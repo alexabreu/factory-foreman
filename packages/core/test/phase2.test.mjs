@@ -42,7 +42,7 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
     exec: async (argv, opts) => { if (argv[0] === 'git') return git(argv, opts); calls.push({ argv, opts }); const stub = dev.exec ?? exec; return stub ? stub(argv, opts) : { code: 0, stdout: '[]', stderr: '' } },
     ...(dev.browser ? { browser: () => dev.browser } : {}),
   })
-  return Object.assign(dev, { run: (...argv) => main(argv, ctx), draft: (step) => worktreeDraftPath(cwd, 7, step), dir: () => stateDir(cwd, 7) })
+  return Object.assign(dev, { ctx, run: (...argv) => main(argv, ctx), draft: (step) => worktreeDraftPath(cwd, 7, step), dir: () => stateDir(cwd, 7) })
 }
 
 function writeDraft(file, body) {
@@ -946,37 +946,60 @@ test('review rounds: round 2 re-briefs only the reviewers whose findings changed
   writeDraft(ana.draft('shape'), SHAPE)
   const r1 = JSON.parse((await ana.run('review', 'shape', '--json')).out)
   assert.deepEqual([ r1.round, r1.maxRounds, r1.briefs.map((b) => b.reviewer) ], [ 1, 2, [ 'test-verification-engineer', 'product-engineer' ] ])
-  // The same draft again is the same round.
   assert.equal(JSON.parse((await ana.run('review', 'shape', '--json')).out).round, 1)
-  // Editing before saving round 1: save it first.
+  // The documented order: settle round 1 by editing the draft, then save, then review again.
   writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, for now.'))
-  assert.match((await ana.run('review', 'shape')).err, /Save round 1's settled findings before the next round/)
-  writeDraft(ana.draft('shape'), SHAPE)
   await settle(ana, 'shape', { 'test-verification-engineer': [ { id: 'T1', text: 'Out of scope is vague', settlement: 'changed' } ], 'product-engineer': [ { id: 'P1', text: 'Fine', settlement: 'accepted' } ] })
-  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, for now.'))
   const r2 = JSON.parse((await ana.run('review', 'shape', '--json')).out)
   assert.deepEqual([ r2.round, r2.briefs.map((b) => b.reviewer) ], [ 2, [ 'test-verification-engineer' ] ])
   assert.match(r2.briefs[0].brief, /^Round 2 of the review\. Re-review only what changed since round 1/)
+  // A line that grows into a longer one is still shown as changed.
   assert.match(r2.briefs[0].brief, /Lines removed:\n- Syncing between devices\.\n\nLines added:\n\+ Syncing between devices, for now\./)
   assert.match(r2.briefs[0].brief, /Your round 1 findings and how they were settled: \[\{"id":"T1"/)
+  // The same round again keeps its briefs, findings included.
+  assert.equal(JSON.parse((await ana.run('review', 'shape', '--json')).out).briefs[0].brief, r2.briefs[0].brief)
   assert.match((await ana.run('review', 'shape')).out, /round 2 of 2: only test-verification-engineer[\s\S]*This is the last round/)
-  // Round 2's save names only who re-reviewed; the others' findings carry over.
+  // Round 2's save needs the re-briefed reviewer; the others carry over.
   const file = join(ana.cwd, 'r2.json')
+  writeFileSync(file, JSON.stringify({ reviewers: {} }))
+  assert.match((await ana.run('review', 'save', 'shape', '--findings', file)).err, /test-verification-engineer is missing/)
   writeFileSync(file, JSON.stringify({ reviewers: { 'test-verification-engineer': [] } }))
   assert.equal((await ana.run('review', 'save', 'shape', '--findings', file)).code, 0)
-  const saved = JSON.parse(readFileSync(join(ana.dir(), 'reviews', readdirSync(join(ana.dir(), 'reviews')).filter((f) => !f.endsWith('-rounds.json')).find((f) => JSON.parse(readFileSync(join(ana.dir(), 'reviews', f), 'utf8')).round === 2)), 'utf8'))
+  const reviewsDir = join(ana.dir(), 'reviews')
+  const saved = readdirSync(reviewsDir).filter((f) => !f.endsWith('-rounds.json')).map((f) => JSON.parse(readFileSync(join(reviewsDir, f), 'utf8'))).find((r) => r.round === 2)
   assert.deepEqual(saved.reviewers['product-engineer'], [ { id: 'P1', text: 'Fine', settlement: 'accepted' } ])
   // A third round is refused; saving the person's settlement of a further edit isn't.
   writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, not now.'))
   assert.match((await ana.run('review', 'shape')).err, /has had its 2 review rounds since version 0\. What's left is the person's to settle[\s\S]*There's no third round/)
   assert.equal((await ana.run('review', 'save', 'shape', '--findings', file)).code, 0)
   assert.equal((await ana.run('checkpoint', 'shape')).code, 0)
-  // No reviewer's finding changed the draft: nothing to re-review.
-  const solo = developer(world, 'ana', { config: { reviewers: { shape: [ 'test-verification-engineer' ], design: [] }, review: { headless: { command: [ 'x' ] }, maxRounds: 2 } } })
-  await solo.run('draft', 'shape', '--reset')
-  writeDraft(solo.draft('shape'), SHAPE)
-  await solo.run('review', 'shape')
-  await settle(solo, 'shape', { 'test-verification-engineer': [ { id: 'T9', text: 'x', settlement: 'accepted' } ] })
-  writeDraft(solo.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing.'))
-  assert.match((await solo.run('review', 'shape')).out, /No reviewer's finding changed the Shape draft in round 1, so there's nothing to re-review/)
+})
+
+test('review rounds: a reviewer new since round 1 gets a full brief; nothing changed means no round 2 and everything carries over', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7, '')
+  const reviewers = { shape: [ 'test-verification-engineer' ], design: [] }
+  const ana = developer(world, 'ana', { config: { reviewers } })
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  await ana.run('review', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing.'))
+  await settle(ana, 'shape', { 'test-verification-engineer': [ { id: 'T9', text: 'x', settlement: 'accepted' } ] })
+  // Nothing changed because of a finding: no round 2, and the save needs no findings.
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing, later.'))
+  assert.match((await ana.run('review', 'shape')).out, /No reviewer's finding changed the Shape draft in round 1, so there's nothing to re-review/)
+  const empty = join(ana.cwd, 'empty.json')
+  writeFileSync(empty, JSON.stringify({ reviewers: {} }))
+  assert.equal((await ana.run('review', 'save', 'shape', '--findings', empty)).code, 0)
+  // A reviewer added since round 1 is briefed in full in the next round.
+  const bob = developer(world, 'ana', { config: { reviewers: { shape: [ 'test-verification-engineer' ], design: [] } } })
+  await bob.run('draft', 'shape', '--reset')
+  writeDraft(bob.draft('shape'), SHAPE)
+  await bob.run('review', 'shape')
+  writeDraft(bob.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing.'))
+  await settle(bob, 'shape', { 'test-verification-engineer': [ { id: 'T1', text: 'x', settlement: 'changed' } ] })
+  const r2 = JSON.parse((await main([ 'review', 'shape', '--json' ], () => ({ ...bob.ctx(), config: () => ({ ...structuredClone(DEFAULTS), ...REVIEWED, reviewers: { shape: [ 'test-verification-engineer', 'product-engineer' ], design: [] } }) }))).out)
+  assert.deepEqual(r2.briefs.map((b) => b.reviewer), [ 'test-verification-engineer', 'product-engineer' ])
+  assert.match(r2.briefs[0].brief, /^Round 2 of the review/)
+  assert.doesNotMatch(r2.briefs[1].brief, /^Round 2 of the review/)
 })

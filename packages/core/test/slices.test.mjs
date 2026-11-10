@@ -662,7 +662,8 @@ test('a retried iteration reuses the evidence it already published when only the
   put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
   commit(ana, 'counter', 'src/counter.mjs')
   await reviewed(ana, 1)
-  const shots = { name: 'shots', collect: ({ out }) => { writeFileSync(join(out, 'after.png'), `png ${Math.random()}`); return { ok: true, files: [ { path: join(out, 'after.png'), name: 'after.png', kind: 'image', label: 'AC-1 after' } ], links: [], summary: '1 screenshot' } } }
+  // The same screenshot on the retry (reuse checks the bytes).
+  const shots = { name: 'shots', collect: ({ out }) => { writeFileSync(join(out, 'after.png'), 'png'); return { ok: true, files: [ { path: join(out, 'after.png'), name: 'after.png', kind: 'image', label: 'AC-1 after' } ], links: [], summary: '1 screenshot' } } }
   const { publishAssets } = await import('../src/assets/publish.mjs')
   let published = 0
   const runIt = (...a) => main(a, () => ({ ...ana.ctx(), loadProviders: async () => [ shots ], publishAssets: (...x) => { published++; return publishAssets(...x) } }))

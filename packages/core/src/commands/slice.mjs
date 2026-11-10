@@ -416,11 +416,13 @@ async function pushIteration(ctx, { n, s, slice, tip, github, config, reviewers,
   const pendingFile = join(ctx.stateDir(), `evidence-slice-${s}.json`)
   let pending = null
   try { pending = JSON.parse(readFileSync(pendingFile, 'utf8')) } catch { /* none */ }
-  const reuse = pending?.head === tip && pending?.k === k && files.length && files.every((f) => pending.names?.includes(f.published))
+  // Reused only when it's exactly these files, byte for byte.
+  const digests = Object.fromEntries(files.map((f) => [ f.published, sha256(readFileSync(f.path)) ]))
+  const reuse = pending?.head === tip && pending?.k === k && pending.repo === github.repo && files.length && files.length === Object.keys(pending.files ?? {}).length && files.every((f) => pending.files[f.published] === digests[f.published])
   const published = !files.length ? null : reuse
     ? { commit: pending.commit, branch: pending.branch, url: (name) => pinnedUrl(github.repo, pending.commit, `${folder}/${name}`) }
     : await (ctx.publishAssets ?? publishAssets)(ctx, { n, folder, files: files.map((f) => ({ name: f.published, path: f.path })), message: `Evidence for slice ${s}, iteration ${k} (#${n})`, what: 'the evidence' })
-  if (published && !reuse) writeFileSync(pendingFile, `${JSON.stringify({ head: tip, k, commit: published.commit, branch: published.branch, names: files.map((f) => f.published) })}\n`)
+  if (published && !reuse) writeFileSync(pendingFile, `${JSON.stringify({ head: tip, k, repo: github.repo, commit: published.commit, branch: published.branch, files: digests })}\n`)
 
   // Push, record, then tag: a rerun on the same commit only re-tags.
   await git(ctx, [ 'push', '--quiet', 'origin', `HEAD:refs/heads/${slice.branch}` ], `Pushing ${slice.branch}`)
@@ -440,6 +442,7 @@ async function pushIteration(ctx, { n, s, slice, tip, github, config, reviewers,
     ...(evidence.length ? [ '', `**Evidence**${published ? ` (pinned at ${short(published.commit)} on ${published.branch})` : ''}:`, evidenceSection(evidence.map((e) => ({ ...e, summary: inert(e.summary ?? ''), files: e.files.map((f) => ({ ...f, label: inert(f.label), published: f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-') })) })), (name) => published.url(name)) ] : []),
   ].join('\n')
   await postSliceRecord(github, { issue: n, slice: updated, text })
+  rmSync(pendingFile, { force: true })
   await github.ensureTag(tag, tip)
   await updateChecklist(ctx, github, n)
   return { out: [ ...warnings.map((w) => `Note: ${w}`), `Iteration ${k} of slice ${s} pushed at ${short(tip)} and tagged ${tag}.${files.length ? ` Evidence: ${files.length} file(s) on ${published.branch} at ${short(published.commit)}.` : ''}`, `When the PR is approved and CI is green, the person merges it: factory-foreman slice merge ${s}` ].join('\n'), json: { iteration, gate, checks, shows, evidence: evidence.map((e) => ({ name: e.name, ok: e.ok, summary: e.summary, files: e.files.map((f) => ({ label: f.label, kind: f.kind, url: published?.url(f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-')) })) })) } }

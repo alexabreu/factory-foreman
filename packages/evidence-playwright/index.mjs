@@ -33,7 +33,7 @@ import base from ${JSON.stringify(from)}
 
 const on = (use) => ({ ...use, video: 'on' })
 // The repo's reporters, plus a JSON report that says which test each video is.
-const reporters = (r) => (Array.isArray(r) ? r : r ? [ [ r ] ] : [ [ 'list' ] ]).map((x) => (Array.isArray(x) ? x : [ x ]))
+const reporters = (r) => (Array.isArray(r) ? r : r ? [ [ r ] ] : [ [ process.env.CI ? 'dot' : 'list' ] ]).map((x) => (Array.isArray(x) ? x : [ x ]))
 // Every project records into the one folder factory-foreman collects from, even
 // one with an outputDir of its own.
 export default {

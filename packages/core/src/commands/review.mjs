@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { Refusal } from '../errors.mjs'
 import { SECOND_OPINION, reviewFile, brief, secondOpinionCommand, visualReviewers, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
-import { changedBy, readRounds, recordRound } from '../review/rounds.mjs'
+import { changedBy, lineDiff, markSaved, readRounds, recordRound } from '../review/rounds.mjs'
 import { inCodexSandbox } from '../state/local.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { approvedBody, loadIssue, requireStep, title } from './common.mjs'
@@ -33,31 +33,43 @@ const readSaved = (dir, step, hash) => {
 async function nextRound(ctx, { step, draft, digest, reviewers }) {
   const max = ctx.config().review?.maxRounds ?? 2
   const dir = ctx.stateDir()
-  const rounds = readRounds(dir, step, draft.meta.base)
+  const base = draft.meta.base
+  const rounds = readRounds(dir, step, base)
   const last = rounds.at(-1)
-  const base = { max, preface: () => '', record: () => {} }
-  if (!last) return { ...base, k: 1, reviewers, record: (r) => recordRound(dir, step, draft.meta.base, { hash: digest, body: draft.body, reviewers: r, at: ctx.now().toISOString() }) }
-  if (last.hash === digest) return { ...base, k: rounds.length, reviewers: last.reviewers, preface: rounds.length > 1 ? preface(rounds, draft) : () => '' }
-  if (rounds.length >= max) {
-    throw new Refusal(`The ${title(step)} draft has had its ${max} review rounds since version ${draft.meta.base}. What's left is the person's to settle: accept a finding, overrule it with their reason, or note it as an open question (factory-foreman note "…" --kind question --step ${step}). Then save the settled findings for this draft: factory-foreman review save ${step} --findings <file>. There's no third round.`, { rounds: rounds.length, maxRounds: max })
+  const record = (k) => (r) => recordRound(dir, step, base, { k, hash: digest, body: draft.body, reviewers: r, at: ctx.now().toISOString() })
+  const plain = { max, preface: () => '', record: () => {} }
+  if (!last) return { ...plain, k: 1, reviewers, record: record(1) }
+  // The same draft again: the same round, with the same briefs.
+  if (last.hash === digest) {
+    const prior = rounds.length > 1 ? readSaved(dir, step, rounds.at(-2).saved) : null
+    return { ...plain, k: rounds.length, reviewers: last.reviewers, preface: rounds.length > 1 ? preface(rounds.at(-2).body, draft, rounds.length, prior) : () => '' }
   }
-  const saved = readSaved(dir, step, last.hash)
-  if (!saved) throw new Refusal(`Save round ${rounds.length}'s settled findings before the next round: factory-foreman review save ${step} --findings <file>. (Run it on the draft as it was then, or settle them against this draft.)`)
-  const again = changedBy(saved).filter((r) => reviewers.includes(r))
-  if (!again.length) return { ...base, k: rounds.length + 1, none: `No reviewer's finding changed the ${title(step)} draft in round ${rounds.length}, so there's nothing to re-review. Save the review of this draft: factory-foreman review save ${step} --findings <file> (round ${rounds.length}'s settled findings carry over).` }
-  const next = [ ...rounds, { hash: digest, body: draft.body, reviewers: again } ]
-  return { ...base, k: rounds.length + 1, reviewers: again, preface: preface(next, draft, saved), record: (r) => recordRound(dir, step, draft.meta.base, { hash: digest, body: draft.body, reviewers: r, at: ctx.now().toISOString() }) }
+  if (rounds.length >= max) {
+    throw new Refusal(`The ${title(step)} draft has had its ${max} review rounds since version ${base}. What's left is the person's to settle: accept a finding, overrule it with their reason, or note it as an open question (factory-foreman note "…" --kind question --step ${step}). Then save the settled findings for this draft: factory-foreman review save ${step} --findings <file>. There's no third round.`, { rounds: rounds.length, maxRounds: max })
+  }
+  const saved = readSaved(dir, step, last.saved)
+  if (!saved) throw new Refusal(`Save round ${rounds.length}'s settled findings before the next round: factory-foreman review save ${step} --findings <file>.`)
+  // Who reviews again: those whose findings changed the draft, and anyone new since.
+  const fresh = reviewers.filter((r) => !(r in (saved.reviewers ?? {})))
+  const again = [ ...new Set([ ...changedBy(saved), ...fresh ]) ].filter((r) => reviewers.includes(r))
+  const k = rounds.length + 1
+  if (!again.length) {
+    // Recorded with no reviewers, so the save that follows carries every finding over.
+    record(k)([])
+    return { ...plain, k, none: `No reviewer's finding changed the ${title(step)} draft in round ${rounds.length}, so there's nothing to re-review. Save the review of this draft: factory-foreman review save ${step} --findings <file> with no findings needed (round ${rounds.length}'s settled findings carry over).` }
+  }
+  const brief = preface(last.body, draft, k, saved)
+  return { ...plain, k, reviewers: again, preface: (r) => (fresh.includes(r) ? '' : brief(r)), record: record(k) }
 }
 
-// Round 2's brief: what changed since round 1, and how the reviewer's own findings were settled.
-function preface(rounds, draft, saved = null) {
-  const before = rounds.at(-2)?.body ?? ''
-  const removed = before.split('\n').filter((l) => !draft.body.includes(l)).slice(0, 80)
-  const added = draft.body.split('\n').filter((l) => !before.includes(l)).slice(0, 80)
+// A later round's brief: what changed since the round before, and how the
+// reviewer's own findings were settled.
+function preface(before, draft, k, saved = null) {
+  const { removed, added } = lineDiff(before, draft.body)
   return (reviewer) => [
-    `Round ${rounds.length} of the review. Re-review only what changed since round ${rounds.length - 1}, to check your findings were settled well; don't start a new review of the whole draft.`,
-    '', 'Lines removed:', ...removed.map((l) => `- ${l}`), '', 'Lines added:', ...added.map((l) => `+ ${l}`),
-    ...(saved?.reviewers?.[reviewer] ? [ '', `Your round ${rounds.length - 1} findings and how they were settled: ${JSON.stringify(saved.reviewers[reviewer])}` ] : []),
+    `Round ${k} of the review. Re-review only what changed since round ${k - 1}, to check your findings were settled well; don't start a new review of the whole draft.`,
+    '', 'Lines removed:', ...(removed.length ? removed : [ '(none)' ]), '', 'Lines added:', ...(added.length ? added : [ '(none)' ]),
+    ...(saved?.reviewers?.[reviewer] ? [ '', `Your round ${k - 1} findings and how they were settled: ${JSON.stringify(saved.reviewers[reviewer])}` ] : []),
     '', '',
   ].join('\n')
 }
@@ -116,7 +128,7 @@ export async function review(ctx, args) {
       failures[b.reviewer] = error.message
     }
   }
-  const lines = [ `Headless review of the ${title(step)} draft for #${n} (draft hash ${digest}).` ]
+  const lines = [ `Headless review of the ${title(step)} draft for #${n} (draft hash ${digest}), round ${round.k} of ${round.max}${round.k > 1 ? `: only ${reviewers.join(', ')}` : ''}.` ]
   for (const [ reviewer, list ] of Object.entries(findings)) {
     lines.push('', `${reviewer}: ${list.length ? `${list.length} finding(s)` : 'no findings'}`)
     for (const f of list) lines.push(`- [${f.severity}] ${f.id}: ${f.text}${f.where ? ` (${f.where})` : ''}`)
@@ -138,16 +150,19 @@ async function save(ctx, { positionals, flags }) {
   } catch (error) {
     throw new Refusal(`Can't read ${flags.findings} as JSON: ${error.message}`)
   }
-  // A later round re-reviews some reviewers; the others' settled findings carry over.
+  // A later round re-reviews some reviewers, who must answer; the others'
+  // settled findings carry over from the round before.
   const rounds = readRounds(ctx.stateDir(), step, draft.meta.base)
   const roundNo = Math.max(1, rounds.length)
   if (roundNo > 1 && findings?.reviewers && typeof findings.reviewers === 'object' && !Array.isArray(findings.reviewers)) {
-    const earlier = readSaved(ctx.stateDir(), step, rounds.at(-2)?.hash)
-    for (const r of reviewers) if (!(r in findings.reviewers) && earlier?.reviewers?.[r]) findings.reviewers[r] = earlier.reviewers[r]
+    const earlier = readSaved(ctx.stateDir(), step, rounds.at(-2).saved)
+    const asked = new Set(rounds.at(-1).reviewers ?? [])
+    for (const r of reviewers) if (!asked.has(r) && !(r in findings.reviewers) && earlier?.reviewers?.[r]) findings.reviewers[r] = earlier.reviewers[r]
   }
   const problems = checkSettlements(findings, reviewers)
   if (problems.length) throw new Refusal(`The review can't be saved yet:\n  - ${problems.join('\n  - ')}`, { problems })
   const { file: saved, digest } = saveReview(ctx.stateDir(), { step, draft, reviewers, findings, at: ctx.now().toISOString(), round: roundNo })
+  markSaved(ctx.stateDir(), step, draft.meta.base, digest)
   const count = reviewers.reduce((sum, r) => sum + findings.reviewers[r].length, 0)
   return { out: `Saved the review of the ${title(step)} draft (hash ${digest.slice(0, 12)}, ${count} finding(s) settled by ${reviewers.join(', ')}). Edit the draft again and you'll need to save again.`, json: { step, hash: digest, file: saved, reviewers } }
 }
