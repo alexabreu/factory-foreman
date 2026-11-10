@@ -52,7 +52,24 @@
           "required": ["command", "steps"],
           "additionalProperties": false,
           "properties": {
-            "command": { "$ref": "#/$defs/argv" },
+            "command": {
+              "description": "The command a second-opinion brief is piped into: one argv, or one per harness (claude-code, codex, vscode, terminal) with a default. A map replaces the default map whole.",
+              "oneOf": [
+                { "$ref": "#/$defs/argv" },
+                {
+                  "type": "object",
+                  "required": ["default"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "default": { "$ref": "#/$defs/argv" },
+                    "claude-code": { "$ref": "#/$defs/argv" },
+                    "codex": { "$ref": "#/$defs/argv" },
+                    "vscode": { "$ref": "#/$defs/argv" },
+                    "terminal": { "$ref": "#/$defs/argv" }
+                  }
+                }
+              ]
+            },
             "steps": { "$ref": "#/$defs/names" }
           }
         }

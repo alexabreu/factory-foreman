@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { main } from '../src/cli.mjs'
-import { DEFAULTS } from '../src/config/load.mjs'
+import { CONFIG_FILE, DEFAULTS, loadConfig } from '../src/config/load.mjs'
 import { isBotLogin, nextMinor, nextVersion, parseLabel, parseRecords, stepState, trustedRecords } from '../src/issue/records.mjs'
-import { checkSettlements, parseFindings, reviewersFor } from '../src/review/briefs.mjs'
+import { checkSettlements, parseFindings, reviewersFor, secondOpinionCommand } from '../src/review/briefs.mjs'
 import { parseExtracted, transcriptText } from '../src/capture/extract.mjs'
-import { readLog, stateDir, worktreeDraftPath } from '../src/state/local.mjs'
+import { detectHarness, readLog, stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { parseDraft, structuralBlocks } from '../src/steps/structure.mjs'
 import { fakeGitHub } from './fixtures/github.mjs'
 import { DESIGN, SHAPE } from './structure.test.mjs'
@@ -115,6 +115,30 @@ test('reviewers: ?visual only when a criterion is visual, and the second opinion
   assert.deepEqual(reviewersFor('shape', { ...config, reviewers: { shape: [] } }, { draft: visualShape }), [])
 })
 
+test('second opinion: another vendor\'s model by default, Claude under Codex and Codex elsewhere', () => {
+  assert.deepEqual(secondOpinionCommand(DEFAULTS, 'codex'), [ 'claude', '-p' ])
+  for (const harness of [ 'claude-code', 'vscode', 'terminal' ]) assert.deepEqual(secondOpinionCommand(DEFAULTS, harness), [ 'codex', 'exec', '-' ])
+  assert.deepEqual(secondOpinionCommand({ secondOpinion: { command: [ 'gemini' ], steps: [] } }, 'codex'), [ 'gemini' ])
+  assert.equal(secondOpinionCommand({ secondOpinion: null }, 'codex'), null)
+  const root = mkdtempSync(join(tmpdir(), 'ff-so-'))
+  // One argv replaces the per-harness default; a per-harness map needs a default.
+  writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ version: 1, secondOpinion: { command: [ 'gemini', '-p' ], steps: [ 'design' ] } }))
+  assert.deepEqual(secondOpinionCommand(loadConfig(root), 'codex'), [ 'gemini', '-p' ])
+  writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ version: 1, secondOpinion: { command: { 'claude-code': [ 'gemini' ], default: [ 'codex', 'exec', '-' ] }, steps: [ 'design' ] } }))
+  assert.deepEqual(secondOpinionCommand(loadConfig(root), 'claude-code'), [ 'gemini' ])
+  // A map replaces the default map whole: no default codex entry survives.
+  writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ version: 1, secondOpinion: { command: { default: [ 'gemini', '-p' ] }, steps: [ 'design' ] } }))
+  assert.deepEqual(loadConfig(root).secondOpinion.command, { default: [ 'gemini', '-p' ] })
+  assert.deepEqual(secondOpinionCommand(loadConfig(root), 'codex'), [ 'gemini', '-p' ])
+  for (const command of [ { codex: [ 'claude', '-p' ] }, { default: [ 'x' ], claude: [ 'y' ] }, { default: [ 'x' ], Codex: [ 'y' ] } ]) {
+    writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ version: 1, secondOpinion: { command, steps: [ 'design' ] } }))
+    assert.throws(() => loadConfig(root), /schema/, JSON.stringify(command))
+  }
+  // Tied to real harness detection: Codex's shell gets Claude, Claude Code's gets Codex.
+  assert.deepEqual(secondOpinionCommand(DEFAULTS, detectHarness({ CODEX_TOOL_CALL_ID: 'c1' })), [ 'claude', '-p' ])
+  assert.deepEqual(secondOpinionCommand(DEFAULTS, detectHarness({ CLAUDECODE: '1' })), [ 'codex', 'exec', '-' ])
+})
+
 test('findings: a reply is read from a fenced block or plain text, and bad items are dropped', () => {
   assert.deepEqual(parseFindings('Here you go:\n```json\n[{"id":"x","severity":"blocking","text":"AC-2 is vague","where":"AC-2"}]\n```'), [ { id: 'x', severity: 'blocking', text: 'AC-2 is vague', where: 'AC-2' } ])
   assert.deepEqual(parseFindings('[{"text":"Missing edge case"},{"id":"empty"}]'), [ { id: 'F1', severity: 'major', text: 'Missing edge case', where: '' } ])
@@ -187,6 +211,19 @@ test('review --headless runs every brief through the configured commands and ref
   // The brief goes on stdin, and the reviewer's session isn't captured as notes.
   assert.match(ana.calls[0].opts.input, /You are the test-verification-engineer reviewer/)
   assert.equal(ana.calls[0].opts.env.FACTORY_FOREMAN_CAPTURE, '1')
+})
+
+test('the second-opinion brief names the other vendor\'s command for the harness it runs in', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7, '')
+  const config = { secondOpinion: { ...structuredClone(DEFAULTS.secondOpinion), steps: [ 'shape' ] } }
+  for (const [ env, command ] of [ [ { CODEX_HOME: '/x' }, 'claude -p' ], [ { CLAUDECODE: '1' }, 'codex exec -' ] ]) {
+    const ana = developer(world, 'ana', { env, config })
+    await ana.run('draft', 'shape')
+    writeDraft(ana.draft('shape'), SHAPE)
+    const out = (await ana.run('review', 'shape')).out
+    assert.ok(out.includes(`=== second-opinion (pipe this brief into: ${command}) ===`), out.split('\n').filter((l) => l.startsWith('===')).join('\n'))
+  }
 })
 
 test('a Design brief includes the approved Shape, and ux-designer only for a visual Shape', async () => {

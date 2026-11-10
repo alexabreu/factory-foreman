@@ -71,7 +71,9 @@ Checkpoint refuses a draft that hasn't been reviewed exactly as it is now.
    (for example `test-verification-engineer`, `software-architect`,
    `ux-designer`), passing the brief as its task. In Claude Code that's the
    Agent tool with the agent's name; in Codex, spawn the agent with that agent
-   type. A `second-opinion` brief names its own command; pipe the brief into it.
+   type. A `second-opinion` brief names its own command, another vendor's model
+   (`claude -p` under Codex, `codex exec -` elsewhere); pipe the brief into it.
+   Never answer it with a subagent of your own model.
    Only in a harness without subagents, or in CI, does `factory-foreman review
    shape --headless` run every brief through the configured command instead.
 3. Each reviewer returns a JSON array of findings. Settle every one with the

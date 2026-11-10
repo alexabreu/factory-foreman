@@ -49,7 +49,10 @@ Without it, factory writes are refused rather than posted as you.
 `test-verification-engineer`, `software-architect`, `ux-designer`,
 `code-reviewer`, `product-engineer` and `principal-engineer`. Each loads the
 repo's `standards-*` skill for its role when there is one. Steps listed in
-`secondOpinion.steps` also get a brief for `secondOpinion.command`, and
+`secondOpinion.steps` also get a brief for `secondOpinion.command`, which by
+default is the other vendor's model: `claude -p` under Codex, `codex exec -`
+everywhere else (give one argv, or one per harness with a `default`; Claude
+Code started from inside Codex counts as Codex, so set `command` there), and
 `review.headless.command` (default `codex exec -`) runs briefs for `--headless`,
 which is for harnesses without subagents and for CI; Claude Code and Codex run
 reviewers as native subagents by agent name. Each command reads its brief on

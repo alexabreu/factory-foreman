@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { Refusal } from '../errors.mjs'
-import { SECOND_OPINION, brief, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
+import { SECOND_OPINION, brief, secondOpinionCommand, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { approvedBody, loadIssue, requireStep, title } from './common.mjs'
 
@@ -32,7 +32,7 @@ export async function review(ctx, args) {
   const digest = draftHash(draft)
   const briefs = reviewers.map((reviewer) => ({
     reviewer,
-    command: reviewer === SECOND_OPINION ? ctx.config().secondOpinion.command : null,
+    command: reviewer === SECOND_OPINION ? secondOpinionCommand(ctx.config(), ctx.harness) : null,
     brief: brief({ reviewer, step, issue: n, draft, shape, shapeVersion }),
   }))
 

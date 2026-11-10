@@ -24,8 +24,9 @@ export const DEFAULTS = Object.freeze({
     slice: [ 'code-reviewer' ],
     verify: [ 'test-verification-engineer' ],
   },
-  // Each command reads its prompt on stdin.
-  secondOpinion: { command: [ 'codex', 'exec', '-' ], steps: [ 'design', 'verify' ] },
+  // Each command reads its prompt on stdin. The second opinion comes from the
+  // other vendor's model: Claude under Codex, Codex everywhere else.
+  secondOpinion: { command: { codex: [ 'claude', '-p' ], default: [ 'codex', 'exec', '-' ] }, steps: [ 'design', 'verify' ] },
   review: { headless: { command: [ 'codex', 'exec', '-' ] } },
   capture: { claude: [ 'claude', '-p', '--model', 'haiku' ], codex: [ 'codex', 'exec', '-' ], minChars: 4000 },
   checks: { tiers: { slice: [], verify: 'ci' }, plugins: [] },
@@ -38,6 +39,8 @@ export const DEFAULTS = Object.freeze({
 
 // Arrays of globs concatenate and dedupe; every other array and scalar is replaced.
 const GLOB_ARRAYS = new Set([ 'sharedFiles', 'publicEntries', 'evidence.reports' ])
+// Objects that are one setting as a whole: a layer replaces them, never merges in.
+const ATOMIC = new Set([ 'secondOpinion.command' ])
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 export function merge(base, layer, path = '') {
@@ -45,7 +48,7 @@ export function merge(base, layer, path = '') {
   for (const [ key, value ] of Object.entries(layer)) {
     const at = path ? `${path}.${key}` : key
     if (GLOB_ARRAYS.has(at) && Array.isArray(value) && Array.isArray(base[key])) out[key] = [ ...new Set([ ...base[key], ...value ]) ]
-    else if (isObject(value) && isObject(base[key])) out[key] = merge(base[key], value, at)
+    else if (!ATOMIC.has(at) && isObject(value) && isObject(base[key])) out[key] = merge(base[key], value, at)
     else out[key] = structuredClone(value)
   }
   return out

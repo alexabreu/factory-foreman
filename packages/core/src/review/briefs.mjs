@@ -4,7 +4,8 @@
 // config.reviewers[step] names the reviewer agents. A name ending in ?visual
 // is briefed only when the step has a visual acceptance criterion: in the
 // draft for Shape, in the approved Shape for Design. When the step is in
-// config.secondOpinion.steps, a second-opinion brief runs through that command.
+// config.secondOpinion.steps, a second-opinion brief runs through that command:
+// one argv, or one per harness, so the opinion comes from another vendor's model.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Refusal } from '../errors.mjs'
@@ -29,6 +30,13 @@ export function reviewersFor(step, config, { draft, shape }) {
   })
   if (config.secondOpinion?.steps?.includes(step)) names.push(SECOND_OPINION)
   return [ ...new Set(names) ]
+}
+
+// The second-opinion command for the harness the review runs in.
+export function secondOpinionCommand(config, harness) {
+  const command = config.secondOpinion?.command
+  if (Array.isArray(command) || command == null) return command ?? null
+  return command[harness] ?? command.default
 }
 
 const OUTPUT = `Reply with only a JSON array of findings, and nothing else:
