@@ -50,7 +50,8 @@ Without it, factory writes are refused rather than posted as you.
 `code-reviewer`, `product-engineer` and `principal-engineer`. Each loads the
 repo's `standards-*` skill for its role when there is one. Steps listed in
 `secondOpinion.steps` also get a brief for `secondOpinion.command`, and
-`review.headless.command` (default `codex exec`) runs briefs for `--headless`.
+`review.headless.command` (default `codex exec -`) runs briefs for `--headless`.
+Each command reads its brief on stdin.
 
 ## Hooks
 
@@ -60,8 +61,8 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
   approve`, `factory-foreman slice merge`, `gh pr review`, `gh pr merge` and
   `gh api` writes of PR reviews or merges, however they are wrapped. It stops
   honest mistakes; it isn't a sandbox.
-- **Capture** (`PreCompact`, `SessionEnd`, `Stop`): hands the transcript to
-  `note --extract` in the background. It reads only what is new, asks a small
+- **Capture** (`PreCompact`, `SessionEnd`, `Stop`): on a `factory-foreman/<n>`
+  branch, hands the transcript to `note --extract` in the background. It reads only what is new, asks a small
   model (`capture.claude`, or `capture.codex` under Codex) for decisions,
   rejected options and questions, and logs them unconfirmed. `Stop` waits until
   `capture.minChars` of new text. It never blocks or fails a session.

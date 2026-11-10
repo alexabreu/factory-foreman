@@ -110,7 +110,12 @@ export function requireReview(stateDir, { step, draft, reviewers }) {
   if (!existsSync(file)) {
     throw new Refusal(`The ${step} draft hasn't been reviewed as it is now (hash ${digest.slice(0, 12)}). Run factory-foreman review ${step}, have ${reviewers.join(', ')} review it, settle every finding, and run factory-foreman review save ${step} --findings <file>. Any edit after saving needs a new save.`, { reviewers, hash: digest })
   }
-  const saved = JSON.parse(readFileSync(file, 'utf8'))
+  let saved
+  try {
+    saved = JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    throw new Refusal(`The saved review ${file} is damaged. Review the ${step} draft again and save.`)
+  }
   const missing = reviewers.filter((r) => !(r in (saved.reviewers ?? {})))
   if (missing.length) throw new Refusal(`The saved review of this ${step} draft has no findings from ${missing.join(', ')}. Review again and save.`)
   return saved

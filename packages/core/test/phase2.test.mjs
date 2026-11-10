@@ -183,8 +183,10 @@ test('review --headless runs every brief through the configured commands and ref
   assert.equal(run.code, 2)
   assert.match(run.err, /test-verification-engineer: 1 finding\(s\)\n- \[minor\] A1: Name the filter \(AC-2\)/)
   assert.match(run.err, /second-opinion: FAILED \(exited with code 1: boom\)/)
-  assert.deepEqual(ana.calls.map((c) => c.argv.slice(0, 2)), [ [ 'codex', 'exec' ], [ 'second', 'opinion' ] ])
-  assert.match(ana.calls[0].argv.at(-1), /You are the test-verification-engineer reviewer/)
+  assert.deepEqual(ana.calls.map((c) => c.argv), [ [ 'codex', 'exec' ], [ 'second', 'opinion' ] ])
+  // The brief goes on stdin, and the reviewer's session isn't captured as notes.
+  assert.match(ana.calls[0].opts.input, /You are the test-verification-engineer reviewer/)
+  assert.equal(ana.calls[0].opts.env.FACTORY_FOREMAN_CAPTURE, '1')
 })
 
 test('a Design brief includes the approved Shape, and ux-designer only for a visual Shape', async () => {
@@ -325,7 +327,8 @@ test('capture: reads only what is new, waits on Stop for enough text, and never 
   // SessionEnd reads it.
   assert.equal((await run('--event', 'SessionEnd')).code, 0)
   assert.equal(replies, 1)
-  assert.match(dev.calls[0].argv.at(-1), /user:\nWe chose the checkbox\./)
+  assert.match(dev.calls[0].opts.input, /user:\nWe chose the checkbox\./)
+  assert.deepEqual(dev.calls[0].argv, [ 'claude', '-p' ])
   assert.equal(dev.calls[0].opts.env.FACTORY_FOREMAN_CAPTURE, '1')
   // Nothing new: no model call.
   assert.equal((await run('--event', 'SessionEnd')).code, 0)
@@ -333,8 +336,8 @@ test('capture: reads only what is new, waits on Stop for enough text, and never 
   // Only the new part is sent.
   writeFileSync(transcript, readFileSync(transcript, 'utf8') + line('And the filter select.'))
   await run('--event', 'PreCompact')
-  assert.doesNotMatch(dev.calls.at(-1).argv.at(-1), /checkbox/)
-  assert.match(dev.calls.at(-1).argv.at(-1), /filter select/)
+  assert.doesNotMatch(dev.calls.at(-1).opts.input, /checkbox/)
+  assert.match(dev.calls.at(-1).opts.input, /filter select/)
 
   // A failing model, a missing transcript, a nested capture: exit 0.
   const failing = developer(world, 'ana', { exec: () => ({ code: 1, stdout: '', stderr: 'no auth' }) })
@@ -418,7 +421,7 @@ test('the capture hook never fails, even on bad input', () => {
 test('config: review and capture commands default sensibly and are validated', async () => {
   const { validate } = await import('../src/config/validate.mjs')
   const schema = JSON.parse(readFileSync(new URL('../factory-foreman.config.schema.json', import.meta.url), 'utf8'))
-  assert.deepEqual(DEFAULTS.review.headless.command, [ 'codex', 'exec' ])
+  assert.deepEqual(DEFAULTS.review.headless.command, [ 'codex', 'exec', '-' ])
   assert.deepEqual(DEFAULTS.capture.claude, [ 'claude', '-p', '--model', 'haiku' ])
   assert.deepEqual(validate(schema, structuredClone(DEFAULTS)), [])
   assert.deepEqual(validate(schema, { version: 1, review: { headless: { command: [ 'my-runner', '--json' ] } }, capture: { minChars: 0 } }), [])
@@ -426,4 +429,94 @@ test('config: review and capture commands default sensibly and are validated', a
   assert.notDeepEqual(validate(schema, { version: 1, review: { headless: {} } }), [])
   assert.notDeepEqual(validate(schema, { version: 1, capture: { minChars: -1 } }), [])
   assert.notDeepEqual(validate(schema, { version: 1, capture: { other: [ 'x' ] } }), [])
+})
+
+test('an escaped pipe stays inside its cell, so the criterion and visual flag read as GitHub shows them', () => {
+  const draft = parseDraft(SHAPE.replace('| A book can be marked read | yes |', '| A book can be marked read in under 5 s \\| ms | yes |'))
+  assert.deepEqual(draft.criteria[0], { id: 'AC-1', criterion: 'A book can be marked read in under 5 s | ms', visual: true })
+  const changed = parseDraft(SHAPE.replace('| A book can be marked read | yes |', '| A book can be marked read in under 50 s \\| ms | yes |'))
+  assert.notEqual(structuralBlocks(changed), structuralBlocks(draft))
+})
+
+test('structural blocks cover slice ownership and visual behaviors', () => {
+  const base = structuralBlocks(parseDraft(DESIGN))
+  const design = parseDraft(DESIGN)
+  assert.ok(design.slices.length && design.visualBehaviors.length, 'the fixture has slices and visual behaviors')
+  const firstSlice = DESIGN.match(/^1\. .*$/m)[0]
+  assert.notEqual(structuralBlocks(parseDraft(DESIGN.replace(firstSlice, firstSlice.replace(/\(([^)]*)\)/, '(AC-9)')))), base, 'a slice owning other criteria')
+  assert.equal(structuralBlocks(parseDraft(DESIGN.replace(firstSlice, firstSlice.replace(/^1\. [^(]*/, '1. Renamed slice ')))), base, 'a slice title is wording')
+  const behavior = DESIGN.match(/^- AC-\d+: .*$/m)[0]
+  assert.notEqual(structuralBlocks(parseDraft(DESIGN.replace(behavior, `${behavior} And it flashes.`))), base, 'a changed visual behavior')
+})
+
+test('a second minor amendment after a second approval is v2.1', async () => {
+  const { world, ana } = await approvedShape()
+  await ana.run('draft', 'shape', '--reset')
+  writeDraft(ana.draft('shape'), SHAPE.replace('| The list can show only unread books | no |', '| The list can show only unread books, oldest first | no |'))
+  await settle(ana, 'shape')
+  assert.equal(JSON.parse((await ana.run('checkpoint', 'shape', '--json')).out).version, 'v2')
+  assert.equal((await developer(world, 'ben', { isTTY: true, answer: 'approve shape v2' }).run('approve', 'shape', 'v2')).code, 0)
+  await ana.run('draft', 'shape', '--reset')
+  writeDraft(ana.draft('shape'), SHAPE.replace('| The list can show only unread books | no |', '| The list can show only unread books, oldest first | no |').replace('Anyone keeping a reading list.', 'Anyone who keeps a reading list.'))
+  await settle(ana, 'shape')
+  const minor = JSON.parse((await ana.run('amend', 'shape', '--reason', 'Wording', '--json')).out)
+  assert.deepEqual([ minor.version, minor.minor, minor.carries ], [ 'v2.1', true, 'v2' ])
+})
+
+test('an approval of a minor label never counts, so it can\'t break the carry', () => {
+  const at = (s) => `2026-11-10T00:00:${String(s).padStart(2, '0')}Z`
+  const cp = (id, version, extra = {}) => ({ type: 'checkpoint', step: 'shape', version, hash: `h${id}`, author: 'ana', comment: { id, login: 'foreman[bot]', type: 'Bot', createdAt: at(id) }, ...extra })
+  const ap = (id, version, checkpoint) => ({ type: 'approval', step: 'shape', version, checkpoint, hash: `h${checkpoint}`, approver: 'ben', comment: { id, login: 'ben', type: 'User', createdAt: at(id) } })
+  const state = stepState([ cp(1, 'v1'), ap(2, 'v1', 1), cp(3, 'v1.1', { minor: true, carries: 'v1' }), ap(4, 'v1.1', 3), cp(5, 'v1.2', { minor: true, carries: 'v1' }) ], 'shape')
+  assert.equal(state.approved.version, 'v1')
+  assert.equal(state.approvedCheckpoint.version, 'v1.2')
+})
+
+test('a saved review missing a reviewer, or damaged, is refused', async () => {
+  const { ana } = setup()
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  await settle(ana, 'shape')
+  const [ file ] = readdirSync(join(ana.dir(), 'reviews'))
+  writeFileSync(join(ana.dir(), 'reviews', file), JSON.stringify({ reviewers: {} }))
+  const missing = await ana.run('checkpoint', 'shape')
+  assert.equal(missing.code, 2)
+  assert.match(missing.err, /no findings from test-verification-engineer/)
+  writeFileSync(join(ana.dir(), 'reviews', file), '{ not json')
+  const damaged = await ana.run('checkpoint', 'shape')
+  assert.equal(damaged.code, 2)
+  assert.match(damaged.err, /is damaged/)
+})
+
+test('status leaves out unconfirmed and dropped blocking questions', async () => {
+  const { ana } = setup()
+  const { appendLog } = await import('../src/state/local.mjs')
+  appendLog(ana.dir(), { id: 'aaaa0001', at: '2026-11-10T12:00:00Z', kind: 'question', text: 'Unconfirmed?', blocking: true, confirmed: false, source: 'extracted' })
+  appendLog(ana.dir(), { id: 'aaaa0002', at: '2026-11-10T12:00:00Z', kind: 'question', text: 'Dropped?', blocking: true, confirmed: false, source: 'extracted' })
+  appendLog(ana.dir(), { op: 'drop', id: 'aaaa0002' })
+  assert.deepEqual(JSON.parse((await ana.run('status', '--json')).out).questions, [])
+  appendLog(ana.dir(), { op: 'keep', id: 'aaaa0001' })
+  assert.deepEqual(JSON.parse((await ana.run('status', '--json')).out).questions.map((q) => q.text), [ 'Unconfirmed?' ])
+})
+
+test('capture: one run per session at a time, and a new transcript file starts over', async () => {
+  const world = fakeGitHub()
+  world.addIssue(7, '')
+  const dev = developer(world, 'ana', { exec: () => ({ code: 0, stdout: '[]', stderr: '' }) })
+  const { claimCapture } = await import('../src/state/local.mjs')
+  const line = (text) => `${JSON.stringify({ message: { role: 'user', content: text } })}\n`
+  const first = join(dev.cwd, 'a.jsonl')
+  writeFileSync(first, line('First file, first line.'))
+  const release = claimCapture(dev.dir(), 's1')
+  const busy = await dev.run('note', '--extract', '--transcript', first, '--session', 's1', '--event', 'SessionEnd', '--json')
+  assert.equal(busy.code, 0)
+  assert.match(JSON.parse(busy.out).skipped, /another capture/)
+  assert.equal(dev.calls.length, 0)
+  release()
+  await dev.run('note', '--extract', '--transcript', first, '--session', 's1', '--event', 'SessionEnd')
+  assert.equal(dev.calls.length, 1)
+  const second = join(dev.cwd, 'b.jsonl')
+  writeFileSync(second, line('Second file.') + line('More.'))
+  await dev.run('note', '--extract', '--transcript', second, '--session', 's1', '--event', 'SessionEnd')
+  assert.match(dev.calls.at(-1).opts.input, /Second file\./)
 })

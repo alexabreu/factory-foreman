@@ -24,10 +24,12 @@ Notes are the "how we got here" for the next version, and decisions become rows
 in the issue's Decisions table. Note the decision, not the conversation. Never
 put secrets, tokens or personal data in a note.
 
-The session hooks also extract notes from the conversation when it ends or is
-compacted. Those are guesses until the person confirms them: `draft` lists them
-as unconfirmed with an id, and checkpoint refuses while any are left. Show each
-one to the person and run what they choose:
+The session hooks also extract notes from the conversation as it goes (when
+enough has been said, and when the session is compacted or ends), on a
+`factory-foreman/<n>` branch. Those are guesses until the person confirms them:
+`draft` lists them as unconfirmed with an id, and checkpoint refuses while any
+logged since the step's latest version are left. Show each one to the person
+and run what they choose:
 
 ```sh
 factory-foreman note --keep 3f9a1c2e

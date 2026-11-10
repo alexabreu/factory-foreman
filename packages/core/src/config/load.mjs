@@ -24,9 +24,10 @@ export const DEFAULTS = Object.freeze({
     slice: [ 'code-reviewer' ],
     verify: [ 'test-verification-engineer' ],
   },
-  secondOpinion: { command: [ 'codex', 'exec' ], steps: [ 'design', 'verify' ] },
-  review: { headless: { command: [ 'codex', 'exec' ] } },
-  capture: { claude: [ 'claude', '-p', '--model', 'haiku' ], codex: [ 'codex', 'exec' ], minChars: 4000 },
+  // Each command reads its prompt on stdin.
+  secondOpinion: { command: [ 'codex', 'exec', '-' ], steps: [ 'design', 'verify' ] },
+  review: { headless: { command: [ 'codex', 'exec', '-' ] } },
+  capture: { claude: [ 'claude', '-p', '--model', 'haiku' ], codex: [ 'codex', 'exec', '-' ], minChars: 4000 },
   checks: { tiers: { slice: [], verify: 'ci' }, plugins: [] },
   evidence: { reports: [ 'test-results/**/*.xml' ], providers: null },
   preview: null,

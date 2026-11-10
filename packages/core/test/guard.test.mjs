@@ -65,6 +65,26 @@ const DENIED = [
   'gh api graphql -f query="mutation { addPullRequestReview(input: {}) { clientMutationId } }"',
   'gh api graphql -f query="mutation { mergePullRequest(input: {}) { clientMutationId } }"',
   'gh api graphql -f query="mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }"',
+  'gh api graphql -F query=@merge.graphql',
+  'gh api repos/{owner}/{repo}/pulls/12/merge -X PUT',
+  'if true; then factory-foreman approve shape v1; fi',
+  'for i in 1; do factory-foreman approve shape v1; done',
+  'while true; do gh pr merge 3; done',
+  '! factory-foreman approve shape v1',
+  'pnpm --filter factory-foreman exec factory-foreman approve shape v1',
+  'pnpm -C packages/core exec factory-foreman approve shape v1',
+  'pnpm --dir packages/core exec factory-foreman approve shape v1',
+  'npx -p factory-foreman factory-foreman approve shape v1',
+  'timeout 30 factory-foreman approve shape v1',
+  'nice -n 5 factory-foreman approve shape v1',
+  'watch -n 2 factory-foreman approve shape v1',
+  'sudo -u me factory-foreman approve shape v1',
+  'node packages/core/src/cli.mjs approve shape v1',
+  'node -r ./x.cjs node_modules/factory-foreman/src/cli.mjs approve shape v1',
+  'echo "$(factory-foreman approve shape v1)"',
+  'bash <<EOF\nfactory-foreman approve shape v1\nEOF',
+  'eval "factory-foreman approve shape v1"',
+  [ 'factory-foreman', 'approve', 'shape', 'v1' ],
 ]
 
 const ALLOWED = [
@@ -86,20 +106,28 @@ const ALLOWED = [
   'gh api -X GET repos/o/r/pulls/12/reviews',
   'gh issue view 7',
   'ls -la',
+  'git commit -m "guard: refuse; factory-foreman approve shape v1 from agents"',
+  'git commit -F - <<EOF\nfactory-foreman approve shape v1\ngh pr merge 3\nEOF',
+  "cat <<'EOF' > notes.md\nfactory-foreman approve shape v1\nEOF\nls",
+  'gh pr create --title x --body "gh pr merge 3"',
+  'echo "(gh pr merge 3)"',
+  'gh api -X GET repos/o/r/pulls/12/reviews -F per_page=100',
+  'gh api repos/{owner}/{repo}/pulls/12',
   '',
 ]
 
 test('denies approving, slice merges and PR reviews or merges, however they are wrapped', () => {
-  for (const command of DENIED) assert.ok(verdict(command), `should deny: ${command}`)
+  for (const command of DENIED) assert.ok(verdict(command), `should deny: ${JSON.stringify(command)}`)
 })
 
 test('allows everything else, including text that only mentions those words', () => {
-  for (const command of ALLOWED) assert.equal(verdict(command), null, `should allow: ${command}`)
+  for (const command of ALLOWED) assert.equal(verdict(command), null, `should allow: ${JSON.stringify(command)}`)
 })
 
 test('reads Claude, Codex and Copilot payloads and answers with a PreToolUse deny', () => {
   const deny = decide({ tool_name: 'Bash', tool_input: { command: 'factory-foreman approve shape v1' } })
   assert.equal(deny.hookSpecificOutput.hookEventName, 'PreToolUse')
+  assert.equal(deny.permissionDecision, 'deny')
   assert.equal(deny.hookSpecificOutput.permissionDecision, 'deny')
   assert.match(deny.hookSpecificOutput.permissionDecisionReason, /person in their own terminal/)
   assert.ok(decide({ toolName: 'bash', toolArgs: JSON.stringify({ command: 'gh pr merge 3' }) }))

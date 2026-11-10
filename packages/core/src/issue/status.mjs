@@ -1,10 +1,6 @@
 // The status line at the top of the issue body.
 const title = (step) => step[0].toUpperCase() + step.slice(1)
 
-// The label that is approved right now: the approved version, or the latest
-// minor amendment carrying its approval.
-export const approvedLabel = (state) => state.approvedCheckpoint?.version ?? null
-
 function describe(step, state) {
   const { latest, approved, approvedCheckpoint } = state
   if (!latest) return `${title(step)} not started`

@@ -51,7 +51,8 @@ export async function review(ctx, args) {
   const failures = {}
   for (const b of briefs) {
     const command = b.command ?? ctx.config().review.headless.command
-    const result = await ctx.exec([ ...command, b.brief ], { cwd: ctx.cwd })
+    // The reviewer's own session must not be captured as this feature's notes.
+    const result = await ctx.exec(command, { cwd: ctx.cwd, env: { ...ctx.env, FACTORY_FOREMAN_CAPTURE: '1' }, input: b.brief })
     try {
       if (result.code !== 0) throw new Error(`exited with code ${result.code}: ${String(result.stderr).trim().split('\n').at(-1) ?? ''}`)
       findings[b.reviewer] = parseFindings(result.stdout)

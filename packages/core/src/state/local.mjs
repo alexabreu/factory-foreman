@@ -3,7 +3,7 @@
 //   $(git rev-parse --git-common-dir)/factory-foreman/<issue>/
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Refusal } from '../errors.mjs'
 
@@ -34,8 +34,6 @@ export function appendLog(dir, entry) {
   appendFileSync(join(dir, 'log.jsonl'), `${JSON.stringify(entry)}\n`)
 }
 
-export const OPS = [ 'keep', 'drop', 'edit' ]
-
 export function readLog(dir, { includeDropped = false } = {}) {
   const file = join(dir, 'log.jsonl')
   if (!existsSync(file)) return []
@@ -65,20 +63,46 @@ export function readLog(dir, { includeDropped = false } = {}) {
   return includeDropped ? entries : entries.filter((e) => !e.dropped)
 }
 
-// Where capture last stopped reading each session's transcript.
-export function readMarkers(dir) {
+// Where capture last stopped reading a session's transcript: one file per
+// session, so sessions sharing a clone never overwrite each other's place.
+const captureFile = (dir, key, ext) => {
+  mkdirSync(join(dir, 'capture'), { recursive: true })
+  return join(dir, 'capture', `${key.replace(/[^\w.-]/g, '_').slice(0, 120)}.${ext}`)
+}
+
+export function readMarker(dir, key) {
   try {
-    return JSON.parse(readFileSync(join(dir, 'capture.json'), 'utf8'))
+    return JSON.parse(readFileSync(captureFile(dir, key, 'json'), 'utf8'))
   } catch {
-    return {}
+    return null
   }
 }
 
-export function writeMarkers(dir, markers) {
-  const file = join(dir, 'capture.json')
+export function writeMarker(dir, key, marker) {
+  const file = captureFile(dir, key, 'json')
   const tmp = `${file}.${process.pid}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(markers, null, 2)}\n`)
+  writeFileSync(tmp, `${JSON.stringify(marker, null, 2)}\n`)
   renameSync(tmp, file)
+}
+
+// Claims a session's transcript for one capture at a time. Returns a release
+// function, or null when another capture holds it (a claim older than ten
+// minutes is a crashed run's, and is taken over).
+export function claimCapture(dir, key, now = Date.now()) {
+  const file = captureFile(dir, key, 'lock')
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      closeSync(openSync(file, 'wx'))
+      return () => { try { unlinkSync(file) } catch { /* already gone */ } }
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      let age = Infinity
+      try { age = now - statSync(file).mtimeMs } catch { /* released meanwhile */ }
+      if (age < 10 * 60_000) return null
+      try { unlinkSync(file) } catch { /* someone else took it over */ }
+    }
+  }
+  return null
 }
 
 // Which harness the command runs under, as best the environment tells.

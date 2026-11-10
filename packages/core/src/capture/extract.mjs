@@ -7,9 +7,9 @@
 // every problem is reported on stderr and the command still exits 0.
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs'
 import { basename } from 'node:path'
-import { appendLog, newId, readLog, readMarkers, writeMarkers } from '../state/local.mjs'
+import { KINDS, appendLog, claimCapture, newId, readLog, readMarker, writeMarker } from '../state/local.mjs'
 
-export const KINDS = [ 'decision', 'rejected', 'question' ]
+// Enough for a long stretch of conversation, and well under any limit on stdin.
 const MAX_TEXT = 60_000
 // Events that end or compact a session read whatever is new; Stop fires every
 // turn, so it waits until enough has been said.
@@ -105,20 +105,31 @@ export async function extract(ctx, { transcript, session, event }) {
     return { out: '', skipped: 'no issue' }
   }
   const key = session || basename(transcript)
-  const markers = readMarkers(dir)
-  const from = markers[key]?.offset ?? 0
+  const release = claimCapture(dir, key)
+  if (!release) return { out: '', skipped: 'another capture of this session is running' }
+  try {
+    return await capture(ctx, { dir, key, transcript, event })
+  } finally {
+    release()
+  }
+}
+
+async function capture(ctx, { dir, key, transcript, event }) {
+  const marker = readMarker(dir, key)
+  // A different file under the same session (a resumed or forked session) starts over.
+  const from = marker?.transcript === transcript ? marker.offset ?? 0 : 0
   const { text: chunk, end } = readFrom(transcript, from)
   const text = transcriptText(chunk)
   const config = ctx.config()
+  const advance = () => writeMarker(dir, key, { offset: end, transcript, at: ctx.now().toISOString() })
   if (!text) {
-    markers[key] = { offset: end, transcript, at: ctx.now().toISOString() }
-    writeMarkers(dir, markers)
+    advance()
     return { out: '', skipped: 'nothing new' }
   }
   if (!FINAL_EVENTS.has(event) && text.length < config.capture.minChars) return { out: '', skipped: 'not enough new text yet' }
 
   const command = ctx.harness === 'codex' ? config.capture.codex : config.capture.claude
-  const result = await ctx.exec([ ...command, extractionPrompt(text) ], { cwd: ctx.cwd, env: { ...ctx.env, FACTORY_FOREMAN_CAPTURE: '1' } })
+  const result = await ctx.exec(command, { cwd: ctx.cwd, env: { ...ctx.env, FACTORY_FOREMAN_CAPTURE: '1' }, input: extractionPrompt(text) })
   if (result.code !== 0) return { out: '', err: `capture: ${command[0]} exited with code ${result.code}: ${String(result.stderr).trim().split('\n').at(-1) ?? ''}` }
   let items
   try {
@@ -136,7 +147,6 @@ export async function extract(ctx, { transcript, session, event }) {
     appendLog(dir, entry)
     added.push(entry)
   }
-  markers[key] = { offset: end, transcript, at: ctx.now().toISOString() }
-  writeMarkers(dir, markers)
+  advance()
   return { out: added.length ? `Captured ${added.length} note(s) to confirm: ${added.map((e) => e.id).join(', ')}` : '', added }
 }

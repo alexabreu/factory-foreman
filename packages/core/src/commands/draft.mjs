@@ -23,7 +23,8 @@ export async function draft(ctx, { positionals, flags }) {
   const current = info.current
   const base = current?.version ?? 0
   const file = flags.draft ?? ctx.draftPath(step)
-  const entries = entriesSince(readLog(ctx.stateDir()), current?.createdAt, step)
+  // Since the latest recorded version: the same notes checkpoint will post or wait on.
+  const entries = entriesSince(readLog(ctx.stateDir()), info.latest?.at, step)
 
   let stale = null
   let backup = null

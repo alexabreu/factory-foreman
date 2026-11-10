@@ -37,4 +37,4 @@ the alternatives the person rejected.
 
 ## Reviews and amendments
 
-The repo's Design reviewers (by default `software-architect`, and `ux-designer` when the approved Shape has a visual criterion) check fit with the codebase, contracts, slice ownership and what a person will see. After approval, changing a contract, a visual behavior, or which criteria or files a slice owns is a material amendment that needs approval again; rewording the approach or a slice's title is minor.
+The repo's Design reviewers (by default `software-architect`, `ux-designer` when the approved Shape has a visual criterion, and a second opinion through the configured command) check fit with the codebase, contracts, slice ownership and what a person will see. After approval, changing a contract, a visual behavior, or which criteria or files a slice owns is a material amendment that needs approval again; rewording the approach or a slice's title is minor.

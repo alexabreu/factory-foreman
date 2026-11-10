@@ -52,7 +52,8 @@ export function countWords(text) {
 }
 
 function parseTableRow(line) {
-  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+  // GitHub renders \| as a literal pipe inside a cell, so split only on the others.
+  return line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, '|').trim())
 }
 
 // HTML comments are invisible on GitHub, so nothing inside one counts.

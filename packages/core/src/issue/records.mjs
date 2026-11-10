@@ -75,6 +75,8 @@ export function stepState(records, step, { requireSecondApprover = false, commen
   const byComment = new Map(checkpoints.map((c) => [ c.comment.id, c ]))
   const approvals = records.filter((r) => {
     if (r.type !== 'approval' || r.step !== step) return false
+    // Only a material version (vN) is approved; a minor one carries vN's approval.
+    if (parseLabel(r.version)?.minor !== 0) return false
     const cp = byComment.get(r.checkpoint)
     if (!cp || cp.version !== r.version || cp.hash !== r.hash) return false
     if (Date.parse(r.comment.createdAt) < Date.parse(cp.comment.createdAt)) return false

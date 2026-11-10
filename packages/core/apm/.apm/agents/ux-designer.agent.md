@@ -1,7 +1,7 @@
 ---
 name: ux-designer
 description: Reviews the visual behaviors a Design promises for the Shape's visual acceptance criteria, as the person using the feature will meet them.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Skill
 model: sonnet
 ---
 
