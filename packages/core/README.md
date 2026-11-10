@@ -187,6 +187,33 @@ owning one of its files. The truth about a slice is the App's latest record on
 its pull request, found by the slice's branch; `.factory-foreman/<n>/slices.json`
 is only a copy of it, never read back as truth.
 
+## Evidence
+
+Each iteration also publishes evidence for a reviewer, on the issue's assets
+branch under `slices/<n>/iter-<k>/` (the same plumbing as wireframes: your
+checkout and its `.git` untouched), linked from the iteration comment and
+pinned to that commit. `evidence.providers` names who collects it; the default
+is the built-in `agent-browser`, which replays each frozen show script against
+the app (`preview`) at the slice's base and at its head, with a screenshot once
+the page is open and another where the script ends. At head every script must
+run to the end.
+
+Other providers are packages installed in the repo and named in the config.
+Core knows no test framework; `@factory-foreman/evidence-playwright` records a
+video of each AC test while the gate runs them at head, through an overlay
+config that imports the repo's own Playwright config:
+
+```json
+{ "evidence": { "providers": ["agent-browser", "@factory-foreman/evidence-playwright"] } }
+```
+
+A provider is a package whose default export is `{ name, collect, headRun? }`:
+`collect({ ctx, slice, base, head, config, top, cwd, out })` writes files into
+`out` and returns `{ ok, files: [{ path, name, kind, label }], links, summary }`;
+`headRun({ run, env, cwd, config })`, if given, adjusts the gate's head run of
+the AC tests, and that provider collects from the run's checkout. A provider
+that isn't ok stops the iteration before anything is pushed.
+
 ## Known limitations
 
 **Wireframes don't render inside Codex's sandbox.** agent-browser needs the

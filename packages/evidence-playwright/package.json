@@ -1,0 +1,10 @@
+{
+  "name": "@factory-foreman/evidence-playwright",
+  "version": "0.1.0-alpha.0",
+  "description": "A factory-foreman evidence provider: video of a slice's AC tests, recorded by the repo's own Playwright",
+  "type": "module",
+  "exports": "./index.mjs",
+  "files": [ "index.mjs", "README.md" ],
+  "engines": { "node": "^22.18.0 || >=24.2.0" },
+  "scripts": { "test": "node --test \"test/**/*.test.mjs\"" }
+}

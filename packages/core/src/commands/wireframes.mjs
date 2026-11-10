@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { assetsBranch, carriedConfig, publishAssets } from '../assets/publish.mjs'
 import { Refusal } from '../errors.mjs'
 import { readDraftFile } from '../review/briefs.mjs'
 import { inCodexSandbox } from '../state/local.mjs'
@@ -25,7 +26,7 @@ import { approvedBody, loadIssue } from './common.mjs'
 
 // Where the pages and images sit in the assets commit.
 export const ASSETS = 'design'
-export const assetsBranch = (n) => `factory-foreman-assets/${n}`
+export { assetsBranch, carriedConfig }
 const NAME = /^(AC-\d+)(?:-([a-z][a-z0-9-]*))?\.html$/
 // A wireframe draws itself: no scripts, frames or embeds, and every reference
 // (attribute or CSS url) stays inside the page (#…) or is inline (data:). That
@@ -92,15 +93,6 @@ export function agentBrowser(ctx, session = `factory-foreman-wireframes-${proces
   }
 }
 
-async function git(ctx, args, what, opts = {}) {
-  const result = await ctx.exec([ 'git', ...args ], { timeout: 120_000, ...opts })
-  if (result.code !== 0) {
-    const why = String(result.stderr).split('\n').filter((l) => l.trim() && !l.startsWith('hint:')).at(-1) ?? ''
-    throw new Refusal(`${what} failed: ${why.trim()}`, { stderr: String(result.stderr) })
-  }
-  return result.stdout.trim()
-}
-
 export function wireframesSection({ repo, commit, files }) {
   const lines = [ '## Wireframes', `Low-fidelity wireframes, rendered at ${commit.slice(0, 7)}.` ]
   let current = null
@@ -146,47 +138,6 @@ export async function pinnedImage(ctx, w) {
   mkdirSync(dirname(out), { recursive: true })
   writeFileSync(out, result.stdout)
   return out
-}
-
-// The assets commit: the previous one's tree with its design folder replaced by
-// these files, on top of it. `a` runs git in the assets repo.
-async function assetsCommit(a, ctx, { n, files, parent, author }) {
-  const blob = async (file) => a([ 'hash-object', '-w', '--', file ], 'Storing a wireframe')
-  const entries = []
-  for (const f of files) {
-    entries.push(`100644 blob ${await blob(f.html)}\t${f.name}`, `100644 blob ${await blob(f.png)}\t${f.name.replace(/\.html$/, '.png')}`)
-  }
-  const mktree = async (lines) => {
-    const result = await ctx.exec([ 'git', '--git-dir', a.dir, 'mktree' ], { cwd: a.top, input: lines.length ? `${lines.join('\n')}\n` : '' })
-    if (result.code !== 0) throw new Refusal(`Building the wireframes commit failed: ${String(result.stderr).trim()}`)
-    return result.stdout.trim()
-  }
-  const design = await mktree(entries)
-  const kept = parent ? (await a([ 'ls-tree', parent ], 'Reading the last assets commit')).split('\n').filter((l) => l && !l.endsWith(`\t${ASSETS}`)) : []
-  const tree = await mktree([ ...kept, `040000 tree ${design}\t${ASSETS}` ])
-  if (parent && tree === await a([ 'rev-parse', `${parent}^{tree}` ], 'Reading the last assets commit')) return parent
-  // By the developer, as the target repo's git config names them.
-  const env = { ...ctx.env, GIT_AUTHOR_NAME: author.name, GIT_AUTHOR_EMAIL: author.email, GIT_COMMITTER_NAME: author.name, GIT_COMMITTER_EMAIL: author.email }
-  // Signed when the developer signs their commits, for repos whose rules require it.
-  const sign = (await ctx.exec([ 'git', 'config', '--bool', 'commit.gpgsign' ])).stdout.trim() === 'true'
-  return a([ 'commit-tree', ...(sign ? [ '-S' ] : []), tree, ...(parent ? [ '-p', parent ] : []), '-m', `Wireframes for the Design of #${n}` ], 'Committing the wireframes', { env })
-}
-
-// Config entries the target has and the assets repo wouldn't (its own file, its
-// includes, includeIf blocks that match only the target), as GIT_CONFIG_*
-// environment variables for git in the assets repo.
-const KEYS = '^(core\\.sshcommand|credential\\..*|http\\..*|url\\..*|user\\.signingkey|gpg\\..*|commit\\.gpgsign)$'
-export async function carriedConfig(ctx, assetsDir) {
-  const entries = async (args) => (await ctx.exec([ 'git', ...args, 'config', '--includes', '--null', '--get-regexp', KEYS ])).stdout.split('\0').filter(Boolean)
-  const theirs = await entries([ '--git-dir', assetsDir ])
-  const carried = []
-  for (const entry of await entries([])) {
-    const i = theirs.indexOf(entry)
-    if (i === -1) carried.push(entry); else theirs.splice(i, 1)
-  }
-  const env = { GIT_CONFIG_COUNT: String(carried.length) }
-  carried.forEach((entry, i) => { const nl = entry.indexOf('\n'); env[`GIT_CONFIG_KEY_${i}`] = entry.slice(0, nl); env[`GIT_CONFIG_VALUE_${i}`] = entry.slice(nl + 1) })
-  return env
 }
 
 export async function wireframes(ctx, { positionals, flags }) {
@@ -238,47 +189,10 @@ export async function wireframes(ctx, { positionals, flags }) {
     f.hash = sha256(readFileSync(f.png))
   }
 
-  // The commit is built and pushed from a bare repo of its own in the ignored
-  // state folder, so nothing writes to the target's .git (read-only in Codex's
-  // sandbox). The target is only read: where origin pushes, and who the developer is.
-  const url = await git(ctx, [ 'remote', 'get-url', '--push', 'origin' ], 'Reading the origin remote')
-  const repo = ctx.github().repo
-  // The repo origin names, before any insteadOf rewrite of where it goes.
-  const named = (await ctx.exec([ 'git', 'config', 'remote.origin.pushurl' ])).stdout.trim() || (await ctx.exec([ 'git', 'config', 'remote.origin.url' ])).stdout.trim()
-  // owner/repo at the end of either URL, whatever the host: SSH aliases and ssh.github.com included.
-  const tail = (u) => u.match(/[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1]?.toLowerCase()
-  if (![ tail(named), tail(url) ].includes(repo.toLowerCase())) throw new Refusal(`origin pushes to ${named || url}, but this issue is on ${repo}: the wireframes must live in ${repo}, where the Design links them.`)
-  const config = async (key) => (await ctx.exec([ 'git', 'config', key ])).stdout.trim()
-  const author = { name: await config('user.name'), email: await config('user.email') }
-  if (!author.name || !author.email) throw new Refusal('Set your git user.name and user.email: the wireframes commit is yours.')
-  const assetsDir = join(dirname(ctx.stateDir()), 'assets.git')
-  if (!existsSync(join(assetsDir, 'HEAD'))) await git(ctx, [ 'init', '--quiet', '--bare', assetsDir ], 'Creating the assets repo')
-  // The assets repo doesn't see config the target gets from its own file, its
-  // includes, or includeIf blocks that match only the target. Carry over what
-  // reaching GitHub as the developer depends on (ssh command, credential
-  // helpers, http settings, URL rewrites, signing) that the assets repo lacks,
-  // in the environment so no secret shows in a process list.
-  const configEnv = await carriedConfig(ctx, assetsDir)
-  const top = await git(ctx, [ 'rev-parse', '--show-toplevel' ], 'Finding the repo root')
-  const a = Object.assign((args, what, opts = {}) => git(ctx, [ '--git-dir', assetsDir, ...args ], what, { cwd: top, ...opts, env: { ...ctx.env, ...configEnv, ...opts.env } }), { dir: assetsDir, top })
-
-  // Build on the branch's last commit, if it has one, and push the new one there.
-  const branch = assetsBranch(n)
-  const ref = `refs/heads/${branch}`
-  const remote = (await a([ 'ls-remote', url, ref ], `Reading ${branch} on origin`)).split(/\s/)[0] || null
-  // Fetched by name, which every server allows, into a ref of the assets repo so
-  // the next run fetches only what's new; a ref that moved since is refused at push.
-  if (remote) await a([ 'fetch', '--quiet', '--no-write-fetch-head', url, `+${ref}:refs/remotes/origin/${branch}` ], `Fetching ${branch}`)
-  const commit = await assetsCommit(a, ctx, { n, files, parent: remote, author })
-  // Checkpoint tags the commits a posted version pins; a rerender isn't tagged.
-  if (commit !== remote) {
-    try {
-      await a([ 'push', '--quiet', url, `${commit}:${ref}` ], 'push')
-    } catch (error) {
-      if (new RegExp(`\\[rejected\\][^\\n]*-> ${branch}\\b`).test(error.stderr ?? '')) throw new Refusal(`Someone pushed wireframes for #${n} meanwhile. Run factory-foreman wireframes design again to build on theirs.`)
-      throw new Refusal(`Pushing ${branch} failed (this needs network access and the right to push branches to ${repo}): ${error.message.replace(/^push failed: /, '')}`)
-    }
-  }
+  // Pages and images go to the assets-only branch under design/, built and
+  // pushed without touching the checkout or its .git (see assets/publish.mjs).
+  const published = await publishAssets(ctx, { n, folder: ASSETS, files: files.flatMap((f) => [ { name: f.name, path: f.html }, { name: f.name.replace(/\.html$/, '.png'), path: f.png } ]), message: `Wireframes for the Design of #${n}`, what: 'the wireframes' })
+  const { commit, branch, repo } = published
   writeFileSync(file, withWireframes(readFileSync(file, 'utf8'), wireframesSection({ repo, commit, files })))
   return {
     out: [ `Rendered ${files.length} wireframe(s) for #${n} and pushed them to ${branch} at ${commit.slice(0, 7)}:`, ...files.map((f) => `- ${f.id} ${f.state}: ${f.png}`), 'The draft\'s Wireframes section links to them at that commit. Review the Design again before you checkpoint it.' ].join('\n'),
