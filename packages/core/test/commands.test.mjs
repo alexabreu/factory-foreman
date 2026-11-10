@@ -13,7 +13,10 @@ import { parseRecords } from '../src/issue/records.mjs'
 import { getSection } from '../src/issue/sections.mjs'
 import { stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { fakeGitHub } from './fixtures/github.mjs'
-import { DESIGN, SHAPE } from './structure.test.mjs'
+import { DESIGN, SHAPE, WIREFRAME_COMMIT, WIREFRAME_PNG } from './structure.test.mjs'
+
+// GitHub holds the image the DESIGN fixture pins.
+const blobs = () => new Map([ [ `${WIREFRAME_COMMIT}:design/AC-1.png`, WIREFRAME_PNG ] ])
 
 function clone() {
   const dir = mkdtempSync(join(tmpdir(), 'ff-clone-'))
@@ -51,7 +54,7 @@ function writeDraft(file, body) {
 }
 
 test('two developers, a stale refusal, approval and the changelog', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write', ben: 'write' } })
   world.addIssue(7, 'Readers want to track what they have read.')
   const ana = developer(world, 'ana')
   const ben = developer(world, 'ben')
@@ -128,7 +131,7 @@ test('two developers, a stale refusal, approval and the changelog', async () => 
 })
 
 test('records are trusted only from the App, or from the approver themselves with write access', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write', eve: 'read' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write', eve: 'read' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -153,7 +156,7 @@ test('records are trusted only from the App, or from the approver themselves wit
 })
 
 test('approve refuses a version changed on GitHub after it was posted', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -165,7 +168,7 @@ test('approve refuses a version changed on GitHub after it was posted', async ()
 })
 
 test('a second approver can be required', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write', ben: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana', { config: { approvals: { requireSecondApprover: true } } })
   await ana.run('draft', 'shape')
@@ -178,7 +181,7 @@ test('a second approver can be required', async () => {
 })
 
 test('design checkpoints against the approved shape, and refuses a bad draft with every problem', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -199,7 +202,7 @@ test('design checkpoints against the approved shape, and refuses a bad draft wit
 })
 
 test('note validates its flags; an unchanged draft is not posted', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   assert.match((await ana.run('note')).err, /Say what to note/)
@@ -214,7 +217,7 @@ test('note validates its flags; an unchanged draft is not posted', async () => {
 })
 
 test('an approval forged by editing an old comment is not trusted', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write', cto: 'admin' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write', cto: 'admin' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -232,7 +235,7 @@ test('an approval forged by editing an old comment is not trusted', async () => 
 })
 
 test('a write that lands between the stale check and ours is reported, not recorded', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -252,7 +255,7 @@ test('a write that lands between the stale check and ours is reported, not recor
 })
 
 test('a checkpoint that failed after posting can be finished by checkpointing the same text', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -271,7 +274,7 @@ test('a checkpoint that failed after posting can be finished by checkpointing th
 })
 
 test('labels never repeat after a checkpoint comment is edited, and approval follows the comment', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -306,7 +309,7 @@ test('repo names match whatever their case', async () => {
 })
 
 test('adopting refuses a version a person wrote, naming the versions in between', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -320,7 +323,7 @@ test('adopting refuses a version a person wrote, naming the versions in between'
 })
 
 test('a deleted checkpoint comment does not free its label: the Changelog remembers it', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -337,7 +340,7 @@ test('a deleted checkpoint comment does not free its label: the Changelog rememb
 })
 
 test('two first checkpoints at once: the first artifact wins and the other run stops', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write', ben: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   const ben = developer(world, 'ben')
@@ -354,7 +357,7 @@ test('two first checkpoints at once: the first artifact wins and the other run s
 })
 
 test('two checkpoints appending to the Changelog at once both keep their entries', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -379,7 +382,7 @@ test('two checkpoints appending to the Changelog at once both keep their entries
 })
 
 test('a draft for another issue is refused, and a Windows draft is read', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -392,7 +395,7 @@ test('a draft for another issue is refused, and a Windows draft is read', async 
 })
 
 test('--reset keeps the old draft as a backup', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -406,7 +409,7 @@ test('--reset keeps the old draft as a backup', async () => {
 })
 
 test('approve stops if a new version is posted while the person confirms', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -427,7 +430,7 @@ test('approve stops if a new version is posted while the person confirms', async
 })
 
 test('note checks --step and --slice, and -- ends the flags', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   assert.match((await ana.run('note', 'x', '--step', 'build')).err, /--step is shape or design/)
@@ -436,7 +439,7 @@ test('note checks --step and --slice, and -- ends the flags', async () => {
 })
 
 test('a Changelog write that lands just before ours, from the version we read, is kept', async () => {
-  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write' } })
   world.addIssue(7)
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')
@@ -464,7 +467,7 @@ test('a Changelog write that lands just before ours, from the version we read, i
 test('approve shows a Design\'s slices, strips control characters, and accepts a padded yes', async () => {
   const { approvedBody } = await import('../src/commands/common.mjs')
   assert.equal(typeof approvedBody, 'function')
-  const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
+  const world = fakeGitHub({ blobs: blobs(), permissions: { ana: 'write', ben: 'write' } })
   world.addIssue(7, '')
   const ana = developer(world, 'ana')
   await ana.run('draft', 'shape')

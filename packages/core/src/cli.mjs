@@ -13,6 +13,7 @@ import { draft } from './commands/draft.mjs'
 import { note } from './commands/note.mjs'
 import { review } from './commands/review.mjs'
 import { status } from './commands/status.mjs'
+import { wireframes } from './commands/wireframes.mjs'
 import { loadConfig } from './config/load.mjs'
 import { Refusal } from './errors.mjs'
 import { appTokens, readApp } from './github/app.mjs'
@@ -21,7 +22,7 @@ import { detectHarness, gitCommonDir, stateDir, worktreeDraftPath } from './stat
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
-export const COMMANDS = { note, draft, review, checkpoint, amend, approve, status }
+export const COMMANDS = { note, draft, wireframes, review, checkpoint, amend, approve, status }
 
 const HELP = `factory-foreman ${version}
 
@@ -29,6 +30,7 @@ const HELP = `factory-foreman ${version}
   note --keep <id> | --drop <id> | --edit <id> "<text>"
   note --extract --transcript <path> [--session <id>] [--event <name>]   (from session hooks)
   draft <shape|design> [--reset]
+  wireframes design [--draft <file>]   (renders the issue's wireframes/*.html with agent-browser)
   review <shape|design> [--draft <file>] [--headless]
   review save <shape|design> --findings <file> [--draft <file>]
   checkpoint <shape|design> [--draft <file>]

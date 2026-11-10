@@ -57,6 +57,40 @@ export function createGitHub({ repo, run, appToken, botLogin }) {
       }
     },
 
+    // A file's bytes at a commit, or null when there is no such file there.
+    // Read through the blobs API, which serves files the contents API won't (over 1 MB).
+    async blob(commit, path) {
+      try {
+        const sha = (await run([ 'api', `repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`, '--jq', '.sha' ])).trim()
+        if (!sha) return null
+        const content = (await run([ 'api', `repos/${repo}/git/blobs/${sha}`, '--jq', '.content' ])).replace(/\s/g, '')
+        return Buffer.from(content, 'base64')
+      } catch (error) {
+        if (/HTTP 404|Not Found|No commit found/i.test(error.stderr ?? error.message)) return null
+        throw error
+      }
+    },
+
+    // A lightweight tag at a commit, as the developer; one already there at that
+    // commit is fine, one at another commit is an error.
+    // An annotated tag is followed to its commit.
+    async ensureTag(name, sha) {
+      try {
+        await run([ 'api', '-X', 'POST', `repos/${repo}/git/refs`, '-f', `ref=refs/tags/${name}`, '-f', `sha=${sha}` ])
+        return
+      } catch (error) {
+        if (!/Reference already exists/i.test(error.stderr ?? error.message)) throw error
+        let target
+        try {
+          target = (await run([ 'api', `repos/${repo}/git/ref/tags/${name.split('/').map(encodeURIComponent).join('/')}`, '--jq', '.object.type + " " + .object.sha' ])).trim().split(' ')
+          for (let depth = 0; target[0] === 'tag' && depth < 5; depth++) target = (await run([ 'api', `repos/${repo}/git/tags/${target[1]}`, '--jq', '.object.type + " " + .object.sha' ])).trim().split(' ')
+        } catch {
+          throw error
+        }
+        if (target[1] !== sha) throw new Error(`tag ${name} already points at ${String(target[1]).slice(0, 12)}`, { cause: error })
+      }
+    },
+
     // A missing issue reads as null; gh reports it as an error.
     async issue(n) {
       try {

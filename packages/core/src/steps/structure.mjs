@@ -5,14 +5,26 @@
 //           whose rows are | AC-n | criterion | visual? |)
 //   Design: Approach, Contracts (```contract JSON blocks), Visual behaviors
 //           ("- AC-n: what a reviewer sees"), Slices ("1. Title (AC-1, AC-2)",
-//           optionally followed by "   files: a, b")
+//           optionally followed by "   files: a, b"), and Wireframes when the
+//           approved Shape has a visual criterion: images rendered by
+//           `factory-foreman wireframes design`, one or more per visual AC,
+//           "![AC-n <state>, sha256:<hash>](<this repo's design/AC-n.png at a commit>?raw=true)"
 // Either may hold ```show JSON blocks; slices use them from phase 3.
 
 // A fence opens with three or more backticks or tildes, indented at most three
 // spaces, and closes on the same character at least as long, with nothing after.
-const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([^`\s]*)[^`]*$/
-const closes = (open, line) => { const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/); return Boolean(m && m[1][0] === open[0] && m[1].length >= open.length) }
+export const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([^`\s]*)[^`]*$/
+export const closes = (open, line) => { const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/); return Boolean(m && m[1][0] === open[0] && m[1].length >= open.length) }
 const AC_ID = /^AC-\d+$/
+// A wireframe image: its alt text names the AC, the state shown and the image's
+// content hash; its link is the image's blob at one commit, so it never changes.
+const IMAGE = /!\[([^\]]*)\]\(([^)\s]*)\)/g
+const WIREFRAME_ALT = /^(AC-\d+) ([a-z][a-z0-9-]*), sha256:([0-9a-f]{64})$/
+const PINNED = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/blob\/([0-9a-f]{40})\/(\S+?)\?raw=true$/
+// Anything that shows an image or media: only pinned wireframes may.
+const ANY_IMAGE = /!\[|<\s*(?:img|picture|source|svg|image|video|audio|object|embed|iframe)\b/gi
+// Where a wireframe of an AC in a state sits in the assets commit.
+export const wireframePath = (id, state) => `design/${id}${state === 'normal' ? '' : `-${state}`}.png`
 
 export const REQUIRED_SECTIONS = {
   shape: [ 'Problem', "Who it's for", 'Out of scope', 'Acceptance criteria' ],
@@ -122,6 +134,18 @@ export function parseDraft(text) {
     if (files && slices.length) slices.at(-1).files.push(...files[1].split(',').map((f) => f.trim()).filter(Boolean))
   }
 
+  const wireframes = []
+  for (const line of prose('Wireframes')) {
+    for (const [ , alt, url ] of line.matchAll(IMAGE)) {
+      const a = alt.trim().match(WIREFRAME_ALT)
+      const u = url.match(PINNED)
+      wireframes.push({ alt: alt.trim(), url, id: a?.[1] ?? null, state: a?.[2] ?? null, hash: a?.[3] ?? null, repo: u?.[1] ?? null, commit: u?.[2] ?? null, path: u?.[3] ?? null })
+    }
+  }
+  // Every image anywhere outside code blocks, wireframe or not.
+  // Code spans and escaped characters don't render, so they aren't images.
+  const images = [ ...leadLines, ...[ ...sections.keys() ].flatMap(prose) ].join('\n').replace(/(`+)[\s\S]*?\1/g, '').replace(/\\[<!]/g, '').match(ANY_IMAGE)?.length ?? 0
+
   return {
     unclosedFence: Boolean(fence),
     meta,
@@ -134,6 +158,8 @@ export function parseDraft(text) {
     showScripts: blocks('show'),
     visualBehaviors,
     slices,
+    wireframes,
+    images,
     words: countWords(body),
     leadWords: countWords(lead),
   }
@@ -141,7 +167,7 @@ export function parseDraft(text) {
 
 // Returns a list of problems; an empty list means the draft can be posted.
 // `shape` is the parsed approved Shape, used to cross-check a Design.
-export function checkStructure(step, draft, { budgets, shape } = {}) {
+export function checkStructure(step, draft, { budgets, shape, repo } = {}) {
   const problems = []
   const words = budgets?.words ?? {}
   if (/<!--\s*\/?factory-foreman:/.test(draft.body)) problems.push('The draft mustn\'t contain "factory-foreman:" markers; they belong to the issue body.')
@@ -153,6 +179,9 @@ export function checkStructure(step, draft, { budgets, shape } = {}) {
     if (!draft.sections.includes(name)) problems.push(`Missing the "## ${name}" section.`)
     else if (!/[\p{L}\p{N}]/u.test(draft.section(name))) problems.push(`The "## ${name}" section is empty.`)
   }
+
+  // An image that isn't a pinned wireframe could change after approval.
+  if (draft.images > (step === 'design' ? draft.wireframes.length : 0)) problems.push(step === 'design' ? 'Images go only in the Wireframes section, as factory-foreman wireframes design writes them: no other images, titled images, reference images or HTML images or media.' : 'A Shape has no images: describe what a person sees in its criteria, and draw it in the Design\'s wireframes.')
 
   if (step === 'shape') {
     if (!draft.criteria.length) problems.push('Acceptance criteria needs at least one row: | AC-1 | criterion | visual |.')
@@ -175,6 +204,11 @@ export function checkStructure(step, draft, { budgets, shape } = {}) {
       if (s.n !== i + 1) problems.push(`Slices must be numbered 1, 2, 3…; found ${s.n} at position ${i + 1}.`)
       if (!s.acs.length) problems.push(`Slice ${s.n} names no acceptance criteria.`)
     })
+    for (const w of draft.wireframes) {
+      if (!w.id) problems.push(`The wireframe image "${w.alt}" needs alt text "AC-n <state>, sha256:<64-hex hash>"; factory-foreman wireframes design writes it.`)
+      const where = w.id ? wireframePath(w.id, w.state) : 'design/<AC>.png'
+      if (!w.commit || !w.path || w.path !== where || (repo && w.repo?.toLowerCase() !== repo.toLowerCase())) problems.push(`The wireframe for ${w.id ?? w.alt} must link to this repo's image at a commit: https://github.com/${repo ?? '<owner>/<repo>'}/blob/<commit sha>/${where}?raw=true. factory-foreman wireframes design writes it.`)
+    }
     if (shape) {
       const ids = new Set(shape.criteria.map((c) => c.id))
       const owners = new Map()
@@ -194,13 +228,18 @@ export function checkStructure(step, draft, { budgets, shape } = {}) {
         if (!described.has(c.id)) problems.push(`${c.id} is visual: add "- ${c.id}: what a reviewer sees" under Visual behaviors.`)
       }
       for (const v of draft.visualBehaviors) if (!ids.has(v.id)) problems.push(`Visual behaviors names ${v.id}, which the approved Shape doesn't have.`)
+      const drawn = new Set(draft.wireframes.map((w) => w.id))
+      for (const c of shape.criteria.filter((c) => c.visual)) {
+        if (!drawn.has(c.id)) problems.push(`${c.id} is visual: add its wireframe (write wireframes/${c.id}.html in the issue's state folder, which factory-foreman draft design names, then run factory-foreman wireframes design).`)
+      }
+      for (const id of new Set(draft.wireframes.map((w) => w.id).filter(Boolean))) if (!ids.has(id)) problems.push(`Wireframes names ${id}, which the approved Shape doesn't have.`)
     }
   }
   return problems
 }
 
 // The parts of a draft that other work depends on: the acceptance criteria,
-// the contracts, the visual behaviors and the slices. Two drafts with the same
+// the contracts, the visual behaviors, the slices and the wireframe images. Two drafts with the same
 // blocks differ only in wording, so an amendment between them is minor.
 // Whitespace inside a criterion or behavior is normalised; anything else
 // (an added word in a criterion, a changed ID or visual flag, a slice owning
@@ -212,5 +251,7 @@ export function structuralBlocks(draft) {
     contracts: draft.contracts.map((c) => (c.error ? { error: true } : c.value)),
     visualBehaviors: draft.visualBehaviors.map((v) => [ v.id, squash(v.text) ]),
     slices: draft.slices.map((s) => [ s.n, s.acs, s.files ]),
+    // The image's content, not the commit it was pushed in: re-pushing the same image is wording.
+    wireframes: draft.wireframes.map((w) => [ w.id, w.state, w.hash ?? w.url ]),
   })
 }

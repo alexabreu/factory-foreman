@@ -119,3 +119,33 @@ test('issue: a missing issue is null, other failures are errors', async () => {
   assert.equal(await createGitHub({ repo: 'o/r', run: fail('GraphQL: Could not resolve to an issue or pull request with the number of 9. (repository.issue)') }).issue(9), null)
   await assert.rejects(createGitHub({ repo: 'o/r', run: fail('connection reset') }).issue(9), /gh failed/)
 })
+
+test('ensureTag creates a tag, accepts one already at that commit through an annotated tag, and refuses one elsewhere', async () => {
+  const fail = (stderr) => Object.assign(new Error(`gh failed: ${stderr}`), { stderr })
+  const C = 'c'.repeat(40)
+  const make = (answers) => {
+    const calls = []
+    const run = async (args) => { calls.push(args); const a = answers.shift(); if (a instanceof Error) throw a; return a ?? '' }
+    return { calls, gh: createGitHub({ repo: 'o/r', run, appToken: null, botLogin: null }) }
+  }
+  // Created, as the developer, under refs/tags/.
+  let { calls, gh } = make([ '' ])
+  await gh.ensureTag('factory-foreman-assets/7/cccccccccccc', C)
+  assert.deepEqual(calls[0], [ 'api', '-X', 'POST', 'repos/o/r/git/refs', '-f', 'ref=refs/tags/factory-foreman-assets/7/cccccccccccc', '-f', `sha=${C}` ])
+  // Already there at the commit, directly or through an annotated tag object.
+  ;({ calls, gh } = make([ fail('HTTP 422: Reference already exists'), `commit ${C}\n` ]))
+  await gh.ensureTag('factory-foreman-assets/7/cccccccccccc', C)
+  assert.equal(calls[1][1], 'repos/o/r/git/ref/tags/factory-foreman-assets/7/cccccccccccc')
+  ;({ calls, gh } = make([ fail('HTTP 422: Reference already exists'), `tag ${'d'.repeat(40)}\n`, `commit ${C}\n` ]))
+  await gh.ensureTag('t', C)
+  assert.equal(calls[2][1], `repos/o/r/git/tags/${'d'.repeat(40)}`)
+  // At another commit: an error naming it.
+  ;({ gh } = make([ fail('HTTP 422: Reference already exists'), `commit ${'e'.repeat(40)}\n` ]))
+  await assert.rejects(gh.ensureTag('t', C), /already points at eeeeeeeeeeee/)
+  // Any other failure, a 422 rule violation included, is the POST's own error.
+  ;({ calls, gh } = make([ fail('HTTP 422: Repository rule violations found') ]))
+  await assert.rejects(gh.ensureTag('t', C), /Repository rule violations/)
+  assert.equal(calls.length, 1)
+  ;({ gh } = make([ fail('HTTP 422: Reference already exists'), fail('HTTP 404: Not Found') ]))
+  await assert.rejects(gh.ensureTag('t', C), /Reference already exists/)
+})

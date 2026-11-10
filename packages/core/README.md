@@ -15,6 +15,7 @@ capture and the approve guard work; slices and verify arrive in later phases.
 | `note --keep <id>` / `--edit <id> "<text>"` / `--drop <id>` | Confirms, rewrites or discards a note extracted from a session |
 | `note --extract --transcript <path> [--session <id>] [--event <name>]` | Extracts notes from a session transcript (run by the session hooks) |
 | `draft <shape\|design> [--reset]` | Prints the drafting brief and writes the draft file |
+| `wireframes design` | Renders each wireframe page to PNG with agent-browser, pushes pages and images to the `factory-foreman-assets/<n>` branch, and links them in the draft at that commit |
 | `review <shape\|design> [--headless]` | Prints one brief per reviewer with the draft's hash; `--headless` runs them through a command |
 | `review save <shape\|design> --findings <file>` | Saves the settled findings for the draft as it is now |
 | `checkpoint <shape\|design> [--draft <file>]` | Checks the draft and its saved review, and posts it as the next version |
@@ -71,6 +72,65 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
   model (`capture.claude`, or `capture.codex` under Codex) for decisions,
   rejected options and questions, and logs them unconfirmed. `Stop` waits until
   `capture.minChars` of new text. It never blocks or fails a session.
+
+## Wireframes
+
+A Design whose approved Shape has a visual criterion needs a wireframe for each
+one. The drafting agent writes a small, self-contained, low-fidelity HTML page
+per visual criterion at `.factory-foreman/<n>/wireframes/AC-<n>.html` (and
+`AC-<n>-<state>.html` for an edge state), laid out like the real component it
+extends. A page may refer only to itself (`#…`) or to `data:` URLs: no scripts,
+event handlers, frames, links, fonts, images or CSS that loads anything, so it
+renders offline and can't pull a local file into a pushed image.
+
+`factory-foreman wireframes design` renders each page to PNG with
+[agent-browser](https://github.com/vercel-labs/agent-browser) (`npm install -g
+agent-browser`, then `agent-browser install`) and puts the pages and images in
+one commit, by you, on the assets-only branch `factory-foreman-assets/<n>`
+(under `design/`, on top of that branch's last commit). When a version that
+pins it is checkpointed or amended, that commit is tagged
+`factory-foreman-assets/<n>/<first 12 hex of the commit>`, so a posted
+version's images stay reachable if the branch is deleted; a rerender nobody
+posts leaves no tag. The tag is made through your gh login, which needs write access
+to the repo's contents; if it can't, checkpoint still posts and prints the
+`gh api` command that makes the tag. It builds and pushes that commit from a bare repo of its own,
+`.factory-foreman/assets.git`, so nothing is written to your repo's `.git`: your
+working tree, index and current branch are never touched, and the issue branch
+never carries the assets into the product. It pushes to origin, which must name the issue's repo, with your git
+credentials: the ssh command, credential helpers, http, URL-rewrite and signing
+settings your repo has (from its own config, its includes, or an includeIf that
+matches it) are passed on through the environment, and it signs the commit when
+you sign commits. A global `core.hooksPath` pre-push hook still runs. It needs network access.
+Then it writes the draft's `## Wireframes` section.
+
+Each image's alt text carries the image's full sha256, and its link is this
+repo's `design/<AC>.png` at that commit with `?raw=true`. Checkpoint reads every
+pinned image back from GitHub and refuses one that's missing or doesn't match
+its hash, so a posted version's images are the ones that were reviewed, and a
+changed image makes an amendment material. It also refuses a Design missing a
+visual criterion's wireframe, naming an unknown criterion, or holding any other
+image (titled, by reference, in HTML, or outside Wireframes). Reviewers
+configured with `?visual` (by default `ux-designer`) get the pinned images as
+files in their brief and look at them.
+
+## Known limitations
+
+**Wireframes don't render inside Codex's sandbox.** agent-browser needs the
+sandbox's network on to open its local socket, and even then Chrome can't start
+inside Codex's sandbox without `--no-sandbox`. Under Codex, `wireframes design`
+checks the pages, then refuses and gives the command for the person to run in
+their own terminal; the agent then re-reads the draft, which that run updates,
+and carries on. Possible solutions:
+
+1. An opt-in setting that passes `--no-sandbox` to Chrome only under Codex:
+   reasonably safe, since the pages are self-contained and can't load anything
+   or run scripts, but it switches off one of Chrome's safety layers.
+2. Render in CI with a GitHub Action once the pages are pushed through the
+   assets repo (which still needs network): no local browser, at the cost of a
+   workflow and a wait for CI.
+3. Generate wireframes as SVG, which GitHub renders directly, removing the
+   browser step: loses the fidelity of laying them out with HTML and CSS.
+4. Revisit if Codex's sandbox gains a way to allow Chrome.
 
 ## Local state
 

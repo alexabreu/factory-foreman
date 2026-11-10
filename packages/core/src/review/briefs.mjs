@@ -21,6 +21,9 @@ export const postedBody = (draft) => `${draft.body.trim()}\n`
 export const draftHash = (draft) => hash(postedBody(draft))
 
 // Which reviewers a step needs, given the draft and (for Design) the approved Shape.
+// Reviewers that look at what a person sees (configured with ?visual) get the wireframe images.
+export const visualReviewers = (step, config) => new Set((config.reviewers?.[step] ?? []).filter((e) => e.split('?')[1] === 'visual').map((e) => e.split('?')[0]))
+
 export function reviewersFor(step, config, { draft, shape }) {
   const visual = (step === 'design' ? shape : draft)?.criteria?.some((c) => c.visual) ?? false
   const names = (config.reviewers?.[step] ?? []).flatMap((entry) => {
@@ -43,7 +46,7 @@ const OUTPUT = `Reply with only a JSON array of findings, and nothing else:
 [{ "id": "<short-id>", "severity": "${SEVERITIES.join('|')}", "text": "<what is wrong and why it matters>", "where": "<section, criterion or line>" }]
 Reply [] when there is nothing to fix. A finding is something the author must settle: accept it, change the draft, or overrule it with a reason.`
 
-export function brief({ reviewer, step, issue, draft, shape, shapeVersion }) {
+export function brief({ reviewer, step, issue, draft, shape, shapeVersion, images = [] }) {
   const who = reviewer === SECOND_OPINION
     ? 'You are giving an independent second opinion on this draft. Read it as a skeptical senior engineer who wasn\'t in the room.'
     : `You are the ${reviewer} reviewer. Follow your agent instructions (the ${reviewer} agent), and load the repo's standards skill for your role if it has one.`
@@ -57,6 +60,10 @@ export function brief({ reviewer, step, issue, draft, shape, shapeVersion }) {
     '</draft>',
   ]
   if (step === 'design' && shape) parts.push('', `The approved Shape (${shapeVersion}) it builds on:`, '', '<shape>', shape.body.trim(), '</shape>')
+  if (images.length) {
+    parts.push('', 'Open and look at each wireframe image before you review: check it against its visual acceptance criterion (the layout, the states it shows, the labels matching the contracts\' accessible names) and for accessibility (reading and focus order, visible labels, contrast, target size).')
+    for (const i of images) parts.push(`- ${i.id} ${i.state}: ${i.path ?? `not available in this checkout (${i.url}); say so in a finding, since you can't review it`}`)
+  }
   parts.push('', OUTPUT)
   return parts.join('\n')
 }

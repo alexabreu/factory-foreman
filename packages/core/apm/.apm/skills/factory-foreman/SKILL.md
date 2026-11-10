@@ -47,7 +47,12 @@ Only confirmed notes reach GitHub.
 2. Edit the draft file. Keep its front matter: `base` is the version you started
    from, and the CLI uses it to refuse a stale write.
 3. Follow `references/shape.md` or `references/design.md` for what goes in each
-   section.
+   section. For a Design whose Shape has a visual criterion, write its
+   wireframes and run `factory-foreman wireframes design` (see
+   `references/design.md`); it renders, commits and pushes them, and writes
+   the draft's Wireframes section. In Codex it checks the pages, then refuses:
+   ask the person to run the command it names in their terminal, don't edit
+   the draft meanwhile, then re-read the draft it updated and carry on.
 4. Show the person the draft and settle anything they raise.
 5. Have it reviewed (below).
 6. `factory-foreman checkpoint shape` posts it as the next version. If it's
