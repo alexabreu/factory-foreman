@@ -1,0 +1,3 @@
+Error: Cannot find module '/work/src/remove' imported from /work/e2e/imp.e2e.ts
+    at eval (<anonymous>:1:1)
+

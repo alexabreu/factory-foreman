@@ -425,7 +425,7 @@ test('status lists open blocking questions and slices', async () => {
   const out = await ana.run('status', '--json')
   assert.equal(out.code, 0, out.err)
   const json = JSON.parse(out.out)
-  assert.deepEqual(json.steps.shape, { latest: null, approved: null, latestApproved: false })
+  assert.deepEqual(json.steps.shape, { latest: null, approved: null, approval: null, latestApproved: false })
   assert.deepEqual(json.questions.map((q) => q.text), [ 'Do we need export?' ])
   assert.deepEqual(json.slices, [])
   assert.match((await ana.run('status')).out, /Open blocking questions \(1\):\n- Do we need export\? \(shape\)\nSlices: none yet/)

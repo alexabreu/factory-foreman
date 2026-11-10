@@ -12,6 +12,7 @@ import { amend, checkpoint } from './commands/checkpoint.mjs'
 import { draft } from './commands/draft.mjs'
 import { note } from './commands/note.mjs'
 import { review } from './commands/review.mjs'
+import { slice } from './commands/slice.mjs'
 import { status } from './commands/status.mjs'
 import { wireframes } from './commands/wireframes.mjs'
 import { loadConfig } from './config/load.mjs'
@@ -22,7 +23,7 @@ import { detectHarness, gitCommonDir, stateDir, worktreeDraftPath } from './stat
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
-export const COMMANDS = { note, draft, wireframes, review, checkpoint, amend, approve, status }
+export const COMMANDS = { note, draft, wireframes, review, checkpoint, amend, approve, slice, status }
 
 const HELP = `factory-foreman ${version}
 
@@ -36,6 +37,12 @@ const HELP = `factory-foreman ${version}
   checkpoint <shape|design> [--draft <file>]
   amend <shape|design> --reason "<why>" [--draft <file>]
   approve <shape|design> v<N>          (a person, in their own terminal)
+  slice open <n>                       cut the slice's branch and draft PR from the approved Design
+  slice tests <n> [--save]             brief the AC tests, then freeze them
+  slice review <n> | review save <n> --findings <file>
+  slice iterate [<n>]                  checks, AC gate, review, show scripts, then push and tag
+  slice merge <n>                      (a person, in their own terminal)
+  slice list
   status
 
 Every issue command takes --issue <n>, or reads it from a factory-foreman/<n> branch.
@@ -88,8 +95,8 @@ export function context({ cwd = process.cwd(), env = process.env, flags = {} } =
       let stdout = ''
       let stderr = ''
       const timer = setTimeout(() => { stderr += `\nstopped after ${timeout / 1000} s`; child.kill('SIGKILL') }, timeout)
-      child.stdout.on('data', (d) => { stdout += d })
-      child.stderr.on('data', (d) => { stderr += d })
+      child.stdout.setEncoding('utf8').on('data', (d) => { stdout += d })
+      child.stderr.setEncoding('utf8').on('data', (d) => { stderr += d })
       child.on('error', (error) => { clearTimeout(timer); resolve({ code: 127, stdout, stderr: error.message }) })
       child.on('close', (code) => { clearTimeout(timer); resolve({ code: code ?? 1, stdout, stderr }) })
       // A child that exits before reading its input closes the pipe; its exit says why.
@@ -112,7 +119,7 @@ export async function main(argv, makeContext = context) {
   if (!command || command === '--help' || command === 'help') return { code: 0, out: HELP }
   const run = COMMANDS[command]
   if (!run) return { code: 1, err: `Unknown command "${command}". Run factory-foreman --help.` }
-  const args = parseArgs(rest, { booleans: [ 'json', 'blocking', 'reset', 'extract', 'headless' ] })
+  const args = parseArgs(rest, { booleans: [ 'json', 'blocking', 'reset', 'extract', 'headless', 'save' ] })
   try {
     const ctx = makeContext({ flags: args.flags })
     const result = await run(ctx, args)

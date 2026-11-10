@@ -5,6 +5,7 @@ import { addChangelogLine, addDecisionRows, setSection, updateBody } from '../is
 import { statusLine } from '../issue/status.mjs'
 import { postedBody, readDraftFile, requireReview, reviewersFor } from '../review/briefs.mjs'
 import { checkStructure, parseDraft, structuralBlocks } from '../steps/structure.mjs'
+import { affectedSlices } from '../slices/plan.mjs'
 import { sha256 } from './wireframes.mjs'
 import { readLog } from '../state/local.mjs'
 import { entriesSince } from './draft.mjs'
@@ -52,10 +53,13 @@ async function post(ctx, { step, file: given, amend: amending }) {
   if (current && draft.meta.baseHash && draft.meta.baseHash !== hash(current.body)) throw new Refusal(`Stale: ${title(step)} version ${latest} doesn't match the one your draft started from.`)
 
   let shape = null
+  let shapeVersion = null
   if (step === 'design') {
     const body = approvedBody(state.steps.shape)
     if (!body) throw new Refusal('Design needs an approved Shape first. Approve one with factory-foreman approve shape v<N>.')
     shape = parseDraft(body)
+    // The approval it rests on (vN); a later minor amendment keeps it.
+    shapeVersion = state.steps.shape.approved.version
   }
   const problems = checkStructure(step, draft, { budgets: config.budgets, shape, repo: github.repo })
   // A wireframe's hash is only a claim until the pinned image is read back from GitHub.
@@ -80,7 +84,9 @@ async function post(ctx, { step, file: given, amend: amending }) {
     if (sameText(recordedBody, body)) throw new Refusal(`The draft is the same as ${title(step)} ${info.latest.version}; nothing to amend.`)
     amending.minor = structuralBlocks(parseDraft(recordedBody)) === structuralBlocks(draft)
     amending.carries = info.approved.version
-    amending.slices = []
+    // The slices built on what changed: none for a minor amendment.
+    const approvedDesign = step === 'shape' ? approvedBody(state.steps.design) : null
+    amending.slices = amending.minor ? [] : affectedSlices({ step, before: parseDraft(recordedBody), after: draft, design: approvedDesign ? parseDraft(approvedDesign) : null })
   }
 
   // Extracted notes are only guesses until someone keeps or drops them.
@@ -167,6 +173,8 @@ async function post(ctx, { step, file: given, amend: amending }) {
   // 3. The record that makes the version count.
   const record = {
     type: 'checkpoint', repo: github.repo, issue: n, step, version, previous, artifact: { number, version: posted.version }, hash: hash(posted.body), author, harness: ctx.harness, at: now.toISOString(),
+    // The approved Shape a Design was written against, so slices can check they pin a matching pair.
+    ...(shapeVersion ? { shapeVersion } : {}),
     ...(review ? { review: review.hash } : {}),
     ...(amending ? { amend: true, reason: amending.reason, minor: amending.minor, ...(amending.minor ? { carries: amending.carries } : {}) } : {}),
   }

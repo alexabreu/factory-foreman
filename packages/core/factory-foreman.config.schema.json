@@ -96,6 +96,28 @@
         "minChars": { "type": "integer", "minimum": 0 }
       }
     },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ac": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The acceptance-criteria tests a slice is gated on. No defaults: each repo names its own files and runner.",
+          "properties": {
+            "files": { "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/globs" } ] },
+            "run": { "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/argv" } ] },
+            "cwd": { "type": "string", "minLength": 1 },
+            "timeout": { "type": "integer", "minimum": 1000 }
+          }
+        },
+        "show": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "files": { "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/globs" } ] } }
+        }
+      }
+    },
     "checks": {
       "type": "object",
       "additionalProperties": false,

@@ -40,6 +40,39 @@ export function fakeGitHub({ repo = 'owner/sandbox', botLogin = 'foreman[bot]', 
           const r = spawnSync('git', [ '--git-dir', world.gitDir, 'cat-file', 'blob', `${commit}:${path}` ])
           return r.status === 0 ? r.stdout : null
         },
+        // Pull requests live in the issue numbering, as on GitHub. A PR's head
+        // commit is read from the bare repo standing in for GitHub.
+        async createPr({ head, base, title, body, draft = true }) {
+          const number = Math.max(0, ...issues.keys()) + 1
+          issues.set(number, { number, title, body, url: `https://github.com/${repo}/pull/${number}`, state: 'OPEN', comments: [], artifacts: [], pr: { head, base, draft, author: viewer, reviews: [], assignees: [], merged: null } })
+          log.push({ op: 'createPr', number, head, base, by: viewer })
+          return number
+        },
+        async pr(n) {
+          const i = get(n)
+          if (!i?.pr) return null
+          const sha = world.gitDir ? spawnSync('git', [ '--git-dir', world.gitDir, 'rev-parse', `refs/heads/${i.pr.head}` ], { encoding: 'utf8' }).stdout.trim() : null
+          return { number: n, url: i.url, state: i.state, isDraft: i.pr.draft, headRefName: i.pr.head, headRefOid: i.pr.merged?.sha ?? sha, baseRefName: i.pr.base, author: { login: i.pr.author } }
+        },
+        async prForBranch(branch) {
+          const all = [ ...issues.values() ].filter((x) => x.pr?.head === branch && !x.pr.fork)
+          const i = all.find((x) => x.state === 'OPEN') ?? all.find((x) => x.state === 'MERGED') ?? all[0]
+          return i ? { number: i.number, state: i.state, baseRefName: i.pr.base, url: i.url } : null
+        },
+        async prReviews(n) { return get(n).pr.reviews.map((r) => ({ ...r })) },
+        async checksAt(sha) { return (world.checks?.get(sha) ?? []).map((c) => ({ ...c })) },
+        async runsFor(sha) { return (world.runs?.get(sha) ?? []).map((r) => ({ ...r })) },
+        async mergePr(n, sha) {
+          const pr = await this.pr(n)
+          if (pr.headRefOid !== sha) throw Object.assign(new Error('gh api failed: Head branch was modified. Review and try the merge again.'), { stderr: 'HTTP 409: Head branch was modified' })
+          get(n).state = 'MERGED'
+          get(n).pr.merged = { sha, by: viewer }
+          log.push({ op: 'mergePr', n, sha, by: viewer })
+          return { sha: `merge-of-${sha.slice(0, 7)}`, merged: true }
+        },
+        async markReady(n) { get(n).pr.draft = false; log.push({ op: 'ready', n, by: viewer }) },
+        async setPrBase(n, base) { get(n).pr.base = base; log.push({ op: 'setPrBase', n, base, by: viewer }) },
+        async addAssignee(n, login) { get(n).pr.assignees.push(login); log.push({ op: 'assign', n, login, by: viewer }) },
         async permission(login) { return permissions[login] ?? 'none' },
         async issue(n) {
           const i = get(n)

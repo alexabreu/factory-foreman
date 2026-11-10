@@ -198,6 +198,7 @@ export function checkStructure(step, draft, { budgets, shape, repo } = {}) {
     draft.contracts.forEach((c, i) => {
       if (c.error) problems.push(`Contract ${i + 1} isn't valid JSON: ${c.error}`)
       else if (typeof c.value?.name !== 'string' || !c.value.name.trim() || !Array.isArray(c.value?.testIds) || !c.value.testIds.length || !c.value.testIds.every((t) => typeof t === 'string' && t.trim())) problems.push(`Contract ${i + 1} needs a "name" and a non-empty "testIds" list.`)
+      else if (c.value.slice !== undefined && !draft.slices.some((s) => s.n === c.value.slice)) problems.push(`Contract ${i + 1} ("${c.value.name}") names slice ${JSON.stringify(c.value.slice)}, which isn't in Slices.`)
     })
     if (!draft.slices.length) problems.push('Slices needs at least one numbered slice: 1. Title (AC-1).')
     draft.slices.forEach((s, i) => {

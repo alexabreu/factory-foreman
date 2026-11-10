@@ -91,6 +91,64 @@ export function createGitHub({ repo, run, appToken, botLogin }) {
       }
     },
 
+    // Pull requests, for slices. Opening, merging and retargeting go out as
+    // the developer; the factory's records on them as the App.
+    async createPr({ head, base, title, body, draft = true }) {
+      const out = await run([ 'pr', 'create', ...R, '--head', head, '--base', base, '--title', title, '--body-file', '-', ...(draft ? [ '--draft' ] : []) ], { input: body })
+      const number = Number(out.trim().match(/\/pull\/(\d+)\s*$/)?.[1])
+      if (!number) throw new Error(`gh pr create didn't return a pull request URL: ${out.trim()}`)
+      return number
+    },
+
+    async pr(n) {
+      return json(await run([ 'pr', 'view', String(n), ...R, '--json', 'number,url,state,isDraft,headRefName,headRefOid,baseRefName,author' ]))
+    },
+
+    // This repo's own pull request for a branch: an open one first, then a merged
+    // one; a closed one only when there's nothing else. Forks' PRs never count.
+    async prForBranch(branch) {
+      const prs = (json(await run([ 'pr', 'list', ...R, '--head', branch, '--state', 'all', '--json', 'number,state,baseRefName,url,isCrossRepository' ])) ?? []).filter((p) => !p.isCrossRepository)
+      return prs.find((p) => p.state === 'OPEN') ?? prs.find((p) => p.state === 'MERGED') ?? prs[0] ?? null
+    },
+
+    async prReviews(n) {
+      const pages = json(await run([ 'api', '--paginate', '--slurp', `repos/${repo}/pulls/${n}/reviews?per_page=100` ])) ?? []
+      return pages.flat().map((r) => ({ login: r.user?.login, type: r.user?.type, state: r.state, commit: r.commit_id, at: r.submitted_at }))
+    },
+
+    // Check runs and commit statuses at a commit.
+    async checksAt(sha) {
+      const runs = json(await run([ 'api', '--paginate', '--slurp', `repos/${repo}/commits/${sha}/check-runs?per_page=100` ])) ?? []
+      // The combined status covers every commit status, however many pages they span.
+      const status = json(await run([ 'api', `repos/${repo}/commits/${sha}/status` ])) ?? {}
+      return [
+        ...runs.flatMap((p) => p.check_runs ?? []).map((c) => ({ name: c.name, state: c.status === 'completed' ? c.conclusion : c.status, url: c.html_url })),
+        ...(status.total_count ? [ { name: 'commit statuses', state: status.state, url: null } ] : []),
+      ]
+    },
+
+    async runsFor(sha) {
+      const out = json(await run([ 'api', `repos/${repo}/actions/runs?head_sha=${sha}&per_page=20` ])) ?? {}
+      return (out.workflow_runs ?? []).map((r) => ({ name: r.name, url: r.html_url, state: r.status }))
+    },
+
+    // Merges exactly that commit: GitHub refuses if the head has moved on.
+    async mergePr(n, sha) {
+      return json(await run([ 'api', '-X', 'PUT', `repos/${repo}/pulls/${n}/merge`, '-f', `sha=${sha}`, '-f', 'merge_method=merge' ]))
+    },
+
+    async markReady(n) {
+      await run([ 'pr', 'ready', String(n), ...R ])
+    },
+
+    async setPrBase(n, base) {
+      await run([ 'api', '-X', 'PATCH', `repos/${repo}/pulls/${n}`, '-f', `base=${base}` ])
+    },
+
+    async addAssignee(n, login) {
+      await run([ 'api', '-X', 'POST', `repos/${repo}/issues/${n}/assignees`, '-f', `assignees[]=${login}` ])
+    },
+
     // A missing issue reads as null; gh reports it as an error.
     async issue(n) {
       try {

@@ -21,7 +21,13 @@ capture and the approve guard work; slices and verify arrive in later phases.
 | `checkpoint <shape\|design> [--draft <file>]` | Checks the draft and its saved review, and posts it as the next version |
 | `amend <shape\|design> --reason "<why>"` | Changes an approved version: minor (vN.M, keeps the approval) or material (vN+1, needs one) |
 | `approve <shape\|design> v<N>` | A person approves that version from their own terminal: it shows the criteria (or slices) and asks y/N |
-| `status` | Each step's latest and approved version, and open blocking questions |
+| `slice open <n>` | Cuts slice n's branch and draft PR, stacked on the slice below, pinned to the approved Shape and Design |
+| `slice tests <n> [--save]` | Briefs the test-verification-engineer, then freezes the AC tests and show scripts it committed |
+| `slice review <n>` / `slice review save <n> --findings <file>` | Code review of the slice's head commit, settled like Shape and Design reviews |
+| `slice iterate [<n>]` | Light checks, the AC gate, the saved review and the show scripts; then pushes, tags and posts the iteration |
+| `slice merge <n>` | A person merges the slice from their own terminal once its PR is approved at the head and CI is green |
+| `slice list` | Each slice: state, PR, owner, iterations and pinned versions |
+| `status` | Each step's latest and approved version, open blocking questions, and slices (stale ones flagged) |
 
 Every issue command takes `--issue <n>`, or reads it from a `factory-foreman/<n>`
 branch, and `--json` for machine-readable output. A refusal exits with code 2
@@ -113,6 +119,74 @@ image (titled, by reference, in HTML, or outside Wireframes). Reviewers
 configured with `?visual` (by default `ux-designer`) get the pinned images as
 files in their brief and look at them.
 
+## Slices
+
+Once Shape and Design are approved, each slice of the Design is built on its
+own branch, `factory-foreman/<issue>-slice-<n>`, with a draft pull request
+stacked on the slice below (slice 1 on `factory-foreman/<issue>`). At most
+`stackDepth` slices are open at once. A slice pins the approved Shape and
+Design; the Design's checkpoint records the Shape it was written against, and
+a slice won't open on a pair that doesn't match. A newer Shape awaiting
+approval is a warning; once approved, slices pinned below it show as stale in
+`status`, and a material amendment names the slices it affects.
+
+1. `slice open <n>`.
+2. `slice tests <n>` briefs the `test-verification-engineer`, which reads only
+   the approved Shape and Design and writes the slice's AC tests (an `AC-n` in
+   each test's title or file name) against its contracts' test ids, plus a show
+   script per visual AC, as the slice's first commit. `slice tests <n> --save`
+   freezes them: only test and show-script files, every owned AC covered, and
+   each test failing at base for a reason the slice fixes (the base half of
+   the AC gate), so a hollow test is caught while it can still be fixed.
+3. Build the slice, `slice review <n>`, settle the findings, `slice review save`.
+4. `slice iterate` refuses unless the frozen tests and show scripts are
+   unchanged, the diff stays within the slice's files plus `sharedFiles` and
+   `budgets.sliceLines` (and never touches `factory-foreman.config.json`), the
+   review of that commit is saved, the light checks pass, the AC gate passes,
+   and every show script replays. Then it pushes, tags
+   `factory-foreman/<issue>/slice-<n>/iter-<k>` and the App posts the iteration
+   on the PR.
+5. A person runs `slice merge <n>`: the PR must be approved at its head commit
+   by someone with write access, CI green there, and the slices below merged.
+   It merges exactly that commit and retargets the slice above.
+
+The rules a slice is held to (tests, checks, budgets, `sharedFiles`,
+reviewers) are read from the config at the slice's base, so a slice can't
+loosen them for itself.
+
+**The AC gate** checks the slice's base and head out into a temporary folder
+outside the repo (through a temporary index, only reading `.git`), links the
+repo's `node_modules`, copies in the frozen tests and runs `tests.ac.run` on
+them. It reads the JUnit reports `evidence.reports` finds, from `tests.ac.cwd`
+or the repo root, and judges each failure by its message, not the code frame
+quoting the test. At base every test must fail for a reason the slice fixes: an
+assertion, an import of a file the slice owns and base doesn't have, or a
+locator waiting for a test id the slice's contract adds (one base doesn't
+quote). A test that passes at base, or fails any other way (a page that won't
+load, importing an existing file under a wrong name), is refused. At head the
+runner must exit 0 and every frozen file and owned AC must have a passing test.
+The gate proves the tests fail before and pass after; whether they assert
+enough is for the reviewers.
+
+The AC tests' files and runner have no defaults, since they're each repo's own;
+`slice tests` and `slice iterate` refuse until they're set:
+
+```json
+{
+  "tests": {
+    "ac": { "files": ["e2e/**/*.e2e.ts"], "run": ["npx", "playwright", "test"], "cwd": ".", "timeout": 600000 },
+    "show": { "files": ["show/**/*.json"] }
+  },
+  "checks": { "tiers": { "slice": [ { "name": "types", "run": ["npx", "tsc", "--noEmit"], "when": "changed:src/**" } ] } },
+  "preview": { "start": ["npm", "run", "dev"], "url": "http://localhost:5173" }
+}
+```
+
+A contract belongs to the slice it names (`"slice": 2`), or else to every slice
+owning one of its files. The truth about a slice is the App's latest record on
+its pull request, found by the slice's branch; `.factory-foreman/<n>/slices.json`
+is only a copy of it, never read back as truth.
+
 ## Known limitations
 
 **Wireframes don't render inside Codex's sandbox.** agent-browser needs the
@@ -131,6 +205,30 @@ and carries on. Possible solutions:
 3. Generate wireframes as SVG, which GitHub renders directly, removing the
    browser step: loses the fidelity of laying them out with HTML and CSS.
 4. Revisit if Codex's sandbox gains a way to allow Chrome.
+
+**Slices need a writable `.git` to commit.** `slice open`, `slice tests --save`
+and `slice iterate` commit and push. Codex's workspace-write sandbox makes
+`.git` read-only, so there they refuse until the person adds `.git` as a
+writable root; `slice iterate` also runs the AC tests in a browser and refuses
+inside Codex with the command for the person to run.
+
+**Frozen tests are final.** `slice tests --save` checks each test fails at base
+for the right reason before freezing, but a frozen test that turns out wrong
+(it can't pass however the slice is built) has no command to unfreeze it yet:
+the person closes the slice's pull request and deletes its branch, and the
+slice is opened again.
+
+**Show scripts need the preview URL free.** `slice iterate` starts
+`preview.start` and refuses if something already answers at `preview.url`.
+
+**Workspace packages resolve to your checkout.** The gate links the repo's
+installed `node_modules` into its base and head checkouts. In a pnpm or yarn
+workspace those link back to the packages in your working tree, so a slice
+that changes a shared workspace package is tested against your copy of it, not
+the base's or head's.
+
+**Merging needs CI.** `slice merge` refuses until at least one check or status
+has reported on the head commit, and all are green.
 
 ## Local state
 

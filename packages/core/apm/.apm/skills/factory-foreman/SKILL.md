@@ -95,6 +95,14 @@ Checkpoint refuses a draft that hasn't been reviewed exactly as it is now.
 The review is saved against the draft's text as it is when you save, so make
 your changes before saving. Any edit afterwards needs a new review save.
 
+## Build the slices
+
+Once Shape and Design are approved, build the Design's slices in order, one
+branch and draft PR each: `factory-foreman slice open <n>`, freeze its AC tests
+with `slice tests <n>`, build it, have it reviewed, and `slice iterate`. Follow
+`references/slices.md`. The person merges each slice with `slice merge <n>` in
+their own terminal; you never do.
+
 ## Amend an approved version
 
 Once the latest version is approved, change it with amend rather than
