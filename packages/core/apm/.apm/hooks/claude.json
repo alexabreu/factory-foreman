@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/approve-guard.mjs\"" } ]
+      }
+    ],
+    "PreCompact": [
+      { "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\"" } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\"" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\"" } ] }
+    ]
+  }
+}

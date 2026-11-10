@@ -23,7 +23,8 @@ export async function draft(ctx, { positionals, flags }) {
   const current = info.current
   const base = current?.version ?? 0
   const file = flags.draft ?? ctx.draftPath(step)
-  const entries = entriesSince(readLog(ctx.stateDir()), current?.createdAt, step)
+  // Since the latest recorded version: the same notes checkpoint will post or wait on.
+  const entries = entriesSince(readLog(ctx.stateDir()), info.latest?.at, step)
 
   let stale = null
   let backup = null
@@ -45,13 +46,13 @@ export async function draft(ctx, { positionals, flags }) {
   const lines = [
     `Drafting ${title(step)} for #${n}. Draft file: ${file}`,
     `Budget: lead ${budget.lead} words, ${step} ${budget[step]} words. Reference: the factory-foreman skill's references/${step}.md.`,
-    current ? `Latest: version ${base}${info.latest ? ` (${info.latest.version} by @${info.latest.author})` : ''}${info.approved ? `; ${info.approved.version} is approved` : ''}.` : `No ${title(step)} yet: this will be v1.`,
+    current ? `Latest: version ${base}${info.latest ? ` (${info.latest.version} by @${info.latest.author})` : ''}${info.approvedCheckpoint ? `; ${info.approvedCheckpoint.version} is approved` : ''}.` : `No ${title(step)} yet: this will be v1.`,
   ]
   if (stale) lines.push(`STALE: ${stale}`)
   if (backup) lines.push(`Your previous draft is at ${backup}; fold back in what should stay.`)
   if (step === 'design' && !shape) lines.push('Shape has no approved version yet; Design can be drafted but not checkpointed until it does.')
   lines.push('', entries.length ? `Notes since the latest version (${entries.length}):` : 'No notes since the latest version.')
-  for (const e of entries) lines.push(`- [${e.kind}${e.confirmed ? '' : ', unconfirmed: keep, edit or drop'}] ${e.text}`)
-  if (shape) lines.push('', `Approved Shape (${state.steps.shape.approved.version}), acceptance criteria:`, ...parseDraft(shape).criteria.map((c) => `- ${c.id}: ${c.criterion}${c.visual ? ' (visual)' : ''}`))
+  for (const e of entries) lines.push(`- [${e.kind}${e.confirmed ? '' : ', unconfirmed: note --keep, --edit or --drop'}] ${e.id ? `${e.id}: ` : ''}${e.text}`)
+  if (shape) lines.push('', `Approved Shape (${state.steps.shape.approvedCheckpoint.version}), acceptance criteria:`, ...parseDraft(shape).criteria.map((c) => `- ${c.id}: ${c.criterion}${c.visual ? ' (visual)' : ''}`))
   return { out: lines.join('\n'), json: { step, issue: n, file, base, stale, entries, approvedShape: shape } }
 }

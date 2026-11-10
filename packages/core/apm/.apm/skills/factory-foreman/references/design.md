@@ -34,3 +34,7 @@ the alternatives the person rejected.
 - **Slices** are numbered from 1. Each owns at least one AC, and every AC in the
   approved Shape is owned by exactly one slice. List the files a slice owns
   where you know them; a slice stays reviewable in one sitting.
+
+## Reviews and amendments
+
+The repo's Design reviewers (by default `software-architect`, `ux-designer` when the approved Shape has a visual criterion, and a second opinion through the configured command) check fit with the codebase, contracts, slice ownership and what a person will see. After approval, changing a contract, a visual behavior, or which criteria or files a slice owns is a material amendment that needs approval again; rewording the approach or a slice's title is minor.

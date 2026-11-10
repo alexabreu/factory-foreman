@@ -1,6 +1,6 @@
 ---
 name: factory-foreman
-description: Use when working a feature on a GitHub issue tracked by factory-foreman (a factory-foreman.config.json at the repo root, or a factory-foreman/<n> branch). Covers noting decisions as they happen, drafting Shape and Design, and checkpointing them for a person to approve.
+description: Use when working a feature on a GitHub issue tracked by factory-foreman (a factory-foreman.config.json at the repo root, or a factory-foreman/<n> branch). Covers noting decisions as they happen, drafting Shape and Design, having reviewers review them, checkpointing them for a person to approve, and amending an approved version.
 ---
 
 # factory-foreman
@@ -24,6 +24,21 @@ Notes are the "how we got here" for the next version, and decisions become rows
 in the issue's Decisions table. Note the decision, not the conversation. Never
 put secrets, tokens or personal data in a note.
 
+The session hooks also extract notes from the conversation as it goes (when
+enough has been said, and when the session is compacted or ends), on a
+`factory-foreman/<n>` branch. Those are guesses until the person confirms them:
+`draft` lists them as unconfirmed with an id, and checkpoint refuses while any
+logged since the step's latest version are left. Show each one to the person
+and run what they choose:
+
+```sh
+factory-foreman note --keep 3f9a1c2e
+factory-foreman note --edit 3f9a1c2e "Sharing lists is for a later issue"
+factory-foreman note --drop 3f9a1c2e
+```
+
+Only confirmed notes reach GitHub.
+
 ## Draft, check, checkpoint
 
 1. `factory-foreman draft shape` (or `design`) prints the brief: the budget, the
@@ -34,18 +49,69 @@ put secrets, tokens or personal data in a note.
 3. Follow `references/shape.md` or `references/design.md` for what goes in each
    section.
 4. Show the person the draft and settle anything they raise.
-5. `factory-foreman checkpoint shape` posts it as the next version. If it's
+5. Have it reviewed (below).
+6. `factory-foreman checkpoint shape` posts it as the next version. If it's
    refused, fix each problem it lists and run it again. If it's refused as
    stale, someone else posted first: run `factory-foreman draft shape --reset`,
    fold your changes into the latest version, and checkpoint again.
-6. Tell the person the version is posted and that they approve it themselves,
-   in their own terminal: `factory-foreman approve shape v<N>`. Don't run
-   approve yourself; it refuses in an agent's shell anyway.
+7. Tell the person the version is posted and that they approve it themselves,
+   in their own terminal: `factory-foreman approve shape v<N>`, which shows
+   what they're approving and asks y/N. Don't run approve yourself; it
+   refuses in an agent's shell anyway.
 
 Design can only be checkpointed once a Shape version is approved.
+
+## Review before you checkpoint
+
+Checkpoint refuses a draft that hasn't been reviewed exactly as it is now.
+
+1. `factory-foreman review shape` (or `design`) prints one brief per reviewer
+   the repo configures, and the draft's hash.
+2. Run each brief as a native subagent of that reviewer agent, by its name
+   (for example `test-verification-engineer`, `software-architect`,
+   `ux-designer`), passing the brief as its task. In Claude Code that's the
+   Agent tool with the agent's name; in Codex, spawn the agent with that agent
+   type. A `second-opinion` brief names its own command, another vendor's model
+   (`claude -p` under Codex, `codex exec -` elsewhere); pipe the brief into it.
+   Never answer it with a subagent of your own model.
+   Only in a harness without subagents, or in CI, does `factory-foreman review
+   shape --headless` run every brief through the configured command instead.
+3. Each reviewer returns a JSON array of findings. Settle every one with the
+   person: `accepted` (they agree, nothing to change), `changed` (you changed
+   the draft) or `overruled` (with a reason the person gives).
+4. Write the settled findings to a file and save them:
+
+   ```json
+   { "reviewers": { "test-verification-engineer": [ { "id": "T1", "text": "…", "settlement": "changed" } ], "ux-designer": [] } }
+   ```
+
+   `factory-foreman review save shape --findings findings.json`
+
+The review is saved against the draft's text as it is when you save, so make
+your changes before saving. Any edit afterwards needs a new review save.
+
+## Amend an approved version
+
+Once the latest version is approved, change it with amend rather than
+checkpoint, and say why:
+
+```sh
+factory-foreman amend shape --reason "Clearer problem statement"
+```
+
+Draft and review as usual first. If the acceptance criteria, contracts, visual
+behaviors and slices are unchanged, the amendment is minor: it is posted as
+v1.1, v1.2… and keeps the approval, so there is nothing to approve. If any of
+them changed, it is material: it is posted as the next version and the person
+approves it as usual. Tell the person which it was.
+
+`factory-foreman status` shows each step's latest and approved version and any
+open blocking questions.
 
 ## When a command refuses
 
 A refusal exits with code 2 and says what is missing. Fix that and rerun. Don't
-work around a refusal by editing files under `.git/factory-foreman/`, the issue
-body or its comments.
+work around a refusal by editing the issue body, its comments, or the notes,
+reviews and markers under `.factory-foreman/`. The only state file you edit is
+the draft there; never commit anything in that folder. A hook stops your shell from running approve, slice merge,
+or a pull request review or merge; those are for the person.

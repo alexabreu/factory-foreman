@@ -52,7 +52,8 @@ export function countWords(text) {
 }
 
 function parseTableRow(line) {
-  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+  // GitHub renders \| as a literal pipe inside a cell, so split only on the others.
+  return line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, '|').trim())
 }
 
 // HTML comments are invisible on GitHub, so nothing inside one counts.
@@ -196,4 +197,20 @@ export function checkStructure(step, draft, { budgets, shape } = {}) {
     }
   }
   return problems
+}
+
+// The parts of a draft that other work depends on: the acceptance criteria,
+// the contracts, the visual behaviors and the slices. Two drafts with the same
+// blocks differ only in wording, so an amendment between them is minor.
+// Whitespace inside a criterion or behavior is normalised; anything else
+// (an added word in a criterion, a changed ID or visual flag, a slice owning
+// different criteria or files) is material. A slice's title is wording.
+const squash = (s) => String(s).replace(/\s+/g, ' ').trim()
+export function structuralBlocks(draft) {
+  return JSON.stringify({
+    criteria: draft.criteria.map((c) => [ c.id, squash(c.criterion), c.visual ]),
+    contracts: draft.contracts.map((c) => (c.error ? { error: true } : c.value)),
+    visualBehaviors: draft.visualBehaviors.map((v) => [ v.id, squash(v.text) ]),
+    slices: draft.slices.map((s) => [ s.n, s.acs, s.files ]),
+  })
 }

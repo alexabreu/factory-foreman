@@ -11,7 +11,7 @@ import { main } from '../src/cli.mjs'
 import { DEFAULTS } from '../src/config/load.mjs'
 import { parseRecords } from '../src/issue/records.mjs'
 import { getSection } from '../src/issue/sections.mjs'
-import { draftPath, stateDir } from '../src/state/local.mjs'
+import { stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { fakeGitHub } from './fixtures/github.mjs'
 import { DESIGN, SHAPE } from './structure.test.mjs'
 
@@ -30,16 +30,17 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
     harness: env.CLAUDECODE ? 'claude-code' : 'terminal',
     isTTY,
     now: () => new Date(Date.parse('2026-11-10T12:00:00Z') + (minute++) * 60_000),
-    config: () => ({ ...structuredClone(DEFAULTS), ...config }),
+    // Phase 1's flow needs no review; the review tests turn reviewers on.
+    config: () => ({ ...structuredClone(DEFAULTS), reviewers: { shape: [], design: [] }, secondOpinion: null, ...config }),
     issue: () => 7,
     stateDir: () => stateDir(cwd, 7),
-    draftPath: (step) => draftPath(stateDir(cwd, 7), step),
+    draftPath: (step) => worktreeDraftPath(cwd, 7, step),
     author: () => login,
     github: () => world.as(login),
     prompt: async () => answer,
   })
   const run = (...argv) => main(argv, ctxFor)
-  return { cwd, run, ctx: ctxFor, draft: (step) => draftPath(stateDir(cwd, 7), step) }
+  return { cwd, run, ctx: ctxFor, draft: (step) => worktreeDraftPath(cwd, 7, step) }
 }
 
 const ctxOf = (dev) => dev.ctx()
@@ -92,20 +93,30 @@ test('two developers, a stale refusal, approval and the changelog', async () => 
   assert.ok(world.log.every((e) => e.by === 'foreman[bot]'))
 
   // Approval from an agent's shell is refused, from a terminal it's recorded.
-  const agent = developer(world, 'ana', { env: { CLAUDECODE: '1' }, isTTY: true, answer: 'approve shape v2' })
+  const agent = developer(world, 'ana', { env: { CLAUDECODE: '1' }, isTTY: true, answer: 'y' })
   const refused = await agent.run('approve', 'shape', 'v2')
   assert.equal(refused.code, 2)
   assert.match(refused.err, /Claude Code's shell/)
-  const noTty = developer(world, 'ana', { answer: 'approve shape v2' })
+  const noTty = developer(world, 'ana', { answer: 'y' })
   assert.match((await noTty.run('approve', 'shape', 'v2')).err, /no interactive terminal/)
 
-  const old = developer(world, 'ana', { isTTY: true, answer: 'approve shape v1' })
+  const old = developer(world, 'ana', { isTTY: true, answer: 'y' })
   assert.match((await old.run('approve', 'shape', 'v1')).err, /v1 isn't the latest Shape; v2 is/)
 
-  const typo = developer(world, 'ana', { isTTY: true, answer: 'yes' })
-  assert.match((await typo.run('approve', 'shape', 'v2')).err, /confirmation didn't match/)
+  const posted = world.log.filter((e) => e.op === 'comment').length
+  for (const no of [ '', 'n', 'no', 'approve', 'y es' ]) {
+    const declined = await developer(world, 'ana', { isTTY: true, answer: no }).run('approve', 'shape', 'v2')
+    assert.equal(declined.code, 2, `"${no}" declines`)
+    assert.match(declined.err, /Not approved\./)
+  }
+  assert.equal(world.log.filter((e) => e.op === 'comment').length, posted, 'declining posts nothing')
+  let asked = ''
+  const shown = await main([ 'approve', 'shape', 'v2' ], () => ({ ...developer(world, 'ana', { isTTY: true }).ctx(), prompt: async (q) => { asked = q; return 'n' } }))
+  assert.equal(shown.code, 2)
+  assert.match(asked, /Shape v2 on #7 \(https:\/\/github\.com\/owner\/sandbox\/issues\/7\), posted by @ben:\n {2}AC-1: A book can be marked read \(visual\)\n {2}AC-2: /)
+  assert.match(asked, /\nApprove Shape v2 on #7 as @ana\? \[y\/N\] $/)
 
-  const terminal = developer(world, 'ana', { isTTY: true, answer: 'approve shape v2' })
+  const terminal = developer(world, 'ana', { isTTY: true, answer: 'y' })
   const approved = await terminal.run('approve', 'shape', 'v2')
   assert.equal(approved.code, 0, approved.err)
   const approval = world.log.findLast((e) => e.op === 'comment')
@@ -137,7 +148,7 @@ test('records are trusted only from the App, or from the approver themselves wit
   const design = await ana.run('checkpoint', 'design')
   assert.equal(design.code, 2)
   assert.match(design.err, /Design needs an approved Shape first/)
-  const terminal = developer(world, 'ana', { isTTY: true, answer: 'approve shape v1' })
+  const terminal = developer(world, 'ana', { isTTY: true, answer: 'y' })
   assert.equal((await terminal.run('approve', 'shape', 'v1')).code, 0)
 })
 
@@ -149,7 +160,7 @@ test('approve refuses a version changed on GitHub after it was posted', async ()
   writeDraft(ana.draft('shape'), SHAPE)
   await ana.run('checkpoint', 'shape')
   await world.as('mallory').editArtifact(7, 1, 'edited in the browser', 'user')
-  const terminal = developer(world, 'ana', { isTTY: true, answer: 'approve shape v1' })
+  const terminal = developer(world, 'ana', { isTTY: true, answer: 'y' })
   assert.match((await terminal.run('approve', 'shape', 'v1')).err, /changed on GitHub after v1 was posted/)
 })
 
@@ -160,9 +171,9 @@ test('a second approver can be required', async () => {
   await ana.run('draft', 'shape')
   writeDraft(ana.draft('shape'), SHAPE)
   await ana.run('checkpoint', 'shape')
-  const self = developer(world, 'ana', { isTTY: true, answer: 'approve shape v1', config: { approvals: { requireSecondApprover: true } } })
+  const self = developer(world, 'ana', { isTTY: true, answer: 'y', config: { approvals: { requireSecondApprover: true } } })
   assert.match((await self.run('approve', 'shape', 'v1')).err, /requires a second approver/)
-  const ben = developer(world, 'ben', { isTTY: true, answer: 'approve shape v1', config: { approvals: { requireSecondApprover: true } } })
+  const ben = developer(world, 'ben', { isTTY: true, answer: 'y', config: { approvals: { requireSecondApprover: true } } })
   assert.equal((await ben.run('approve', 'shape', 'v1')).code, 0)
 })
 
@@ -173,7 +184,7 @@ test('design checkpoints against the approved shape, and refuses a bad draft wit
   await ana.run('draft', 'shape')
   writeDraft(ana.draft('shape'), SHAPE)
   await ana.run('checkpoint', 'shape')
-  await developer(world, 'ana', { isTTY: true, answer: 'approve shape v1' }).run('approve', 'shape', 'v1')
+  await developer(world, 'ana', { isTTY: true, answer: 'y' }).run('approve', 'shape', 'v1')
 
   const brief = await ana.run('draft', 'design')
   assert.match(brief.out, /Approved Shape \(v1\), acceptance criteria:\n- AC-1: A book can be marked read \(visual\)/)
@@ -269,7 +280,7 @@ test('labels never repeat after a checkpoint comment is edited, and approval fol
   await ana.run('draft', 'shape', '--reset')
   writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Sharing.'))
   await ana.run('checkpoint', 'shape')
-  assert.equal((await developer(world, 'ana', { isTTY: true, answer: 'approve shape v2' }).run('approve', 'shape', 'v2')).code, 0)
+  assert.equal((await developer(world, 'ana', { isTTY: true, answer: 'y' }).run('approve', 'shape', 'v2')).code, 0)
   const issue = world.issues.get(7)
   const first = issue.comments.find((c) => c.body.includes('"version":"v1"'))
   world.as('mallory').editComment(7, first.id, `${first.body} `)
@@ -408,7 +419,7 @@ test('approve stops if a new version is posted while the person confirms', async
       await ana.run('draft', 'shape', '--reset')
       writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Sharing.'))
       await ana.run('checkpoint', 'shape')
-      return 'approve shape v1'
+      return 'y'
     },
   }))
   assert.equal(result.code, 2)
@@ -421,7 +432,7 @@ test('note checks --step and --slice, and -- ends the flags', async () => {
   const ana = developer(world, 'ana')
   assert.match((await ana.run('note', 'x', '--step', 'build')).err, /--step is shape or design/)
   assert.match((await ana.run('note', 'x', '--slice', 'abc')).err, /--slice is a slice number/)
-  assert.match((await ana.run('note', '--', '--kind', 'is text here')).out, /Noted decision: --kind is text here/)
+  assert.match((await ana.run('note', '--', '--kind', 'is text here')).out, /Noted decision \([0-9a-f]{8}\): --kind is text here/)
 })
 
 test('a Changelog write that lands just before ours, from the version we read, is kept', async () => {
@@ -448,4 +459,25 @@ test('a Changelog write that lands just before ours, from the version we read, i
   assert.equal((await main([ 'checkpoint', 'shape' ], () => ({ ...ctxOf(ana), github: () => view }))).code, 0)
   const log = world.issues.get(7).artifacts.find((a) => a.number === 2).versions.at(-1).body
   assert.match(log, /## Shape v1, [\s\S]*## Design v9, other run[\s\S]*## Shape v2, /)
+})
+
+test('approve shows a Design\'s slices, strips control characters, and accepts a padded yes', async () => {
+  const { approvedBody } = await import('../src/commands/common.mjs')
+  assert.equal(typeof approvedBody, 'function')
+  const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
+  world.addIssue(7, '')
+  const ana = developer(world, 'ana')
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE.replace('A book can be marked read', 'A book can be marked read\u001b[8m hidden'))
+  assert.equal((await ana.run('checkpoint', 'shape')).code, 0)
+  let asked = ''
+  const shapeOk = await main([ 'approve', 'shape', 'v1' ], () => ({ ...developer(world, 'ben', { isTTY: true }).ctx(), prompt: async (q) => { asked = q; return ' Yes \n' } }))
+  assert.equal(shapeOk.code, 0, shapeOk.err)
+  assert.ok(!asked.includes(String.fromCharCode(27)), 'no escape character reaches the terminal')
+  assert.match(asked, /AC-1: A book can be marked read \[8m hidden \(visual\)/)
+  await ana.run('draft', 'design')
+  writeDraft(ana.draft('design'), DESIGN)
+  assert.equal((await ana.run('checkpoint', 'design')).code, 0)
+  await main([ 'approve', 'design', 'v1' ], () => ({ ...developer(world, 'ben', { isTTY: true }).ctx(), prompt: async (q) => { asked = q; return 'n' } }))
+  assert.match(asked, /Design v1 on #7 \(.*\), posted by @ana:\n {2}1\. .+ \(AC-1\)/)
 })
