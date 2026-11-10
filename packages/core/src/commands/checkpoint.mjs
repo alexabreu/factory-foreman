@@ -9,6 +9,9 @@ import { readLog } from '../state/local.mjs'
 import { entriesSince } from './draft.mjs'
 import { approvedBody, loadIssue, requireStep, sameText, title, today } from './common.mjs'
 
+// The entries of a Changelog body: each "## " heading with what follows it.
+const logEntries = (body) => String(body ?? '').replace(/\r\n/g, '\n').split(/\n(?=## )/).slice(1).map((e) => e.trim())
+
 // factory-foreman checkpoint <shape|design> --draft <file>
 export async function checkpoint(ctx, { positionals, flags }) {
   const step = requireStep(positionals[0])
@@ -90,15 +93,20 @@ export async function checkpoint(ctx, { positionals, flags }) {
 
   // 2. The changelog artifact, one full entry per version.
   const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, notes: notes.map((e) => `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`) })
-  // Another checkpoint may append at the same moment and write over ours, so
-  // read it back and append again until the latest version holds our entry.
+  // Another checkpoint may append at the same moment, from the same version,
+  // and either write could drop the other's entry. So each write holds every
+  // entry any App-written version has held, plus ours, and is checked again.
   let changelog = state.changelog?.number
   if (!changelog) changelog = await github.createArtifact(n, 'Changelog', `# Changelog\n\n${entry}`, 'app')
   for (let i = 0; ; i++) {
-    const latestLog = (await github.history(n, changelog)).versions.at(-1)?.body ?? '# Changelog'
-    if (latestLog.includes(entry.trim())) break
+    const versions = (await github.history(n, changelog)).versions
+    const all = []
+    for (const v of versions.filter((v) => byBot(v, github.botLogin))) for (const e of logEntries(v.body)) if (!all.includes(e)) all.push(e)
+    if (!all.includes(entry.trim())) all.push(entry.trim())
+    const latestEntries = logEntries(versions.at(-1)?.body)
+    if (all.every((e) => latestEntries.includes(e))) break
     if (i === 3) throw new Refusal(`The Changelog on #${n} kept changing, so ${title(step)} ${version}'s entry isn't in it. Checkpoint again.`)
-    await github.editArtifact(n, changelog, `${latestLog.trimEnd()}\n\n${entry}`, 'app')
+    await github.editArtifact(n, changelog, `# Changelog\n\n${all.join('\n\n')}\n`, 'app')
   }
 
   // 3. The record that makes the version count.

@@ -11,25 +11,32 @@ const close = (name) => `<!-- /factory-foreman:${name} -->`
 
 // A marker counts only as a line of its own outside code fences, so one the
 // person quotes in their text (inline or in a code block) is left alone.
+// A fence never closed (a pasted log, say) runs to the end of the body, so
+// when one is left open the body is scanned again without fences: our
+// markers after it must still be found, or every run would add another block.
 function find(body, name) {
-  let offset = 0
-  let fence = null
-  let start = -1
-  for (const line of body.split('\n')) {
-    const bare = line.replace(/\r$/, '')
-    const f = bare.match(/^ {0,3}(`{3,}|~{3,})/)
-    if (fence) {
-      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !bare.slice(f[0].length).trim()) fence = null
-    } else if (f) {
-      fence = f[1]
-    } else if (start === -1 && bare === open(name)) {
-      start = offset
-    } else if (start !== -1 && bare === close(name)) {
-      return { start, end: offset + bare.length, inner: body.slice(start + open(name).length, offset) }
+  const scan = (fences) => {
+    let offset = 0
+    let fence = null
+    let start = -1
+    for (const line of body.split('\n')) {
+      const bare = line.replace(/\s+$/, '')
+      const f = fences && bare.match(/^ {0,3}(`{3,}|~{3,})/)
+      if (fence) {
+        if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !bare.slice(f[0].length).trim()) fence = null
+      } else if (f) {
+        fence = f[1]
+      } else if (start === -1 && bare === open(name)) {
+        start = offset
+      } else if (start !== -1 && bare === close(name)) {
+        return { start, end: offset + bare.length, inner: body.slice(start + open(name).length, offset) }
+      }
+      offset += line.length + 1
     }
-    offset += line.length + 1
+    return fence ? 'unclosed' : null
   }
-  return null
+  const found = scan(true)
+  return found === 'unclosed' ? scan(false) : found
 }
 
 export function getSection(body, name) {
@@ -59,25 +66,30 @@ export function addDecisionRows(body, rows) {
   if (!rows.length) return body
   const header = '## Decisions\n\n| Date | Decision | By | Step |\n| --- | --- | --- | --- |'
   const current = getSection(body, 'decisions') ?? header
-  const lines = rows.map((r) => `| ${cell(r.date)} | ${cell(r.text)} | ${cell(r.by)} | ${cell(r.step ?? '')} |`).filter((l) => !current.split('\n').includes(l))
+  const have = new Set(current.split('\n').map((l) => l.replace(/\s+$/, '')))
+  const lines = rows.map((r) => `| ${cell(r.date)} | ${cell(r.text)} | ${cell(r.by)} | ${cell(r.step ?? '')} |`).filter((l) => !have.has(l))
   if (!lines.length) return body
   return setSection(body, 'decisions', `${current}\n${lines.join('\n')}`)
 }
 
 export function addChangelogLine(body, line) {
   const current = getSection(body, 'changelog') ?? '## Changelog'
-  if (current.split('\n').includes(line)) return body
+  if (current.split('\n').some((l) => l.replace(/\s+$/, '') === line)) return body
   return setSection(body, 'changelog', `${current}\n${line}`)
 }
 
 // Writes the issue body with `change` applied to the latest one, then reads
-// it back. GitHub has no conditional write, so if someone wrote after us the
-// change is applied again on top of theirs; `change` must be idempotent.
+// it back and checks the change is still there, ignoring line endings and
+// trailing space, which GitHub may rewrite. GitHub has no conditional write,
+// so if someone wrote after us the change is applied again on top of theirs;
+// `change` must be idempotent.
+const norm = (s) => s.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').replace(/\s+$/, '')
 export async function updateBody(github, n, change, tries = 3) {
+  let body = (await github.issue(n))?.body ?? ''
   for (let i = 0; i < tries; i++) {
-    const next = change((await github.issue(n))?.body ?? '')
-    await github.setBody(n, next, 'app')
-    if (((await github.issue(n))?.body ?? '') === next) return next
+    await github.setBody(n, change(body), 'app')
+    body = (await github.issue(n))?.body ?? ''
+    if (norm(change(body)) === norm(body)) return body
   }
   throw new Refusal(`Issue #${n}'s description kept changing while it was being updated. Run the command again.`)
 }

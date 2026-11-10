@@ -143,3 +143,8 @@ test('fences with info strings, longer fences and tildes hide their contents', (
     assert.ok(!draft.sections.includes('Problem'), open)
   }
 })
+
+test('a draft that ends inside a code block is refused', () => {
+  const problems = checkStructure('shape', parseDraft(`${SHAPE}\nExample:\n\`\`\`\nGET /books?unread=1\n`), { budgets: DEFAULTS.budgets })
+  assert.ok(problems.some((p) => /never closed/.test(p)), problems.join('\n'))
+})

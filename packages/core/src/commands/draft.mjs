@@ -33,8 +33,8 @@ export async function draft(ctx, { positionals, flags }) {
   } else {
     // --reset keeps the old draft next to the new one, so no work is lost.
     if (flags.reset && existsSync(file)) {
-      renameSync(file, `${file}.bak`)
-      backup = `${file}.bak`
+      backup = `${file}.${ctx.now().toISOString().replace(/[:.]/g, '-')}.bak`
+      renameSync(file, backup)
     }
     const body = current?.body ?? SKELETON[step]
     writeFileSync(file, withFrontMatter({ step, issue: n, base, baseHash: current ? hash(current.body) : '' }, body))

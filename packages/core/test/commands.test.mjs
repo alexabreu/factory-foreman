@@ -387,8 +387,11 @@ test('--reset keeps the old draft as a backup', async () => {
   await ana.run('draft', 'shape')
   writeDraft(ana.draft('shape'), SHAPE)
   const reset = await ana.run('draft', 'shape', '--reset')
-  assert.match(reset.out, /previous draft is at .*shape\.md\.bak/)
-  assert.match(readFileSync(`${ana.draft('shape')}.bak`, 'utf8'), /Syncing between devices/)
+  const backup = reset.out.match(/previous draft is at (\S+\.bak);/)[1]
+  assert.match(backup, /shape\.md\..+\.bak$/)
+  assert.match(readFileSync(backup, 'utf8'), /Syncing between devices/)
+  await ana.run('draft', 'shape', '--reset')
+  assert.match(readFileSync(backup, 'utf8'), /Syncing between devices/, 'a second reset keeps the first backup')
 })
 
 test('approve stops if a new version is posted while the person confirms', async () => {
@@ -419,4 +422,30 @@ test('note checks --step and --slice, and -- ends the flags', async () => {
   assert.match((await ana.run('note', 'x', '--step', 'build')).err, /--step is shape or design/)
   assert.match((await ana.run('note', 'x', '--slice', 'abc')).err, /--slice is a slice number/)
   assert.match((await ana.run('note', '--', '--kind', 'is text here')).out, /Noted decision: --kind is text here/)
+})
+
+test('a Changelog write that lands just before ours, from the version we read, is kept', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7)
+  const ana = developer(world, 'ana')
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  await ana.run('checkpoint', 'shape')
+  await ana.run('draft', 'shape', '--reset')
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Sharing.'))
+  // The other run read the same version, appended, and finished before we write.
+  const view = world.as('ana')
+  const edit = view.editArtifact
+  let once = true
+  view.editArtifact = async (n, number, body, w) => {
+    if (number === 2 && once) {
+      once = false
+      const before = world.issues.get(7).artifacts.find((a) => a.number === 2).versions.at(-1).body
+      await edit.call(view, n, 2, `${before}\n\n## Design v9, other run`, 'app')
+    }
+    return edit.call(view, n, number, body, w)
+  }
+  assert.equal((await main([ 'checkpoint', 'shape' ], () => ({ ...ctxOf(ana), github: () => view }))).code, 0)
+  const log = world.issues.get(7).artifacts.find((a) => a.number === 2).versions.at(-1).body
+  assert.match(log, /## Shape v1, [\s\S]*## Design v9, other run[\s\S]*## Shape v2, /)
 })

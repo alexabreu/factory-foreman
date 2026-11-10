@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { byBot, hash, nextVersion, parseRecords, recordComment, stepState, trustedRecords } from '../src/issue/records.mjs'
-import { addDecisionRows, getSection, inert, setSection } from '../src/issue/sections.mjs'
+import { addChangelogLine, addDecisionRows, getSection, inert, setSection, updateBody } from '../src/issue/sections.mjs'
 import { statusLine } from '../src/issue/status.mjs'
 
 test('sections keep the person\'s text and sit in a fixed order', () => {
@@ -104,4 +104,34 @@ test('byBot is true only for the App\'s own login', () => {
   assert.equal(byBot({ actor: { login: 'ff', type: 'User' } }, 'ff[bot]'), false)
   assert.equal(byBot({ actor: null }, 'ff[bot]'), false)
   assert.equal(byBot({ actor: { login: 'ff[bot]' } }, null), false)
+})
+
+test('an unclosed fence in the person\'s text doesn\'t hide our sections', () => {
+  let body = 'Paste:\n```\nlog output'
+  for (let i = 0; i < 3; i++) body = addChangelogLine(body, `- line ${i}`)
+  assert.equal(body.split('<!-- factory-foreman:changelog -->').length, 2)
+  assert.match(getSection(body, 'changelog'), /- line 0\n- line 1\n- line 2/)
+})
+
+test('lines already there are recognised through CRLF and trailing space', () => {
+  const body = addChangelogLine('Text.', '- once').replace(/\n/g, '\r\n').replace('- once', '- once  ')
+  assert.equal(addChangelogLine(body, '- once'), body)
+  const status = '<!-- factory-foreman:status --> \r\nold\r\n<!-- /factory-foreman:status -->\r\nText.'
+  assert.equal(setSection(status, 'status', 'new').split('<!-- factory-foreman:status').length, 2)
+})
+
+test('updateBody applies the change again when someone writes over it, and accepts GitHub\'s rewrites', async () => {
+  let stored = 'Text.'
+  let interlope = true
+  const github = {
+    issue: async () => ({ body: stored }),
+    setBody: async (n, body) => {
+      stored = body
+      if (interlope) { interlope = false; stored = 'Text.\n\nTheirs.' }
+      else stored = stored.replace(/\n/g, '\r\n').trimEnd()
+    },
+  }
+  const result = await updateBody(github, 7, (b) => addChangelogLine(b, '- ours'))
+  assert.match(result, /Theirs\./)
+  assert.match(result, /- ours/)
 })

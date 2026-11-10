@@ -122,6 +122,7 @@ export function parseDraft(text) {
   }
 
   return {
+    unclosedFence: Boolean(fence),
     meta,
     body,
     lead,
@@ -143,6 +144,7 @@ export function checkStructure(step, draft, { budgets, shape } = {}) {
   const problems = []
   const words = budgets?.words ?? {}
   if (/<!--\s*\/?factory-foreman:/.test(draft.body)) problems.push('The draft mustn\'t contain "factory-foreman:" markers; they belong to the issue body.')
+  if (draft.unclosedFence) problems.push('A code block is never closed; close it with a line of matching backticks or tildes.')
   if (!draft.lead) problems.push('Start with a lead paragraph before the first section.')
   else if (words.lead && draft.leadWords > words.lead) problems.push(`The lead is ${draft.leadWords} words; the budget is ${words.lead}.`)
   if (words[step] && draft.words > words[step]) problems.push(`The draft is ${draft.words} words; the ${step} budget is ${words[step]}.`)
