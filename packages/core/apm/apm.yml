@@ -1,0 +1,7 @@
+name: factory-foreman
+version: 0.1.0-alpha.0
+description: Checkpoints for agent-built features on GitHub issues
+targets:
+  - claude
+  - codex
+  - copilot

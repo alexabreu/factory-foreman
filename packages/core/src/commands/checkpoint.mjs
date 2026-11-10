@@ -1,0 +1,121 @@
+import { readFileSync } from 'node:fs'
+import { artifactEntry, bodyLine, unifiedDiff } from '../changelog.mjs'
+import { Refusal } from '../errors.mjs'
+import { hash, nextVersion, recordComment } from '../issue/records.mjs'
+import { addChangelogLine, addDecisionRows, setSection } from '../issue/sections.mjs'
+import { statusLine } from '../issue/status.mjs'
+import { checkStructure, parseDraft } from '../steps/structure.mjs'
+import { readLog } from '../state/local.mjs'
+import { entriesSince } from './draft.mjs'
+import { approvedBody, loadIssue, requireStep, sameText, title, today } from './common.mjs'
+
+// True unless the version names an actor other than the App. GraphQL names a
+// bot without the [bot] suffix, so compare without it.
+const byBot = (version, botLogin) => {
+  const actor = version?.actor?.login ?? version?.actor
+  const bare = (login) => String(login).replace(/\[bot\]$/, '').toLowerCase()
+  return typeof actor !== 'string' || !botLogin || bare(actor) === bare(botLogin)
+}
+
+// factory-foreman checkpoint <shape|design> --draft <file>
+export async function checkpoint(ctx, { positionals, flags }) {
+  const step = requireStep(positionals[0])
+  const n = ctx.issue()
+  const file = flags.draft ?? ctx.draftPath(step)
+  let text
+  try {
+    text = readFileSync(file, 'utf8')
+  } catch {
+    throw new Refusal(`Can't read the draft ${file}. Run factory-foreman draft ${step} first.`)
+  }
+  const draft = parseDraft(text)
+  if (draft.meta.step && draft.meta.step !== step) throw new Refusal(`${file} is a ${draft.meta.step} draft, not ${step}.`)
+  if (!Number.isInteger(draft.meta.base)) throw new Refusal(`${file} has no "base" in its front matter, so it can't be checked for staleness. Run factory-foreman draft ${step}.`)
+
+  const github = ctx.github()
+  const config = ctx.config()
+  await github.appReady()
+  const state = await loadIssue(github, n, config.approvals)
+  const info = state.steps[step]
+  const current = info.current
+  const latest = current?.version ?? 0
+  if (draft.meta.base !== latest) {
+    const by = current?.actor?.login ?? current?.actor ?? 'someone'
+    throw new Refusal(`Stale: ${title(step)} is at version ${latest} (last written by ${by}), and your draft started from version ${draft.meta.base}. Run factory-foreman draft ${step} --reset, fold in your changes, and checkpoint again.`, { latest, base: draft.meta.base })
+  }
+  if (current && draft.meta.baseHash && draft.meta.baseHash !== hash(current.body)) throw new Refusal(`Stale: ${title(step)} version ${latest} doesn't match the one your draft started from.`)
+
+  let shape = null
+  if (step === 'design') {
+    const body = approvedBody(state.steps.shape)
+    if (!body) throw new Refusal('Design needs an approved Shape first. Approve one with factory-foreman approve shape v<N>.')
+    shape = parseDraft(body)
+  }
+  const problems = checkStructure(step, draft, { budgets: config.budgets, shape })
+  if (problems.length) throw new Refusal(`The ${step} draft isn't ready:\n  - ${problems.join('\n  - ')}`, { problems })
+
+  const body = `${draft.body.trim()}\n`
+  // The latest version may already hold this text without a record: a
+  // checkpoint that failed after posting, or someone pasting it in. Then the
+  // record is all that's missing, and the artifact isn't written again.
+  const recordedVersion = info.latest?.artifact?.version ?? 0
+  const recorded = Boolean(current && recordedVersion === current.version && info.latest.hash === hash(current.body))
+  if (current && sameText(current.body, body) && recorded) throw new Refusal(`The draft is the same as ${title(step)} ${info.latest.version}; nothing to post.`)
+  // Adopt only the one version right after the last recorded one, and only if
+  // the App wrote it; anything else hides someone's write, so say so instead.
+  const adopt = Boolean(current && sameText(current.body, body) && !recorded)
+  if (adopt && (current.version !== recordedVersion + 1 || !byBot(current, github.botLogin))) {
+    throw new Refusal(`${title(step)} has unrecorded versions ${recordedVersion + 1} to ${current.version} since ${info.latest?.version ?? 'the start'}, not all written by the factory. Read them (gh issue artifact view ${n} ${info.artifact.number} --json versions), fold in what should stay, change the draft, and checkpoint again.`)
+  }
+
+  const author = await github.viewer()
+  const version = nextVersion(info)
+  const previous = info.latest?.version ?? null
+  const now = ctx.now()
+  const date = today(now)
+  // Diff against the last recorded version, so an unrecorded edit in between shows up too.
+  const before = info.latest ? info.artifact?.versions.find((v) => v.version === info.latest.artifact.version)?.body ?? '' : null
+  const diff = before === null ? '' : unifiedDiff(before, body, { from: previous, to: version })
+  const notes = entriesSince(readLog(ctx.stateDir()), info.latest?.at, step).filter((e) => e.confirmed && e.kind !== 'question')
+
+  // 1. The artifact: a new version of it, unless it already holds the text.
+  let number = info.artifact?.number
+  let posted = current
+  if (!adopt) {
+    if (number) await github.editArtifact(n, number, body, 'app')
+    else {
+      number = await github.createArtifact(n, title(step), body, 'app')
+      const firstNumber = Math.min(...(await github.artifacts(n)).filter((a) => a.name === title(step)).map((a) => a.number))
+      if (firstNumber !== number) throw new Error(`Someone created ${title(step)} at the same moment (artifact ${firstNumber}), so artifact ${number} isn't recorded. Run factory-foreman draft ${step} --reset and checkpoint again.`)
+    }
+    const history = await github.history(n, number)
+    posted = history.versions.at(-1)
+    if (!posted || posted.version !== latest + 1 || !sameText(posted.body, body) || !byBot(posted, github.botLogin)) {
+      throw new Error(`Someone wrote ${title(step)} at the same moment, so artifact version ${posted?.version ?? '?'} isn't recorded. Run factory-foreman draft ${step} --reset, check it, and checkpoint again.`)
+    }
+  }
+
+  // 2. The changelog artifact, one full entry per version.
+  const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, notes: notes.map((e) => `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`) })
+  if (state.changelog) {
+    const log = await github.history(n, state.changelog.number)
+    await github.editArtifact(n, state.changelog.number, `${log.versions.at(-1)?.body.trimEnd() ?? '# Changelog'}\n\n${entry}`, 'app')
+  } else {
+    await github.createArtifact(n, 'Changelog', `# Changelog\n\n${entry}`, 'app')
+  }
+
+  // 3. The record that makes the version count.
+  const record = { type: 'checkpoint', repo: github.repo, issue: n, step, version, previous, artifact: { number, version: posted.version }, hash: hash(posted.body), author, harness: ctx.harness, at: now.toISOString() }
+  await github.comment(n, recordComment(`**${title(step)} ${version}** posted by @${author} from ${ctx.harness}${diff ? '' : ' (first version)'}. To approve it, run \`factory-foreman approve ${step} ${version}\` in a terminal.`, record), 'app')
+
+  // 4. The issue body: changelog line, decisions, and a status read afresh,
+  // so a checkpoint or approval that landed meanwhile shows too.
+  const states = (await loadIssue(github, n, config.approvals)).steps
+  let issueBody = (await github.issue(n))?.body ?? ''
+  issueBody = addChangelogLine(issueBody, bodyLine({ step, version, date, author, diff }))
+  issueBody = addDecisionRows(issueBody, notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}` })))
+  issueBody = setSection(issueBody, 'status', statusLine(states))
+  await github.setBody(n, issueBody, 'app')
+
+  return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}). Approve it from a terminal: factory-foreman approve ${step} ${version}`, json: record }
+}
