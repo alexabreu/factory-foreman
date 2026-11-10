@@ -971,6 +971,8 @@ test('review rounds: round 2 re-briefs only the reviewers whose findings changed
   // A third round is refused; saving the person's settlement of a further edit isn't.
   writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, not now.'))
   assert.match((await ana.run('review', 'shape')).err, /has had its 2 review rounds since version 0\. What's left is the person's to settle[\s\S]*There's no third round/)
+  // After the cap, everyone's last findings carry over, the re-briefed reviewer's from round 2.
+  writeFileSync(file, JSON.stringify({ reviewers: {} }))
   assert.equal((await ana.run('review', 'save', 'shape', '--findings', file)).code, 0)
   assert.equal((await ana.run('checkpoint', 'shape')).code, 0)
 })
@@ -988,6 +990,8 @@ test('review rounds: a reviewer new since round 1 gets a full brief; nothing cha
   // Nothing changed because of a finding: no round 2, and the save needs no findings.
   writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing, later.'))
   assert.match((await ana.run('review', 'shape')).out, /No reviewer's finding changed the Shape draft in round 1, so there's nothing to re-review/)
+  // Running it again says the same, not "no reviewers are configured".
+  assert.match((await ana.run('review', 'shape')).out, /nothing to re-review/)
   const empty = join(ana.cwd, 'empty.json')
   writeFileSync(empty, JSON.stringify({ reviewers: {} }))
   assert.equal((await ana.run('review', 'save', 'shape', '--findings', empty)).code, 0)
@@ -1002,4 +1006,7 @@ test('review rounds: a reviewer new since round 1 gets a full brief; nothing cha
   assert.deepEqual(r2.briefs.map((b) => b.reviewer), [ 'test-verification-engineer', 'product-engineer' ])
   assert.match(r2.briefs[0].brief, /^Round 2 of the review/)
   assert.doesNotMatch(r2.briefs[1].brief, /^Round 2 of the review/)
+  // Printed again, the new reviewer's brief is still the full one.
+  const again = JSON.parse((await main([ 'review', 'shape', '--json' ], () => ({ ...bob.ctx(), config: () => ({ ...structuredClone(DEFAULTS), ...REVIEWED, reviewers: { shape: [ 'test-verification-engineer', 'product-engineer' ], design: [] } }) }))).out)
+  assert.deepEqual(again.briefs.map((b) => b.brief), r2.briefs.map((b) => b.brief))
 })

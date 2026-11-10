@@ -41,8 +41,12 @@ async function nextRound(ctx, { step, draft, digest, reviewers }) {
   if (!last) return { ...plain, k: 1, reviewers, record: record(1) }
   // The same draft again: the same round, with the same briefs.
   if (last.hash === digest) {
+    if (rounds.length > 1 && !last.reviewers.length) return { ...plain, k: rounds.length, none: nothingToReview(step, rounds.length - 1) }
     const prior = rounds.length > 1 ? readSaved(dir, step, rounds.at(-2).saved) : null
-    return { ...plain, k: rounds.length, reviewers: last.reviewers, preface: rounds.length > 1 ? preface(rounds.at(-2).body, draft, rounds.length, prior) : () => '' }
+    // Reviewers new since the round before were briefed in full; they still are.
+    const fresh = last.reviewers.filter((r) => !(r in (prior?.reviewers ?? {})))
+    const brief = rounds.length > 1 ? preface(rounds.at(-2).body, draft, rounds.length, prior) : () => ''
+    return { ...plain, k: rounds.length, reviewers: last.reviewers, preface: (r) => (fresh.includes(r) ? '' : brief(r)) }
   }
   if (rounds.length >= max) {
     throw new Refusal(`The ${title(step)} draft has had its ${max} review rounds since version ${base}. What's left is the person's to settle: accept a finding, overrule it with their reason, or note it as an open question (factory-foreman note "…" --kind question --step ${step}). Then save the settled findings for this draft: factory-foreman review save ${step} --findings <file>. There's no third round.`, { rounds: rounds.length, maxRounds: max })
@@ -56,11 +60,13 @@ async function nextRound(ctx, { step, draft, digest, reviewers }) {
   if (!again.length) {
     // Recorded with no reviewers, so the save that follows carries every finding over.
     record(k)([])
-    return { ...plain, k, none: `No reviewer's finding changed the ${title(step)} draft in round ${rounds.length}, so there's nothing to re-review. Save the review of this draft: factory-foreman review save ${step} --findings <file> with no findings needed (round ${rounds.length}'s settled findings carry over).` }
+    return { ...plain, k, none: nothingToReview(step, rounds.length) }
   }
   const brief = preface(last.body, draft, k, saved)
   return { ...plain, k, reviewers: again, preface: (r) => (fresh.includes(r) ? '' : brief(r)), record: record(k) }
 }
+
+const nothingToReview = (step, k) => `No reviewer's finding changed the ${title(step)} draft in round ${k}, so there's nothing to re-review. Save the review of this draft: factory-foreman review save ${step} --findings <file> with no findings needed (round ${k}'s settled findings carry over).`
 
 // A later round's brief: what changed since the round before, and how the
 // reviewer's own findings were settled.
@@ -156,8 +162,15 @@ async function save(ctx, { positionals, flags }) {
   const roundNo = Math.max(1, rounds.length)
   if (roundNo > 1 && findings?.reviewers && typeof findings.reviewers === 'object' && !Array.isArray(findings.reviewers)) {
     const earlier = readSaved(ctx.stateDir(), step, rounds.at(-2).saved)
+    const thisRound = readSaved(ctx.stateDir(), step, rounds.at(-1).saved)
     const asked = new Set(rounds.at(-1).reviewers ?? [])
-    for (const r of reviewers) if (!asked.has(r) && !(r in findings.reviewers) && earlier?.reviewers?.[r]) findings.reviewers[r] = earlier.reviewers[r]
+    // The others carry over from the round before; those asked again from their
+    // own earlier save in this round, once they've answered it.
+    for (const r of reviewers) {
+      if (r in findings.reviewers) continue
+      if (!asked.has(r) && earlier?.reviewers?.[r]) findings.reviewers[r] = earlier.reviewers[r]
+      else if (asked.has(r) && thisRound?.reviewers?.[r]) findings.reviewers[r] = thisRound.reviewers[r]
+    }
   }
   const problems = checkSettlements(findings, reviewers)
   if (problems.length) throw new Refusal(`The review can't be saved yet:\n  - ${problems.join('\n  - ')}`, { problems })
