@@ -520,3 +520,28 @@ test('capture: one run per session at a time, and a new transcript file starts o
   await dev.run('note', '--extract', '--transcript', second, '--session', 's1', '--event', 'SessionEnd')
   assert.match(dev.calls.at(-1).opts.input, /Second file\./)
 })
+
+test('exec survives a child that exits before reading its input, and stops a slow one', async () => {
+  const { context } = await import('../src/cli.mjs')
+  const ctx = context({ cwd: process.cwd() })
+  const early = await ctx.exec([ process.execPath, '-e', 'process.exit(3)' ], { input: 'x'.repeat(2_000_000) })
+  assert.equal(early.code, 3)
+  const slow = await ctx.exec([ process.execPath, '-e', 'setTimeout(() => {}, 5000)' ], { timeout: 200 })
+  assert.notEqual(slow.code, 0)
+  assert.match(slow.stderr, /stopped after 0\.2 s/)
+})
+
+test('a capture claim is released only by its owner', async () => {
+  const { claimCapture } = await import('../src/state/local.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'ff-claim-'))
+  const first = claimCapture(dir, 's')
+  assert.ok(first)
+  assert.equal(claimCapture(dir, 's'), null, 'held')
+  // Eleven minutes later the claim is stale and taken over.
+  const second = claimCapture(dir, 's', Date.now() + 11 * 60_000)
+  assert.ok(second)
+  first()
+  assert.equal(claimCapture(dir, 's'), null, 'the old owner can\'t release the new claim')
+  second()
+  assert.ok(claimCapture(dir, 's'))
+})

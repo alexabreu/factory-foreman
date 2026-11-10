@@ -129,7 +129,8 @@ async function capture(ctx, { dir, key, transcript, event }) {
   if (!FINAL_EVENTS.has(event) && text.length < config.capture.minChars) return { out: '', skipped: 'not enough new text yet' }
 
   const command = ctx.harness === 'codex' ? config.capture.codex : config.capture.claude
-  const result = await ctx.exec(command, { cwd: ctx.cwd, env: { ...ctx.env, FACTORY_FOREMAN_CAPTURE: '1' }, input: extractionPrompt(text) })
+  // Well inside the ten minutes after which another capture may take the claim over.
+  const result = await ctx.exec(command, { cwd: ctx.cwd, env: { ...ctx.env, FACTORY_FOREMAN_CAPTURE: '1' }, input: extractionPrompt(text), timeout: 5 * 60_000 })
   if (result.code !== 0) return { out: '', err: `capture: ${command[0]} exited with code ${result.code}: ${String(result.stderr).trim().split('\n').at(-1) ?? ''}` }
   let items
   try {

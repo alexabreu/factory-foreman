@@ -90,10 +90,14 @@ export function writeMarker(dir, key, marker) {
 // minutes is a crashed run's, and is taken over).
 export function claimCapture(dir, key, now = Date.now()) {
   const file = captureFile(dir, key, 'lock')
+  const token = newId()
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      closeSync(openSync(file, 'wx'))
-      return () => { try { unlinkSync(file) } catch { /* already gone */ } }
+      const fd = openSync(file, 'wx')
+      writeFileSync(fd, token)
+      closeSync(fd)
+      // Release only our own claim: a run that took over a stale one owns it now.
+      return () => { try { if (readFileSync(file, 'utf8') === token) unlinkSync(file) } catch { /* already gone */ } }
     } catch (error) {
       if (error.code !== 'EEXIST') throw error
       let age = Infinity

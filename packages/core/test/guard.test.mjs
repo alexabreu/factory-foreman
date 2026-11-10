@@ -85,6 +85,19 @@ const DENIED = [
   'bash <<EOF\nfactory-foreman approve shape v1\nEOF',
   'eval "factory-foreman approve shape v1"',
   [ 'factory-foreman', 'approve', 'shape', 'v1' ],
+  'time -p factory-foreman approve shape v1',
+  'command -p factory-foreman approve shape v1',
+  'sudo -n factory-foreman approve shape v1',
+  'xargs -r factory-foreman approve shape v1',
+  'timeout -s KILL 30 factory-foreman approve shape v1',
+  'node --env-file .env node_modules/factory-foreman/src/cli.mjs approve shape v1',
+  'yarn workspace core exec factory-foreman approve shape v1',
+  'npm --prefix packages/core exec factory-foreman approve shape v1',
+  'exec -a foo factory-foreman approve shape v1',
+  'env -S "factory-foreman approve shape v1"',
+  'bash <<< "factory-foreman approve shape v1"',
+  'gh api graphql -f "query=$(cat merge.graphql)"',
+  'gh api graphql -Fquery=@merge.graphql',
 ]
 
 const ALLOWED = [
@@ -113,6 +126,8 @@ const ALLOWED = [
   'echo "(gh pr merge 3)"',
   'gh api -X GET repos/o/r/pulls/12/reviews -F per_page=100',
   'gh api repos/{owner}/{repo}/pulls/12',
+  'cat <<< "factory-foreman approve shape v1"',
+  'sudo -n ls',
   '',
 ]
 

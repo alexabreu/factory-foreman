@@ -40,7 +40,7 @@ export async function review(ctx, args) {
     const lines = [ `Review of the ${title(step)} draft for #${n} (draft hash ${digest}).` ]
     if (!briefs.length) lines.push(`No reviewers are configured for ${step}; checkpoint needs no review.`)
     for (const b of briefs) {
-      lines.push('', `=== ${b.reviewer}${b.command ? ` (run with: ${b.command.join(' ')})` : ' (run as a subagent)'} ===`, b.brief)
+      lines.push('', `=== ${b.reviewer}${b.command ? ` (pipe this brief into: ${b.command.join(' ')})` : ' (run as a subagent)'} ===`, b.brief)
     }
     if (briefs.length) lines.push('', `Settle every finding (accepted, changed or overruled with a reason), then: factory-foreman review save ${step} --findings <file>`)
     return { out: lines.join('\n'), json: { step, issue: n, hash: digest, briefs } }

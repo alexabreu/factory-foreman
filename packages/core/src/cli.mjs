@@ -80,16 +80,18 @@ export function context({ cwd = process.cwd(), env = process.env, flags = {} } =
     draftPath: (step) => draftPath(stateDir(cwd, issue()), step),
     author: () => git(cwd, [ 'config', 'user.name' ]) || env.USER || 'unknown',
     github,
-    // Runs a command with no shell, collecting its output.
-    exec: (argv, { cwd: dir = cwd, env: childEnv = env, input } = {}) => new Promise((resolve) => {
+    // Runs a command with no shell, collecting its output; stopped after `timeout` ms.
+    exec: (argv, { cwd: dir = cwd, env: childEnv = env, input, timeout = 10 * 60_000 } = {}) => new Promise((resolve) => {
       const child = spawn(argv[0], argv.slice(1), { cwd: dir, env: childEnv, stdio: [ input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe' ] })
       let stdout = ''
       let stderr = ''
+      const timer = setTimeout(() => { stderr += `\nstopped after ${timeout / 1000} s`; child.kill('SIGKILL') }, timeout)
       child.stdout.on('data', (d) => { stdout += d })
       child.stderr.on('data', (d) => { stderr += d })
-      child.on('error', (error) => resolve({ code: 127, stdout, stderr: error.message }))
-      child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }))
-      if (input !== undefined) child.stdin.end(input)
+      child.on('error', (error) => { clearTimeout(timer); resolve({ code: 127, stdout, stderr: error.message }) })
+      child.on('close', (code) => { clearTimeout(timer); resolve({ code: code ?? 1, stdout, stderr }) })
+      // A child that exits before reading its input closes the pipe; its exit says why.
+      if (input !== undefined) child.stdin.on('error', () => {}).end(input)
     }),
     async prompt(question) {
       const rl = createInterface({ input: process.stdin, output: process.stdout })
