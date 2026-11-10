@@ -55,8 +55,9 @@ Only confirmed notes reach GitHub.
    stale, someone else posted first: run `factory-foreman draft shape --reset`,
    fold your changes into the latest version, and checkpoint again.
 7. Tell the person the version is posted and that they approve it themselves,
-   in their own terminal: `factory-foreman approve shape v<N>`. Don't run
-   approve yourself; it refuses in an agent's shell anyway.
+   in their own terminal: `factory-foreman approve shape v<N>`, which shows
+   what they're approving and asks y/N. Don't run approve yourself; it
+   refuses in an agent's shell anyway.
 
 Design can only be checkpointed once a Shape version is approved.
 

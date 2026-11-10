@@ -57,7 +57,7 @@ async function settle(dev, step, reviewers = { 'test-verification-engineer': [] 
 function setup() {
   const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
   world.addIssue(7, 'Readers want to track what they have read.')
-  return { world, ana: developer(world, 'ana'), ben: developer(world, 'ben', { isTTY: true, answer: 'approve shape v1' }) }
+  return { world, ana: developer(world, 'ana'), ben: developer(world, 'ben', { isTTY: true, answer: 'y' }) }
 }
 
 // Shape v1, reviewed and approved by ben.
@@ -243,7 +243,7 @@ test('amend: wording only is minor and keeps the approval; a changed criterion i
   assert.equal(early.code, 2)
   assert.match(early.err, /isn't approved, so there is nothing to amend/)
 
-  const approveV2 = await developer(world, 'ben', { isTTY: true, answer: 'approve shape v2' }).run('approve', 'shape', 'v2')
+  const approveV2 = await developer(world, 'ben', { isTTY: true, answer: 'YES' }).run('approve', 'shape', 'v2')
   assert.equal(approveV2.code, 0, approveV2.err)
   assert.match((await ana.run('status')).out, /Shape: v2 approved/)
 })
@@ -455,7 +455,7 @@ test('a second minor amendment after a second approval is v2.1', async () => {
   writeDraft(ana.draft('shape'), SHAPE.replace('| The list can show only unread books | no |', '| The list can show only unread books, oldest first | no |'))
   await settle(ana, 'shape')
   assert.equal(JSON.parse((await ana.run('checkpoint', 'shape', '--json')).out).version, 'v2')
-  assert.equal((await developer(world, 'ben', { isTTY: true, answer: 'approve shape v2' }).run('approve', 'shape', 'v2')).code, 0)
+  assert.equal((await developer(world, 'ben', { isTTY: true, answer: 'YES' }).run('approve', 'shape', 'v2')).code, 0)
   await ana.run('draft', 'shape', '--reset')
   writeDraft(ana.draft('shape'), SHAPE.replace('| The list can show only unread books | no |', '| The list can show only unread books, oldest first | no |').replace('Anyone keeping a reading list.', 'Anyone who keeps a reading list.'))
   await settle(ana, 'shape')

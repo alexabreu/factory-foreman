@@ -19,7 +19,7 @@ capture and the approve guard work; slices and verify arrive in later phases.
 | `review save <shape\|design> --findings <file>` | Saves the settled findings for the draft as it is now |
 | `checkpoint <shape\|design> [--draft <file>]` | Checks the draft and its saved review, and posts it as the next version |
 | `amend <shape\|design> --reason "<why>"` | Changes an approved version: minor (vN.M, keeps the approval) or material (vN+1, needs one) |
-| `approve <shape\|design> v<N>` | A person approves that version, from their own terminal |
+| `approve <shape\|design> v<N>` | A person approves that version from their own terminal: it shows the criteria (or slices) and asks y/N |
 | `status` | Each step's latest and approved version, and open blocking questions |
 
 Every issue command takes `--issue <n>`, or reads it from a `factory-foreman/<n>`
