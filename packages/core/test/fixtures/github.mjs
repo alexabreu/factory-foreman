@@ -1,7 +1,8 @@
 // An in-memory GitHub with the same interface as createGitHub, for tests.
 // `as(login)` returns a view that reads and writes as that developer, while
 // `app` writes appear as the bot.
-export function fakeGitHub({ repo = 'owner/sandbox', botLogin = 'foreman[bot]', permissions = {} } = {}) {
+import { spawnSync } from 'node:child_process'
+export function fakeGitHub({ repo = 'owner/sandbox', botLogin = 'foreman[bot]', permissions = {}, blobs = new Map() } = {}) {
   const issues = new Map()
   let clock = Date.parse('2026-11-10T00:00:00Z')
   const tick = () => new Date((clock += 1000)).toISOString()
@@ -13,6 +14,7 @@ export function fakeGitHub({ repo = 'owner/sandbox', botLogin = 'foreman[bot]', 
     issues,
     log,
     permissions,
+    blobs,
     addIssue(n, body = '') {
       issues.set(n, { number: n, title: `Issue ${n}`, body, url: `https://github.com/${repo}/issues/${n}`, state: 'OPEN', comments: [], artifacts: [] })
       return issues.get(n)
@@ -24,6 +26,13 @@ export function fakeGitHub({ repo = 'owner/sandbox', botLogin = 'foreman[bot]', 
         repo,
         botLogin,
         async viewer() { return viewer },
+        // From world.blobs, or the bare repo standing in for GitHub when a test sets one.
+        async blob(commit, path) {
+          if (world.blobs?.has(`${commit}:${path}`)) return world.blobs.get(`${commit}:${path}`)
+          if (!world.gitDir) return null
+          const r = spawnSync('git', [ '--git-dir', world.gitDir, 'cat-file', 'blob', `${commit}:${path}` ])
+          return r.status === 0 ? r.stdout : null
+        },
         async permission(login) { return permissions[login] ?? 'none' },
         async issue(n) {
           const i = get(n)

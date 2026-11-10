@@ -5,6 +5,7 @@ import { addChangelogLine, addDecisionRows, setSection, updateBody } from '../is
 import { statusLine } from '../issue/status.mjs'
 import { postedBody, readDraftFile, requireReview, reviewersFor } from '../review/briefs.mjs'
 import { checkStructure, parseDraft, structuralBlocks } from '../steps/structure.mjs'
+import { sha256 } from './wireframes.mjs'
 import { readLog } from '../state/local.mjs'
 import { entriesSince } from './draft.mjs'
 import { approvedBody, loadIssue, requireStep, sameText, title, today } from './common.mjs'
@@ -56,7 +57,15 @@ async function post(ctx, { step, file: given, amend: amending }) {
     if (!body) throw new Refusal('Design needs an approved Shape first. Approve one with factory-foreman approve shape v<N>.')
     shape = parseDraft(body)
   }
-  const problems = checkStructure(step, draft, { budgets: config.budgets, shape })
+  const problems = checkStructure(step, draft, { budgets: config.budgets, shape, repo: github.repo })
+  // A wireframe's hash is only a claim until the pinned image is read back from GitHub.
+  if (!problems.length) {
+    for (const w of draft.wireframes) {
+      const bytes = await github.blob(w.commit, w.path)
+      if (!bytes) problems.push(`The wireframe for ${w.id} ${w.state} isn't on GitHub at ${w.commit.slice(0, 12)}; run factory-foreman wireframes design, which pushes it.`)
+      else if (sha256(bytes) !== w.hash) problems.push(`The wireframe for ${w.id} ${w.state} at ${w.commit.slice(0, 12)} isn't the image its hash names; run factory-foreman wireframes design again.`)
+    }
+  }
   if (problems.length) throw new Refusal(`The ${step} draft isn't ready:\n  - ${problems.join('\n  - ')}`, { problems })
 
   const body = postedBody(draft)

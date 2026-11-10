@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { Refusal } from '../errors.mjs'
-import { SECOND_OPINION, brief, secondOpinionCommand, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
+import { SECOND_OPINION, brief, secondOpinionCommand, visualReviewers, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { approvedBody, loadIssue, requireStep, title } from './common.mjs'
+import { pinnedImage } from './wireframes.mjs'
 
 // The draft, the approved Shape it builds on (for Design), and who reviews it.
 export async function reviewSetup(ctx, step, file) {
@@ -30,10 +31,14 @@ export async function review(ctx, args) {
   const file = flags.draft ?? ctx.draftPath(step)
   const { draft, shape, shapeVersion, reviewers } = await reviewSetup(ctx, step, file)
   const digest = draftHash(draft)
+  // Each pinned wireframe as a file that is exactly the pinned image.
+  const images = []
+  for (const w of draft.wireframes.filter((w) => w.id && w.commit && w.path && w.hash)) images.push({ id: w.id, state: w.state, path: await pinnedImage(ctx, w), url: w.url })
+  const looking = visualReviewers(step, ctx.config())
   const briefs = reviewers.map((reviewer) => ({
     reviewer,
     command: reviewer === SECOND_OPINION ? secondOpinionCommand(ctx.config(), ctx.harness) : null,
-    brief: brief({ reviewer, step, issue: n, draft, shape, shapeVersion }),
+    brief: brief({ reviewer, step, issue: n, draft, shape, shapeVersion, images: looking.has(reviewer) ? images : [] }),
   }))
 
   if (!flags.headless) {

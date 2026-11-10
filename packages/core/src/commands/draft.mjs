@@ -1,8 +1,10 @@
+import { join } from 'node:path'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { hash } from '../issue/records.mjs'
 import { parseDraft, splitFrontMatter, withFrontMatter } from '../steps/structure.mjs'
 import { readLog } from '../state/local.mjs'
 import { after, approvedBody, loadIssue, requireStep, title } from './common.mjs'
+import { wireframesDir } from './wireframes.mjs'
 
 const SKELETON = {
   shape: 'One paragraph: the problem and the outcome, in under 100 words.\n\n## Problem\n\n## Who it\'s for\n\n## Out of scope\n\n## Acceptance criteria\n| ID | Criterion | Visual |\n| --- | --- | --- |\n| AC-1 |  |  |\n',
@@ -53,6 +55,8 @@ export async function draft(ctx, { positionals, flags }) {
   if (step === 'design' && !shape) lines.push('Shape has no approved version yet; Design can be drafted but not checkpointed until it does.')
   lines.push('', entries.length ? `Notes since the latest version (${entries.length}):` : 'No notes since the latest version.')
   for (const e of entries) lines.push(`- [${e.kind}${e.confirmed ? '' : ', unconfirmed: note --keep, --edit or --drop'}] ${e.id ? `${e.id}: ` : ''}${e.text}`)
+  const visual = shape ? parseDraft(shape).criteria.filter((c) => c.visual).map((c) => c.id) : []
   if (shape) lines.push('', `Approved Shape (${state.steps.shape.approvedCheckpoint.version}), acceptance criteria:`, ...parseDraft(shape).criteria.map((c) => `- ${c.id}: ${c.criterion}${c.visual ? ' (visual)' : ''}`))
+  if (visual.length) lines.push('', `Wireframes: write ${join(wireframesDir(ctx.stateDir()), `${visual[0]}.html`)} for each visual criterion (${visual.join(', ')}), plus ${visual[0]}-<state>.html for an edge state, then run factory-foreman wireframes design. See references/design.md.`)
   return { out: lines.join('\n'), json: { step, issue: n, file, base, stale, entries, approvedShape: shape } }
 }

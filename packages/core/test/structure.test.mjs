@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { test } from 'node:test'
 import { DEFAULTS } from '../src/config/load.mjs'
 import { checkStructure, countWords, parseDraft, splitFrontMatter, withFrontMatter } from '../src/steps/structure.mjs'
+
+// The image the DESIGN fixture pins, and its hash.
+export const WIREFRAME_PNG = Buffer.from('a wireframe')
+export const WIREFRAME_HASH = createHash('sha256').update(WIREFRAME_PNG).digest('hex')
+export const WIREFRAME_COMMIT = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 export const SHAPE = `---
 step: shape
@@ -46,6 +52,10 @@ Keep state in reading-list.ts.
 1. Toggle read (AC-1)
    files: src/reading-list.ts, src/main.ts
 2. Filter (AC-2)
+
+## Wireframes
+### AC-1
+![AC-1 normal, sha256:${WIREFRAME_HASH}](https://github.com/owner/sandbox/blob/${WIREFRAME_COMMIT}/design/AC-1.png?raw=true)
 `
 
 test('front matter round-trips, with numbers parsed', () => {
@@ -74,6 +84,48 @@ test('parses a Design: contracts, visual behaviors and slices', () => {
     { n: 2, title: 'Filter', acs: [ 'AC-2' ], files: [] },
   ])
   assert.deepEqual(checkStructure('design', design, { budgets: DEFAULTS.budgets, shape: parseDraft(SHAPE) }), [])
+})
+
+export const WIREFRAME = (alt, url) => DESIGN.replace(/!\[[^\]]*\]\([^)]*\)/, `![${alt}](${url})`)
+const PNG = (commit = WIREFRAME_COMMIT, file = 'AC-1.png', repo = 'owner/sandbox') => `https://github.com/${repo}/blob/${commit}/design/${file}?raw=true`
+
+test('wireframes: every visual AC has one, pinned to a commit, naming only known ACs', () => {
+  const shape = parseDraft(SHAPE)
+  const check = (text) => checkStructure('design', parseDraft(text), { budgets: DEFAULTS.budgets, shape, repo: 'Owner/Sandbox' })
+  const H = WIREFRAME_HASH
+  assert.deepEqual(parseDraft(DESIGN).wireframes, [ { alt: `AC-1 normal, sha256:${H}`, url: PNG(), id: 'AC-1', state: 'normal', hash: H, repo: 'owner/sandbox', commit: WIREFRAME_COMMIT, path: 'design/AC-1.png' } ])
+  assert.deepEqual(check(DESIGN), [])
+  assert.match(check(DESIGN.replace(/\n## Wireframes[\s\S]*$/, '\n')).join('\n'), /AC-1 is visual: add its wireframe/)
+  // A link that could change under the approver: a branch, or no ?raw=true.
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG('main'))).join('\n'), /must link to this repo's image at a commit/)
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG().replace('?raw=true', ''))).join('\n'), /must link to this repo's image at a commit/)
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, 'wireframes/AC-1.png')).join('\n'), /must link to this repo's image at a commit/)
+  assert.match(check(WIREFRAME('the toggle', PNG())).join('\n'), /needs alt text "AC-n <state>, sha256:<64-hex hash>"/)
+  assert.match(check(WIREFRAME('AC-1 normal', PNG())).join('\n'), /needs alt text/)
+  assert.match(check(`${DESIGN}![AC-7 normal, sha256:${H}](${PNG(undefined, 'AC-7.png')})\n`).join('\n'), /Wireframes names AC-7, which the approved Shape doesn't have/)
+  // A non-visual AC may have one too; an edge state is a second image.
+  assert.deepEqual(check(`${DESIGN}![AC-1 empty, sha256:${H}](${PNG(undefined, 'AC-1-empty.png')})\n### AC-2\n![AC-2 normal, sha256:${H}](${PNG(undefined, 'AC-2.png')})\n`), [])
+  // Another repo, a path that isn't the AC's own, a short hash, a malformed link: refused, never thrown.
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG(undefined, undefined, 'someone/fork'))).join('\n'), /must link to this repo's image/)
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG(undefined, 'AC-2.png'))).join('\n'), /must link to this repo's image/)
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG(undefined, '../AC-1.png'))).join('\n'), /must link to this repo's image/)
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H.slice(0, 16)}`, PNG())).join('\n'), /needs alt text/)
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG(undefined, 'AC-1%E0%A4%A.png'))).join('\n'), /must link to this repo's image/)
+  // Any other image could change after approval: titled, by reference, in HTML, or in another section.
+  for (const extra of [ `![AC-1 normal, sha256:${H}](${PNG()} "t")`, '![x][ref]\n\n[ref]: https://example.com/x.png', '<img src="https://example.com/x.png">', '<picture><source srcset="x.png"></picture>' ]) {
+    assert.match(check(`${DESIGN}${extra}\n`).join('\n'), /Images go only in the Wireframes section/, extra)
+  }
+  assert.match(check(DESIGN.replace('Keep state in reading-list.ts.', 'Keep state in reading-list.ts. ![now](https://example.com/now.png)')).join('\n'), /Images go only in the Wireframes section/)
+  assert.deepEqual(check(DESIGN.replace('Keep state in reading-list.ts.', 'Keep state in reading-list.ts.\n```md\n![in code](x.png)\n```')), [])
+  assert.match(checkStructure('shape', parseDraft(SHAPE.replace('Syncing between devices.', 'Syncing. ![x](https://example.com/x.png)')), { budgets: DEFAULTS.budgets }).join('\n'), /A Shape has no images/)
+  // Tags and image syntax as code or escaped don't render, so they aren't images.
+  assert.deepEqual(check(DESIGN.replace('Keep state in reading-list.ts.', 'Render the avatar with an `<img>`, swap the `<svg>` icon, and write ``![alt](x)`` in docs. \\<img> too.')), [])
+  assert.deepEqual(checkStructure('shape', parseDraft(SHAPE.replace('The list mixes read and unread books.', 'The avatar uses an `<img>` tag; swap it for an `<svg>` icon.')), { budgets: DEFAULTS.budgets }), [])
+  // A link GitHub would serve at another, encoded path.
+  assert.match(check(WIREFRAME(`AC-1 normal, sha256:${H}`, PNG().replace('design/AC-1.png', 'design%2FAC-1.png'))).join('\n'), /must link to this repo's image/)
+  // A non-visual Shape needs none.
+  const plain = parseDraft(SHAPE.replace('| A book can be marked read | yes |', '| A book can be marked read | no |'))
+  assert.deepEqual(checkStructure('design', parseDraft(DESIGN.replace(/\n## Wireframes[\s\S]*$/, '\n')), { budgets: DEFAULTS.budgets, shape: plain }), [])
 })
 
 test('headings inside code blocks are not sections', () => {

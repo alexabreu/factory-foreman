@@ -57,6 +57,20 @@ export function createGitHub({ repo, run, appToken, botLogin }) {
       }
     },
 
+    // A file's bytes at a commit, or null when there is no such file there.
+    // Read through the blobs API, which serves files the contents API won't (over 1 MB).
+    async blob(commit, path) {
+      try {
+        const sha = (await run([ 'api', `repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`, '--jq', '.sha' ])).trim()
+        if (!sha) return null
+        const content = (await run([ 'api', `repos/${repo}/git/blobs/${sha}`, '--jq', '.content' ])).replace(/\s/g, '')
+        return Buffer.from(content, 'base64')
+      } catch (error) {
+        if (/HTTP 404|Not Found|No commit found/i.test(error.stderr ?? error.message)) return null
+        throw error
+      }
+    },
+
     // A missing issue reads as null; gh reports it as an error.
     async issue(n) {
       try {

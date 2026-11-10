@@ -1,8 +1,8 @@
 // Phase 2: reviews that must be settled before a checkpoint, amendments that
 // keep or need approval, status, and notes captured from transcripts.
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -14,7 +14,7 @@ import { parseExtracted, transcriptText } from '../src/capture/extract.mjs'
 import { detectHarness, readLog, stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { parseDraft, structuralBlocks } from '../src/steps/structure.mjs'
 import { fakeGitHub } from './fixtures/github.mjs'
-import { DESIGN, SHAPE } from './structure.test.mjs'
+import { DESIGN, SHAPE, WIREFRAME_COMMIT, WIREFRAME_PNG } from './structure.test.mjs'
 
 const REVIEWED = { reviewers: { shape: [ 'test-verification-engineer' ], design: [ 'software-architect', 'ux-designer?visual' ] }, secondOpinion: null }
 
@@ -23,6 +23,9 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
   execFileSync('git', [ 'init', '-q' ], { cwd })
   let minute = 0
   const calls = []
+  const dev = { cwd, calls, browser: null, world }
+  // git runs for real; any other command is stubbed.
+  const git = (argv, opts) => { const r = spawnSync('git', argv.slice(1), { cwd: opts?.cwd ?? cwd, encoding: 'utf8', input: opts?.input, env: opts?.env ? { ...process.env, ...opts.env } : undefined }); return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr } }
   const ctx = () => ({
     cwd,
     env,
@@ -36,9 +39,10 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
     author: () => login,
     github: () => world.as(login),
     prompt: async () => answer,
-    exec: async (argv, opts) => { calls.push({ argv, opts }); return exec ? exec(argv, opts) : { code: 0, stdout: '[]', stderr: '' } },
+    exec: async (argv, opts) => { if (argv[0] === 'git') return git(argv, opts); calls.push({ argv, opts }); const stub = dev.exec ?? exec; return stub ? stub(argv, opts) : { code: 0, stdout: '[]', stderr: '' } },
+    ...(dev.browser ? { browser: () => dev.browser } : {}),
   })
-  return { cwd, calls, run: (...argv) => main(argv, ctx), draft: (step) => worktreeDraftPath(cwd, 7, step), dir: () => stateDir(cwd, 7) }
+  return Object.assign(dev, { run: (...argv) => main(argv, ctx), draft: (step) => worktreeDraftPath(cwd, 7, step), dir: () => stateDir(cwd, 7) })
 }
 
 function writeDraft(file, body) {
@@ -57,6 +61,7 @@ async function settle(dev, step, reviewers = { 'test-verification-engineer': [] 
 function setup() {
   const world = fakeGitHub({ permissions: { ana: 'write', ben: 'write' } })
   world.addIssue(7, 'Readers want to track what they have read.')
+  world.blobs.set(`${WIREFRAME_COMMIT}:design/AC-1.png`, WIREFRAME_PNG)
   return { world, ana: developer(world, 'ana'), ben: developer(world, 'ben', { isTTY: true, answer: 'y' }) }
 }
 
@@ -302,6 +307,10 @@ test('structural blocks ignore wording and whitespace but not criteria, contract
   const base = structuralBlocks(parseDraft(DESIGN))
   assert.equal(structuralBlocks(parseDraft(DESIGN.replace('Keep state in reading-list.ts.', 'Keep all state in reading-list.ts.'))), base)
   assert.notEqual(structuralBlocks(parseDraft(DESIGN.replace('"item-toggle"', '"item-check"'))), base)
+  // A changed wireframe image is material; the same image pushed in a later commit is not.
+  assert.notEqual(structuralBlocks(parseDraft(DESIGN.replace(/sha256:[0-9a-f]{64}/, `sha256:${'0'.repeat(64)}`))), base)
+  assert.notEqual(structuralBlocks(parseDraft(DESIGN.replace('AC-1 normal,', 'AC-1 empty,'))), base)
+  assert.equal(structuralBlocks(parseDraft(DESIGN.replace('a'.repeat(40), 'b'.repeat(40)))), base)
   assert.equal(structuralBlocks(parseDraft(SHAPE.replace('A book can be marked read', 'A book  can be marked read'))), structuralBlocks(parseDraft(SHAPE)))
   assert.notEqual(structuralBlocks(parseDraft(SHAPE.replace('| A book can be marked read | yes |', '| A book can be marked read | no |'))), structuralBlocks(parseDraft(SHAPE)))
 })
@@ -665,4 +674,198 @@ test('review --headless refuses inside Codex\'s sandbox and points to subagents'
   assert.match(out.err, /doesn't run inside Codex[\s\S]*run each as a subagent by its agent name \(test-verification-engineer\)/)
   assert.equal(dev.calls.length, 0)
   assert.match((await dev.run('review', 'shape')).out, /=== test-verification-engineer \(run as a subagent: the test-verification-engineer agent\) ===/)
+})
+
+// A repo with a bare origin, and a browser that writes a PNG per page.
+function withOrigin(dev) {
+  const remote = mkdtempSync(join(tmpdir(), 'ff-origin-'))
+  execFileSync('git', [ 'init', '-q', '--bare' ], { cwd: remote })
+  const g = (...a) => execFileSync('git', a, { cwd: dev.cwd, encoding: 'utf8' }).trim()
+  g('config', 'user.name', 'Ana'); g('config', 'user.email', 'ana@example.com')
+  g('commit', '-q', '--allow-empty', '-m', 'start')
+  g('checkout', '-q', '-b', 'factory-foreman/7')
+  // origin names the GitHub repo; insteadOf sends it to the bare repo standing in for GitHub.
+  g('remote', 'add', 'origin', 'https://github.com/owner/sandbox.git')
+  g('config', `url.${remote}.insteadOf`, 'https://github.com/owner/sandbox.git')
+  dev.world.gitDir = remote
+  const rendered = []
+  dev.browser = { render: async (html, png) => { rendered.push(html); writeFileSync(png, `PNG of ${readFileSync(html, 'utf8')}`) }, close: async () => { dev.closed = true } }
+  const pages = join(dev.dir(), 'wireframes')
+  mkdirSync(pages, { recursive: true })
+  const origin = (...a) => execFileSync('git', a, { cwd: remote, encoding: 'utf8' }).trim()
+  return { remote, origin, g, rendered, pages }
+}
+const PAGE = (label) => `<!doctype html><title>${label}</title><main style="font:16px sans-serif"><label><input type="checkbox"> ${label}</label></main>`
+
+test('wireframes design renders each page and pushes it to an assets-only branch, leaving the checkout untouched', async () => {
+  const { ana } = await approvedShape()
+  const { origin, g, rendered, pages } = withOrigin(ana)
+  await ana.run('draft', 'design')
+  writeDraft(ana.draft('design'), DESIGN.replace(/\n## Wireframes[\s\S]*$/, '\n'))
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('Mark read'))
+  writeFileSync(join(pages, 'AC-1-empty.html'), PAGE('No books yet'))
+  // Work in progress, staged and unstaged, on the issue branch.
+  writeFileSync(join(ana.cwd, 'staged.txt'), 'x'); g('add', 'staged.txt')
+  writeFileSync(join(ana.cwd, 'loose.txt'), 'y')
+  const before = { head: g('rev-parse', 'HEAD'), branch: g('branch', '--show-current'), status: g('status', '--porcelain'), index: g('ls-files', '--stage'), branches: g('branch', '--list'), objects: g('count-objects') }
+  const out = await ana.run('wireframes', 'design', '--json')
+  assert.equal(out.code, 0, out.err)
+  const result = JSON.parse(out.out)
+  assert.equal(result.branch, 'factory-foreman-assets/7')
+  assert.deepEqual(result.files.map((f) => `${f.id} ${f.state}`), [ 'AC-1 normal', 'AC-1 empty' ])
+  assert.equal(rendered.length, 2)
+  assert.ok(ana.closed)
+  // Nothing was written to the target's .git: the assets repo is in the ignored state folder.
+  assert.equal(g('count-objects'), before.objects)
+  assert.ok(existsSync(join(ana.cwd, '.factory-foreman', 'assets.git', 'HEAD')))
+  delete before.objects
+  // The checkout is exactly as it was: same commit, branch, index, files and local branches.
+  assert.deepEqual({ head: g('rev-parse', 'HEAD'), branch: g('branch', '--show-current'), status: g('status', '--porcelain'), index: g('ls-files', '--stage'), branches: g('branch', '--list') }, before)
+  // The assets commit holds only the pages and images, by the developer, with no parent.
+  assert.equal(origin('rev-parse', 'refs/heads/factory-foreman-assets/7'), result.commit)
+  assert.equal(origin('ls-tree', '-r', '--name-only', result.commit), 'design/AC-1-empty.html\ndesign/AC-1-empty.png\ndesign/AC-1.html\ndesign/AC-1.png')
+  assert.equal(origin('log', '-1', '--format=%an %s %P', result.commit), 'Ana Wireframes for the Design of #7')
+  assert.equal(origin('show', `${result.commit}:design/AC-1.html`), PAGE('Mark read'))
+  assert.throws(() => origin('rev-parse', '--verify', 'refs/heads/factory-foreman/7'))
+  // The draft links each image at that commit.
+  const draft = parseDraft(readFileSync(ana.draft('design'), 'utf8'))
+  assert.deepEqual(draft.wireframes.map((w) => [ w.id, w.state, w.commit, w.path ]), [ [ 'AC-1', 'normal', result.commit, 'design/AC-1.png' ], [ 'AC-1', 'empty', result.commit, 'design/AC-1-empty.png' ] ])
+  assert.match(readFileSync(ana.draft('design'), 'utf8'), /https:\/\/github\.com\/owner\/sandbox\/blob\/[0-9a-f]{40}\/design\/AC-1\.png\?raw=true/)
+  // Nothing changed: the same commit, and still one section.
+  const again = JSON.parse((await ana.run('wireframes', 'design', '--json')).out)
+  assert.equal(again.commit, result.commit)
+  assert.equal(readFileSync(ana.draft('design'), 'utf8').match(/^## Wireframes$/gm).length, 1)
+  // A changed page and a dropped one: a new commit on top, without the dropped files.
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('Mark as read'))
+  execFileSync('rm', [ join(pages, 'AC-1-empty.html') ])
+  const third = JSON.parse((await ana.run('wireframes', 'design', '--json')).out)
+  assert.notEqual(third.commit, result.commit)
+  assert.equal(origin('log', '-1', '--format=%P', third.commit), result.commit)
+  assert.equal(origin('ls-tree', '-r', '--name-only', third.commit), 'design/AC-1.html\ndesign/AC-1.png')
+  assert.notEqual(third.files[0].hash, result.files[0].hash)
+  // Checkpoint reads each pinned image back from GitHub and checks its hash.
+  await settle(ana, 'design', { 'software-architect': [], 'ux-designer': [] })
+  const posted = await ana.run('checkpoint', 'design')
+  assert.equal(posted.code, 0, posted.err)
+  // The ux-designer's brief points at the images in the state folder; the architect's doesn't.
+  const briefs = JSON.parse((await ana.run('review', 'design', '--json')).out).briefs
+  const ux = briefs.find((b) => b.reviewer === 'ux-designer').brief
+  assert.ok(ux.includes(`- AC-1 normal: ${join(pages, 'AC-1.png')}`), ux.slice(-600))
+  assert.match(ux, /Open and look at each wireframe image/)
+  assert.doesNotMatch(briefs.find((b) => b.reviewer === 'software-architect').brief, /wireframe image/)
+})
+
+test('wireframes design refuses a missing or unknown AC, a bad name or a page that loads from elsewhere', async () => {
+  const { ana } = await approvedShape()
+  await ana.run('draft', 'design')
+  const { origin, rendered, pages } = withOrigin(ana)
+  assert.match((await ana.run('wireframes', 'design')).err, /AC-1 is visual and has no wireframe: write .*wireframes\/AC-1\.html/)
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('ok'))
+  writeFileSync(join(pages, 'AC-9.html'), PAGE('?'))
+  writeFileSync(join(pages, 'ac-1 edge.html'), PAGE('?'))
+  writeFileSync(join(pages, 'AC-1-normal.html'), PAGE('?'))
+  writeFileSync(join(pages, 'AC-1-font.html'), '<link rel="stylesheet" href="https://fonts.example/x.css">')
+  writeFileSync(join(pages, 'AC-1-img.html'), '<img src=//cdn.example/x.png>')
+  const err = (await ana.run('wireframes', 'design')).err
+  for (const why of [ /AC-9\.html: the approved Shape has no AC-9/, /ac-1 edge\.html: name it AC-<n>\.html/, /AC-1-normal\.html: the normal state is AC-1\.html/, /AC-1-font\.html isn't self-contained: it has a <link>/, /AC-1-img\.html isn't self-contained: it refers to \/\/cdn/ ]) assert.match(err, why)
+  assert.equal(rendered.length, 0)
+  assert.equal(origin('branch', '--list'), '')
+})
+
+test('a wireframe page may refer only to itself or data: URLs', async () => {
+  const { notSelfContained } = await import('../src/commands/wireframes.mjs')
+  const outside = [ '<script>fetch("x")</script>', '<iframe src="../../.aws/credentials"></iframe>', '<img srcset="https://x/a.png 2x">', '<img src="https:x.example/a.png">', '<img src="/etc/hosts">', '<div style="background:url(https:x/a.png)">', '<style>@import "local.css";</style>', '<meta http-equiv=refresh content="0;url=https://x">', '<object data="x.pdf"></object>', '<video poster="x.png"></video>', '<form action="https://x">', '<a href=https://x>', "<div style='background-image: url( \"file:///etc/passwd\" )'>" ]
+  for (const html of outside) assert.ok(notSelfContained(html), html)
+  outside.push('<img src="data:," onerror="location=\'file:///etc/hosts\'">', '<body onload="fetch(\'https://x\')">', '<div style="background:image-set(\'https://x/a.png\' 1x)">', '<div style="background:u\\72l(https://x)">', '<style>div{background:u\\72l(https://x)}</style>', '<svg><a><animate attributeName="href" to="https://x"/></a></svg>', '<svg><set attributeName="href" to="https://x"/></svg>')
+  for (const html of outside.slice(-7)) assert.ok(notSelfContained(html), html)
+  const inside = [ '<meta charset="utf-8">', '<meta name="viewport" content="width=960">', '<a href="#top">Top</a>', '<img src="data:image/png;base64,AAAA" alt="">', '<p>See http://example.com in the docs</p>', '<div style="background:url(#g)">', '<label for="x">Read</label><input id="x" type="checkbox">' ]
+  for (const html of inside) assert.equal(notSelfContained(html), null, html)
+})
+
+test('without agent-browser, wireframes refuses with how to install it', async () => {
+  const { ana } = await approvedShape()
+  await ana.run('draft', 'design')
+  const { pages } = withOrigin(ana)
+  ana.browser = null
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('ok'))
+  // agent-browser isn't on PATH: spawning it fails as a missing binary does.
+  ana.exec = () => ({ code: 127, stdout: '', stderr: 'spawn agent-browser ENOENT' })
+  const out = await ana.run('wireframes', 'design')
+  assert.equal(out.code, 2)
+  assert.match(out.err, /npm install -g agent-browser, then agent-browser install/)
+  assert.equal(ana.calls[0].argv[0], 'agent-browser')
+})
+
+test('checkpoint refuses a wireframe whose pinned image is missing or isn\'t the one its hash names', async () => {
+  const { ana } = await approvedShape()
+  const { pages } = withOrigin(ana)
+  await ana.run('draft', 'design')
+  writeDraft(ana.draft('design'), DESIGN.replace(/\n## Wireframes[\s\S]*$/, '\n'))
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('Mark read'))
+  const { commit } = JSON.parse((await ana.run('wireframes', 'design', '--json')).out)
+  const text = readFileSync(ana.draft('design'), 'utf8')
+  // Another image's hash claimed for this one.
+  writeFileSync(ana.draft('design'), text.replace(/sha256:[0-9a-f]{64}/, `sha256:${'0'.repeat(64)}`))
+  await settle(ana, 'design', { 'software-architect': [], 'ux-designer': [] })
+  assert.match((await ana.run('checkpoint', 'design')).err, /isn't the image its hash names/)
+  // A commit GitHub doesn't have.
+  writeFileSync(ana.draft('design'), text.replaceAll(commit, 'c'.repeat(40)))
+  await settle(ana, 'design', { 'software-architect': [], 'ux-designer': [] })
+  assert.match((await ana.run('checkpoint', 'design')).err, /isn't on GitHub at cccccccccccc/)
+})
+
+test('the Wireframes section is replaced in place, and headings inside code blocks are left alone', async () => {
+  const { withWireframes, wireframeFiles } = await import('../src/commands/wireframes.mjs')
+  const section = '## Wireframes\nnew\n'
+  const middle = '---\nstep: design\n---\nLead.\n\n## Approach\n```md\n## Wireframes\nin a fence\n```\n\n## Wireframes\nold\n\n## Slices\n1. A (AC-1)\n'
+  const out = withWireframes(middle, section)
+  assert.match(out, /```md\n## Wireframes\nin a fence\n```/)
+  assert.match(out, /## Wireframes\nnew\n\n## Slices\n1\. A \(AC-1\)\n$/)
+  assert.doesNotMatch(out, /\nold\n/)
+  assert.match(withWireframes('---\nstep: design\n---\nLead.\n\n## Approach\nx\n', section), /## Approach\nx\n\n## Wireframes\nnew\n$/)
+  // AC order is numeric, normal state first.
+  const dir = mkdtempSync(join(tmpdir(), 'ff-wf-'))
+  for (const name of [ 'AC-10.html', 'AC-2-empty.html', 'AC-2.html', 'AC-1.html' ]) writeFileSync(join(dir, name), PAGE(name))
+  assert.deepEqual(wireframeFiles(dir).files.map((f) => f.name), [ 'AC-1.html', 'AC-2.html', 'AC-2-empty.html', 'AC-10.html' ])
+})
+
+test('the assets repo gets the target\'s own and included git config, in the environment', async () => {
+  const { carriedConfig } = await import('../src/commands/wireframes.mjs')
+  const cwd = mkdtempSync(join(tmpdir(), 'ff-cfg-'))
+  const g = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim()
+  g('init', '-q')
+  const assets = join(cwd, '.factory-foreman', 'assets.git')
+  execFileSync('git', [ 'init', '-q', '--bare', assets ])
+  writeFileSync(join(cwd, 'extra.gitconfig'), '[core]\n\tsshCommand = ssh -i ~/.ssh/work\n')
+  g('config', 'include.path', join(cwd, 'extra.gitconfig'))
+  g('config', 'http.https://github.com/.extraheader', 'AUTHORIZATION: basic c2VjcmV0')
+  g('config', 'user.name', 'not carried')
+  const exec = async (argv) => { const r = spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8' }); return { code: r.status, stdout: r.stdout, stderr: r.stderr } }
+  const env = await carriedConfig({ exec }, assets)
+  const pairs = Object.fromEntries(Array.from({ length: Number(env.GIT_CONFIG_COUNT) }, (_, i) => [ env[`GIT_CONFIG_KEY_${i}`], env[`GIT_CONFIG_VALUE_${i}`] ]))
+  assert.equal(pairs['core.sshcommand'], 'ssh -i ~/.ssh/work')
+  assert.equal(pairs['http.https://github.com/.extraheader'], 'AUTHORIZATION: basic c2VjcmV0')
+  assert.equal(pairs['user.name'], undefined)
+  // Global settings both repos already see aren't carried twice.
+  const both = execFileSync('git', [ '--git-dir', assets, 'config', '--null', '--get-regexp', '^credential\\..*' ], { encoding: 'utf8' }).split('\0').filter(Boolean)
+  for (const entry of both) assert.ok(!Object.entries(pairs).some(([ k, v ]) => `${k}\n${v}` === entry), entry)
+})
+
+test('a missing tag is pushed on a rerun, and an SSH alias origin naming the repo is accepted', async () => {
+  const { ana } = await approvedShape()
+  await ana.run('draft', 'design')
+  const { origin, g, pages, remote } = withOrigin(ana)
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('ok'))
+  const { commit } = JSON.parse((await ana.run('wireframes', 'design', '--json')).out)
+  const tag = `refs/tags/factory-foreman-assets/7/${commit.slice(0, 12)}`
+  assert.equal(origin('rev-parse', tag), commit)
+  origin('update-ref', '-d', tag)
+  assert.equal((await ana.run('wireframes', 'design')).code, 0)
+  assert.equal(origin('rev-parse', tag), commit)
+  // A multi-account SSH alias for github.com, rewritten here to the bare repo.
+  g('remote', 'set-url', 'origin', 'git@github-work:owner/sandbox.git')
+  g('config', `url.${remote}.insteadOf`, 'git@github-work:owner/sandbox.git')
+  assert.equal((await ana.run('wireframes', 'design')).code, 0)
+  g('remote', 'set-url', 'origin', 'git@github-work:someone/else.git')
+  assert.match((await ana.run('wireframes', 'design')).err, /but this issue is on owner\/sandbox/)
 })
