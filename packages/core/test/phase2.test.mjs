@@ -866,7 +866,8 @@ test('the assets repo gets the target\'s own and included git config, in the env
   assert.equal(pairs['http.https://github.com/.extraheader'], 'AUTHORIZATION: basic c2VjcmV0')
   assert.equal(pairs['user.name'], undefined)
   // Global settings both repos already see aren't carried twice.
-  const both = execFileSync('git', [ '--git-dir', assets, 'config', '--null', '--get-regexp', '^credential\\..*' ], { encoding: 'utf8' }).split('\0').filter(Boolean)
+  // (git config exits 1 when nothing matches, as on a CI runner with no credential helper.)
+  const both = spawnSync('git', [ '--git-dir', assets, 'config', '--null', '--get-regexp', '^credential\\..*' ], { encoding: 'utf8' }).stdout.split('\0').filter(Boolean)
   for (const entry of both) assert.ok(!Object.entries(pairs).some(([ k, v ]) => `${k}\n${v}` === entry), entry)
 })
 
