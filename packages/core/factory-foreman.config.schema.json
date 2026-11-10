@@ -79,6 +79,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "maxRounds": { "type": "integer", "minimum": 1, "description": "Review rounds a draft gets per version it builds on (default 2); after the last, the person settles what's left." },
         "headless": {
           "type": "object",
           "required": ["command"],

@@ -188,7 +188,8 @@ test('review prints one brief per reviewer with the draft hash; checkpoint waits
   assert.match(unsettled.err, /T1 isn't settled/)
 
   await settle(ana, 'shape', { 'test-verification-engineer': [ { id: 'T1', text: 'AC-2 needs a case for an empty list', settlement: 'overruled', reason: 'An empty list shows nothing either way.' } ] })
-  const saved = readdirSync(join(ana.dir(), 'reviews'))
+  // Saved reviews by draft hash, next to the rounds file.
+  const saved = readdirSync(join(ana.dir(), 'reviews')).filter((f) => !f.endsWith('-rounds.json'))
   assert.equal(saved.length, 1)
   assert.match(saved[0], /^shape-[0-9a-f]{64}\.json$/)
 
@@ -523,7 +524,7 @@ test('a saved review missing a reviewer, or damaged, is refused', async () => {
   await ana.run('draft', 'shape')
   writeDraft(ana.draft('shape'), SHAPE)
   await settle(ana, 'shape')
-  const [ file ] = readdirSync(join(ana.dir(), 'reviews'))
+  const [ file ] = readdirSync(join(ana.dir(), 'reviews')).filter((f) => !f.endsWith('-rounds.json'))
   writeFileSync(join(ana.dir(), 'reviews', file), JSON.stringify({ reviewers: {} }))
   const missing = await ana.run('checkpoint', 'shape')
   assert.equal(missing.code, 2)
@@ -724,7 +725,7 @@ test('wireframes design renders each page and pushes it to an assets-only branch
   // The assets commit holds only the pages and images, by the developer, with no parent.
   assert.equal(origin('rev-parse', 'refs/heads/factory-foreman-assets/7'), result.commit)
   assert.equal(origin('ls-tree', '-r', '--name-only', result.commit), 'design/AC-1-empty.html\ndesign/AC-1-empty.png\ndesign/AC-1.html\ndesign/AC-1.png')
-  assert.equal(origin('log', '-1', '--format=%an %s %P', result.commit), 'Ana Wireframes for the Design of #7')
+  assert.equal(origin('log', '-1', '--format=%an %s %P', result.commit), 'Ana Wireframes for the Design of #7 [skip ci]')
   assert.equal(origin('show', `${result.commit}:design/AC-1.html`), PAGE('Mark read'))
   assert.throws(() => origin('rev-parse', '--verify', 'refs/heads/factory-foreman/7'))
   // The draft links each image at that commit.
@@ -935,4 +936,47 @@ test('inside Codex, wireframes checks the pages, then refuses with the command f
     await ana.run('draft', 'design')
     assert.doesNotMatch((await ana.run('wireframes', 'design')).err ?? '', /Codex's sandbox/)
   }
+})
+
+test('review rounds: round 2 re-briefs only the reviewers whose findings changed the draft, and there is no third', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7, '')
+  const ana = developer(world, 'ana', { config: { reviewers: { shape: [ 'test-verification-engineer', 'product-engineer' ], design: [] } } })
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  const r1 = JSON.parse((await ana.run('review', 'shape', '--json')).out)
+  assert.deepEqual([ r1.round, r1.maxRounds, r1.briefs.map((b) => b.reviewer) ], [ 1, 2, [ 'test-verification-engineer', 'product-engineer' ] ])
+  // The same draft again is the same round.
+  assert.equal(JSON.parse((await ana.run('review', 'shape', '--json')).out).round, 1)
+  // Editing before saving round 1: save it first.
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, for now.'))
+  assert.match((await ana.run('review', 'shape')).err, /Save round 1's settled findings before the next round/)
+  writeDraft(ana.draft('shape'), SHAPE)
+  await settle(ana, 'shape', { 'test-verification-engineer': [ { id: 'T1', text: 'Out of scope is vague', settlement: 'changed' } ], 'product-engineer': [ { id: 'P1', text: 'Fine', settlement: 'accepted' } ] })
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, for now.'))
+  const r2 = JSON.parse((await ana.run('review', 'shape', '--json')).out)
+  assert.deepEqual([ r2.round, r2.briefs.map((b) => b.reviewer) ], [ 2, [ 'test-verification-engineer' ] ])
+  assert.match(r2.briefs[0].brief, /^Round 2 of the review\. Re-review only what changed since round 1/)
+  assert.match(r2.briefs[0].brief, /Lines removed:\n- Syncing between devices\.\n\nLines added:\n\+ Syncing between devices, for now\./)
+  assert.match(r2.briefs[0].brief, /Your round 1 findings and how they were settled: \[\{"id":"T1"/)
+  assert.match((await ana.run('review', 'shape')).out, /round 2 of 2: only test-verification-engineer[\s\S]*This is the last round/)
+  // Round 2's save names only who re-reviewed; the others' findings carry over.
+  const file = join(ana.cwd, 'r2.json')
+  writeFileSync(file, JSON.stringify({ reviewers: { 'test-verification-engineer': [] } }))
+  assert.equal((await ana.run('review', 'save', 'shape', '--findings', file)).code, 0)
+  const saved = JSON.parse(readFileSync(join(ana.dir(), 'reviews', readdirSync(join(ana.dir(), 'reviews')).filter((f) => !f.endsWith('-rounds.json')).find((f) => JSON.parse(readFileSync(join(ana.dir(), 'reviews', f), 'utf8')).round === 2)), 'utf8'))
+  assert.deepEqual(saved.reviewers['product-engineer'], [ { id: 'P1', text: 'Fine', settlement: 'accepted' } ])
+  // A third round is refused; saving the person's settlement of a further edit isn't.
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing between devices, not now.'))
+  assert.match((await ana.run('review', 'shape')).err, /has had its 2 review rounds since version 0\. What's left is the person's to settle[\s\S]*There's no third round/)
+  assert.equal((await ana.run('review', 'save', 'shape', '--findings', file)).code, 0)
+  assert.equal((await ana.run('checkpoint', 'shape')).code, 0)
+  // No reviewer's finding changed the draft: nothing to re-review.
+  const solo = developer(world, 'ana', { config: { reviewers: { shape: [ 'test-verification-engineer' ], design: [] }, review: { headless: { command: [ 'x' ] }, maxRounds: 2 } } })
+  await solo.run('draft', 'shape', '--reset')
+  writeDraft(solo.draft('shape'), SHAPE)
+  await solo.run('review', 'shape')
+  await settle(solo, 'shape', { 'test-verification-engineer': [ { id: 'T9', text: 'x', settlement: 'accepted' } ] })
+  writeDraft(solo.draft('shape'), SHAPE.replace('Syncing between devices.', 'Syncing.'))
+  assert.match((await solo.run('review', 'shape')).out, /No reviewer's finding changed the Shape draft in round 1, so there's nothing to re-review/)
 })

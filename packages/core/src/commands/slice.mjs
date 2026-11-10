@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { publishAssets } from '../assets/publish.mjs'
+import { pinnedUrl, publishAssets } from '../assets/publish.mjs'
 import { CONFIG_FILE, loadConfig } from '../config/load.mjs'
 import { evidenceSection, loadProviders } from '../evidence/providers.mjs'
 import { Refusal } from '../errors.mjs'
@@ -411,7 +411,16 @@ async function pushIteration(ctx, { n, s, slice, tip, github, config, reviewers,
   // comment can link it pinned; a failure stops before the slice is pushed.
   const files = evidence.flatMap((e) => e.files.map((f) => ({ ...f, published: `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-') })))
   const folder = `slices/${s}/iter-${k}`
-  const published = files.length ? await (ctx.publishAssets ?? publishAssets)(ctx, { n, folder, files: files.map((f) => ({ name: f.published, path: f.path })), message: `Evidence for slice ${s}, iteration ${k} (#${n})`, what: 'the evidence' }) : null
+  // A retry of this same head and iteration (the slice push failed after the
+  // evidence went up) reuses that commit instead of publishing it again.
+  const pendingFile = join(ctx.stateDir(), `evidence-slice-${s}.json`)
+  let pending = null
+  try { pending = JSON.parse(readFileSync(pendingFile, 'utf8')) } catch { /* none */ }
+  const reuse = pending?.head === tip && pending?.k === k && files.length && files.every((f) => pending.names?.includes(f.published))
+  const published = !files.length ? null : reuse
+    ? { commit: pending.commit, branch: pending.branch, url: (name) => pinnedUrl(github.repo, pending.commit, `${folder}/${name}`) }
+    : await (ctx.publishAssets ?? publishAssets)(ctx, { n, folder, files: files.map((f) => ({ name: f.published, path: f.path })), message: `Evidence for slice ${s}, iteration ${k} (#${n})`, what: 'the evidence' })
+  if (published && !reuse) writeFileSync(pendingFile, `${JSON.stringify({ head: tip, k, commit: published.commit, branch: published.branch, names: files.map((f) => f.published) })}\n`)
 
   // Push, record, then tag: a rerun on the same commit only re-tags.
   await git(ctx, [ 'push', '--quiet', 'origin', `HEAD:refs/heads/${slice.branch}` ], `Pushing ${slice.branch}`)

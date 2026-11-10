@@ -64,3 +64,14 @@ test('a config outside cwd gets its overlay next to it; --config= and per-projec
   assert.equal(r.ok, true)
   assert.match(r.summary, /not recorded/)
 })
+
+test('video labels come from the JSON report: full titles, with the retry when there was one', async () => {
+  const { videoTitles } = await import('../index.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'ffpw-'))
+  writeFileSync(join(dir, 'report.json'), JSON.stringify({ suites: [ { title: 'a.e2e.ts', specs: [], suites: [ { title: 'Reading list', specs: [ { title: 'AC-1: removes a book', tests: [ { results: [ { retry: 0, attachments: [ { name: 'video', path: '/v/1.webm' } ] }, { retry: 1, attachments: [ { name: 'video', path: '/v/2.webm' }, { name: 'trace', path: '/t' } ] } ] } ] } ] } ] } ] }))
+  const map = videoTitles(join(dir, 'report.json'))
+  assert.deepEqual(map.get('/v/1.webm'), { title: 'Reading list › AC-1: removes a book', retry: 0 })
+  assert.equal(map.get('/v/2.webm').retry, 1)
+  assert.equal(map.size, 2)
+  assert.equal(videoTitles(join(dir, 'missing.json')).size, 0)
+})

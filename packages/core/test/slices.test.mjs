@@ -654,3 +654,27 @@ test('the evidence section is text: provider names, labels, summaries and links 
   assert.match(section, /!\[ahttp:\/\/evilb\]\(https:\/\/github\.com\/o\/r\/blob\/c\/p\.png\?raw=true\)/)
   assert.match(section, /\[r\]\(https:\/\/example\.com\/r\)/)
 })
+
+test('a retried iteration reuses the evidence it already published when only the slice push failed', async () => {
+  const f = await feature()
+  const { ana, origin } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  const shots = { name: 'shots', collect: ({ out }) => { writeFileSync(join(out, 'after.png'), `png ${Math.random()}`); return { ok: true, files: [ { path: join(out, 'after.png'), name: 'after.png', kind: 'image', label: 'AC-1 after' } ], links: [], summary: '1 screenshot' } } }
+  const { publishAssets } = await import('../src/assets/publish.mjs')
+  let published = 0
+  const runIt = (...a) => main(a, () => ({ ...ana.ctx(), loadProviders: async () => [ shots ], publishAssets: (...x) => { published++; return publishAssets(...x) } }))
+  // The slice push fails once (the evidence goes from the assets repo, so it isn't affected).
+  const flag = join(ana.cwd, '..', `fail-push-${Date.now()}`)
+  writeFileSync(flag, '1')
+  writeFileSync(join(ana.cwd, '.git', 'hooks', 'pre-push'), `#!/bin/sh\n[ -f "${flag}" ] && { rm -f "${flag}"; echo "network down" >&2; exit 1; }\nexit 0\n`, { mode: 0o755 })
+  assert.equal((await runIt('slice', 'iterate', '1')).code, 2)
+  assert.equal(published, 1)
+  const first = origin('rev-parse', 'refs/heads/factory-foreman-assets/7')
+  const it = JSON.parse(ok(await runIt('slice', 'iterate', '1', '--json')).out)
+  assert.equal(published, 1)
+  assert.equal(it.iteration.evidence, first)
+  assert.equal(origin('rev-parse', 'refs/heads/factory-foreman-assets/7'), first)
+})

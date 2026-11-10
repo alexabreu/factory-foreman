@@ -109,11 +109,11 @@ export function checkSettlements(findings, reviewers) {
   return problems
 }
 
-export function saveReview(stateDir, { step, draft, reviewers, findings, at }) {
+export function saveReview(stateDir, { step, draft, reviewers, findings, at, round = 1 }) {
   const digest = draftHash(draft)
   const file = reviewFile(stateDir, step, digest)
   mkdirSync(join(stateDir, 'reviews'), { recursive: true })
-  writeFileSync(file, `${JSON.stringify({ step, hash: digest, savedAt: at, reviewers: Object.fromEntries(reviewers.map((r) => [ r, findings.reviewers[r] ])) }, null, 2)}\n`)
+  writeFileSync(file, `${JSON.stringify({ step, hash: digest, savedAt: at, round, reviewers: Object.fromEntries(reviewers.map((r) => [ r, findings.reviewers[r] ])) }, null, 2)}\n`)
   return { file, digest }
 }
 

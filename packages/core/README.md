@@ -65,6 +65,13 @@ which is for harnesses without subagents and for CI; Claude Code and Codex run
 reviewers as native subagents by agent name. Each command reads its brief on
 stdin.
 
+A draft gets at most `review.maxRounds` review rounds (default 2) per version
+it builds on. Round 1 briefs every reviewer; round 2 re-briefs only the
+reviewers whose findings changed the draft, with what changed and how their
+findings were settled, and their findings replace only theirs when it's saved.
+A third `review` is refused: what's left is the person's to settle, or an open
+question. The saved review records its round.
+
 ## Hooks
 
 APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
