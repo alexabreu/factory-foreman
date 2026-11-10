@@ -181,7 +181,8 @@ test('the six reviewer agents are named, scoped and each loads its standards ski
   const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', 'principal-engineer': 'standards-engineering' }
   for (const [ name, skill ] of Object.entries(expected)) {
     const text = readFileSync(new URL(`${name}.agent.md`, dir), 'utf8')
-    assert.match(text, new RegExp(`^---\\nname: ${name}\\ndescription: .+\\ntools: .+\\nmodel: \\w+\\n---\\n`), name)
+    // No model: each harness uses its own session model (a Claude model name means nothing to Codex).
+    assert.match(text, new RegExp(`^---\\nname: ${name}\\ndescription: .+\\ntools: .+\\n---\\n`), name)
     assert.match(text, new RegExp(`\`${skill}\``), `${name} loads ${skill}`)
     assert.match(text, /JSON\s+array\s+of\s+findings/, `${name} answers in the brief's format`)
   }

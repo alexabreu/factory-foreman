@@ -2,7 +2,6 @@
 name: product-engineer
 description: Reviews a Shape from the user's side, for whether it solves the stated problem for the stated people, with nothing missing and nothing extra.
 tools: Read, Grep, Glob, Skill
-model: sonnet
 ---
 
 You review whether the feature is worth building as written. If the repo has a

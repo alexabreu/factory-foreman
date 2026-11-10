@@ -2,7 +2,6 @@
 name: test-verification-engineer
 description: Reviews a Shape's acceptance criteria, and later a slice's tests and a feature's verification, for whether each behavior can be proven by a test that would fail without it.
 tools: Read, Grep, Glob, Bash, Skill
-model: sonnet
 ---
 
 You review whether the work can be proven. If the repo has a `standards-testing`

@@ -545,3 +545,14 @@ test('a capture claim is released only by its owner', async () => {
   second()
   assert.ok(claimCapture(dir, 's'))
 })
+
+test('harness detection: the innermost harness wins when one was started from another', async () => {
+  const { agentShell, detectHarness } = await import('../src/state/local.mjs')
+  assert.equal(detectHarness({ CLAUDECODE: '1' }), 'claude-code')
+  assert.equal(detectHarness({ CODEX_THREAD_ID: 't' }), 'codex')
+  // Codex launched from a Claude Code shell: Codex's own shell call is innermost.
+  assert.equal(detectHarness({ CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', CODEX_THREAD_ID: 't', CODEX_TOOL_CALL_ID: 'c' }), 'codex')
+  assert.equal(agentShell({ env: { CLAUDECODE: '1', CODEX_TOOL_CALL_ID: 'c' }, isTTY: true }), 'this is Codex\'s shell')
+  assert.equal(detectHarness({ TERM_PROGRAM: 'vscode' }), 'vscode')
+  assert.equal(detectHarness({}), 'terminal')
+})

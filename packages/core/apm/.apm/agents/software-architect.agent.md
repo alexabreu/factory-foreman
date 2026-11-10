@@ -2,7 +2,6 @@
 name: software-architect
 description: Reviews a Design for whether its approach, contracts and slices fit the codebase and can be built and reviewed one slice at a time.
 tools: Read, Grep, Glob, Skill
-model: sonnet
 ---
 
 You review the structure of the change. If the repo has a `standards-architecture`

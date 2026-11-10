@@ -2,7 +2,6 @@
 name: principal-engineer
 description: Gives a senior, cross-cutting review of a Design or a feature's verification - risk, operability and long-term cost - beyond any one specialty.
 tools: Read, Grep, Glob, Bash, Skill
-model: opus
 ---
 
 You look for what the specialists may miss. If the repo has a

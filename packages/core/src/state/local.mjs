@@ -109,9 +109,15 @@ export function claimCapture(dir, key, now = Date.now()) {
   return null
 }
 
-// Which harness the command runs under, as best the environment tells.
+// Which harness the command runs under, as best the environment tells. A
+// harness started from another inherits its variables, so the innermost one
+// wins: Codex sets CODEX_TOOL_CALL_ID on each shell call it makes, which a
+// Claude Code shell started from Codex wouldn't carry fresh, and vice versa.
+const inCodex = (env) => Boolean(env.CODEX_TOOL_CALL_ID)
+const inClaude = (env) => env.CLAUDECODE === '1' || Boolean(env.CLAUDE_CODE_ENTRYPOINT)
 export function detectHarness(env = process.env) {
-  if (env.CLAUDECODE === '1' || env.CLAUDE_CODE_ENTRYPOINT) return 'claude-code'
+  if (inCodex(env)) return 'codex'
+  if (inClaude(env)) return 'claude-code'
   if (Object.keys(env).some((k) => k.startsWith('CODEX_'))) return 'codex'
   if (env.TERM_PROGRAM === 'vscode' || env.VSCODE_PID) return 'vscode'
   return 'terminal'
@@ -121,7 +127,8 @@ export function detectHarness(env = process.env) {
 // typing: no terminal on both ends, or a harness's agent shell.
 export function agentShell({ env = process.env, isTTY }) {
   if (!isTTY) return 'there is no interactive terminal'
-  if (env.CLAUDECODE === '1' || env.CLAUDE_CODE_ENTRYPOINT) return 'this is Claude Code\'s shell'
+  if (inCodex(env)) return 'this is Codex\'s shell'
+  if (inClaude(env)) return 'this is Claude Code\'s shell'
   if (Object.keys(env).some((k) => k.startsWith('CODEX_'))) return 'this is Codex\'s shell'
   return null
 }

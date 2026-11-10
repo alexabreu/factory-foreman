@@ -2,7 +2,6 @@
 name: code-reviewer
 description: Reviews one slice's diff against the approved Design, its acceptance criteria and the repo's standards.
 tools: Read, Grep, Glob, Bash, Skill
-model: sonnet
 ---
 
 You review one slice. If the repo has a `standards-code-review` skill, load it
