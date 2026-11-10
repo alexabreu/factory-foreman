@@ -7,8 +7,7 @@
 // the pages and images in one commit on an assets-only branch,
 // factory-foreman-assets/<n>, built with git plumbing so the working tree, the
 // index and the current branch are never touched, pushes it with the
-// developer's own git credentials (tagging it, so it stays reachable if the
-// branch is deleted), and writes the draft's "## Wireframes"
+// developer's own git credentials, and writes the draft's "## Wireframes"
 // section: one image per page, linked to its blob at that commit, so a
 // version's images never change after it is posted. The issue branch never
 // carries them, so they can't be merged into the product.
@@ -242,17 +241,13 @@ export async function wireframes(ctx, { positionals, flags }) {
   // the next run fetches only what's new; a ref that moved since is refused at push.
   if (remote) await a([ 'fetch', '--quiet', '--no-write-fetch-head', url, `+${ref}:refs/remotes/origin/${branch}` ], `Fetching ${branch}`)
   const commit = await assetsCommit(a, ctx, { n, files, parent: remote, author })
-  // The tag keeps each pinned commit reachable if the branch is ever deleted.
-  // Branch and tag go together (atomic), and a missing tag is pushed on a rerun.
-  const tag = `refs/tags/${branch}/${commit.slice(0, 12)}`
-  const tagged = (await a([ 'ls-remote', url, tag ], `Reading ${tag} on origin`)).startsWith(commit)
-  const updates = [ ...(commit !== remote ? [ `${commit}:${ref}` ] : []), ...(tagged ? [] : [ `${commit}:${tag}` ]) ]
-  if (updates.length) {
+  // Checkpoint tags the commits a posted version pins; a rerender isn't tagged.
+  if (commit !== remote) {
     try {
-      await a([ 'push', '--quiet', '--atomic', url, ...updates ], 'push')
+      await a([ 'push', '--quiet', url, `${commit}:${ref}` ], 'push')
     } catch (error) {
       if (new RegExp(`\\[rejected\\][^\\n]*-> ${branch}\\b`).test(error.stderr ?? '')) throw new Refusal(`Someone pushed wireframes for #${n} meanwhile. Run factory-foreman wireframes design again to build on theirs.`)
-      throw new Refusal(`Pushing ${branch} and its tag failed (this needs network access and the right to push branches and tags to ${repo}): ${error.message.replace(/^push failed: /, '')}`)
+      throw new Refusal(`Pushing ${branch} failed (this needs network access and the right to push branches to ${repo}): ${error.message.replace(/^push failed: /, '')}`)
     }
   }
   writeFileSync(file, withWireframes(readFileSync(file, 'utf8'), wireframesSection({ repo, commit, files })))

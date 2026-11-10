@@ -26,6 +26,13 @@ export function fakeGitHub({ repo = 'owner/sandbox', botLogin = 'foreman[bot]', 
         repo,
         botLogin,
         async viewer() { return viewer },
+        async ensureTag(name, sha) {
+          world.tags ??= new Map()
+          world.tagCalls = (world.tagCalls ?? 0) + 1
+          if (world.tags.has(name) && world.tags.get(name) !== sha) throw new Error(`tag ${name} already points at ${world.tags.get(name).slice(0, 12)}`)
+          world.tags.set(name, sha)
+          log.push({ op: 'tag', name, sha, by: viewer })
+        },
         // From world.blobs, or the bare repo standing in for GitHub when a test sets one.
         async blob(commit, path) {
           if (world.blobs?.has(`${commit}:${path}`)) return world.blobs.get(`${commit}:${path}`)

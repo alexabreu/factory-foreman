@@ -851,17 +851,35 @@ test('the assets repo gets the target\'s own and included git config, in the env
   for (const entry of both) assert.ok(!Object.entries(pairs).some(([ k, v ]) => `${k}\n${v}` === entry), entry)
 })
 
-test('a missing tag is pushed on a rerun, and an SSH alias origin naming the repo is accepted', async () => {
-  const { ana } = await approvedShape()
+test('only a posted version\'s wireframes commit is tagged, at checkpoint; an SSH alias origin naming the repo is accepted', async () => {
+  const { ana, world } = await approvedShape()
   await ana.run('draft', 'design')
   const { origin, g, pages, remote } = withOrigin(ana)
-  writeFileSync(join(pages, 'AC-1.html'), PAGE('ok'))
-  const { commit } = JSON.parse((await ana.run('wireframes', 'design', '--json')).out)
-  const tag = `refs/tags/factory-foreman-assets/7/${commit.slice(0, 12)}`
-  assert.equal(origin('rev-parse', tag), commit)
-  origin('update-ref', '-d', tag)
-  assert.equal((await ana.run('wireframes', 'design')).code, 0)
-  assert.equal(origin('rev-parse', tag), commit)
+  writeDraft(ana.draft('design'), DESIGN.replace(/\n## Wireframes[\s\S]*$/, '\n'))
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('draft one'))
+  const first = JSON.parse((await ana.run('wireframes', 'design', '--json')).out).commit
+  writeFileSync(join(pages, 'AC-1.html'), PAGE('draft two'))
+  const second = JSON.parse((await ana.run('wireframes', 'design', '--json')).out).commit
+  // Rendering pushes the branch and no tags.
+  assert.equal(origin('tag', '--list'), '')
+  await settle(ana, 'design', { 'software-architect': [], 'ux-designer': [] })
+  const posted = await ana.run('checkpoint', 'design')
+  assert.equal(posted.code, 0, posted.err)
+  assert.equal(posted.err, undefined)
+  // The posted version's commit is tagged, as the developer; the rerender before it isn't.
+  assert.deepEqual([ ...world.tags ], [ [ `factory-foreman-assets/7/${second.slice(0, 12)}`, second ] ])
+  assert.ok(world.log.some((e) => e.op === 'tag' && e.by === 'ana'))
+  assert.ok(![ ...world.tags.values() ].includes(first))
+  // One call per pinned commit, however many images it holds.
+  assert.equal(world.tagCalls, 1)
+  // A tag already at another commit is reported, and the version is still posted.
+  world.tags.set(`factory-foreman-assets/7/${second.slice(0, 12)}`, 'f'.repeat(40))
+  await ana.run('draft', 'design', '--reset')
+  writeFileSync(ana.draft('design'), readFileSync(ana.draft('design'), 'utf8').replace('Keep state in reading-list.ts.', 'Keep all state in reading-list.ts.'))
+  await settle(ana, 'design', { 'software-architect': [], 'ux-designer': [] })
+  const again = await ana.run('checkpoint', 'design')
+  assert.equal(again.code, 0, again.err)
+  assert.match(again.err, /Couldn't tag the wireframes commit .* already points at ffffffffffff.*gh api -X POST repos\/owner\/sandbox\/git\/refs -f ref=refs\/tags\/factory-foreman-assets\/7\//s)
   // A multi-account SSH alias for github.com, rewritten here to the bare repo.
   g('remote', 'set-url', 'origin', 'git@github-work:owner/sandbox.git')
   g('config', `url.${remote}.insteadOf`, 'git@github-work:owner/sandbox.git')

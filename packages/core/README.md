@@ -87,9 +87,13 @@ renders offline and can't pull a local file into a pushed image.
 [agent-browser](https://github.com/vercel-labs/agent-browser) (`npm install -g
 agent-browser`, then `agent-browser install`) and puts the pages and images in
 one commit, by you, on the assets-only branch `factory-foreman-assets/<n>`
-(under `design/`, on top of that branch's last commit), tagged
-`factory-foreman-assets/<n>/<first 12 hex of the commit>` so it stays reachable if the branch is
-deleted. It builds and pushes that commit from a bare repo of its own,
+(under `design/`, on top of that branch's last commit). When a version that
+pins it is checkpointed or amended, that commit is tagged
+`factory-foreman-assets/<n>/<first 12 hex of the commit>`, so a posted
+version's images stay reachable if the branch is deleted; a rerender nobody
+posts leaves no tag. The tag is made through your gh login, which needs write access
+to the repo's contents; if it can't, checkpoint still posts and prints the
+`gh api` command that makes the tag. It builds and pushes that commit from a bare repo of its own,
 `.factory-foreman/assets.git`, so nothing is written to your repo's `.git`: your
 working tree, index and current branch are never touched, it runs inside
 Codex's sandbox, and the issue branch never carries the assets into the

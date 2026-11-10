@@ -131,6 +131,21 @@ async function post(ctx, { step, file: given, amend: amending }) {
     }
   }
 
+  // 1b. Tag each assets commit the posted version pins, so its images stay
+  // reachable if the assets branch is ever deleted. Only posted versions get
+  // tags; a rerender nobody checkpoints leaves none. It runs once the version
+  // is in the artifact, so a later failure can't skip it, and a failure here
+  // is reported, not fatal, with the command that makes the tag by hand.
+  const warnings = []
+  for (const commit of new Set(draft.wireframes.map((w) => w.commit).filter(Boolean))) {
+    const tag = `factory-foreman-assets/${n}/${commit.slice(0, 12)}`
+    try {
+      await github.ensureTag(tag, commit)
+    } catch (error) {
+      warnings.push(`Couldn't tag the wireframes commit ${commit.slice(0, 12)}: ${error.message}. Without the tag its images go if the assets branch is deleted; create it with: gh api -X POST repos/${github.repo}/git/refs -f ref=refs/tags/${tag} -f sha=${commit}`)
+    }
+  }
+
   // 2. The changelog artifact, one full entry per version.
   const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, notes: notes.map((e) => `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`), amend: amending })
   // Another checkpoint may append at the same moment, from the same version,
@@ -166,5 +181,5 @@ async function post(ctx, { step, file: given, amend: amending }) {
   await updateBody(github, n, (b) => setSection(addDecisionRows(addChangelogLine(b, bodyLine({ step, version, date, author, diff, amend: amending })), rows), 'status', statusLine(states)))
 
   const next = amending?.minor ? `It keeps ${amending.carries}'s approval.` : `Approve it from a terminal: factory-foreman approve ${step} ${version}`
-  return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}${amending ? `, ${amending.minor ? 'minor' : 'material'} amendment` : ''}). ${next}`, json: record }
+  return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}${amending ? `, ${amending.minor ? 'minor' : 'material'} amendment` : ''}). ${next}`, json: record, ...(warnings.length ? { err: warnings.join('\n') } : {}) }
 }
