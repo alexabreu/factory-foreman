@@ -1,57 +1,84 @@
-// The developer's private state for one issue, under the clone's common git
-// dir so every worktree shares it and nothing is ever committed:
-//   $(git rev-parse --git-common-dir)/factory-foreman/<issue>/
+// The developer's private state for one issue: drafts, the decision log,
+// saved reviews and capture markers, in the working tree at
+//   <worktree>/.factory-foreman/<issue>/
+// Harnesses keep agents out of .git (Claude Code refuses edits there; Codex's
+// sandbox makes it read-only), so nothing is ever written under .git. The
+// folder ignores itself with its own .gitignore, so it never shows as a change
+// and is never committed. State is per checkout, and git clean -dx removes it.
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Refusal } from '../errors.mjs'
 
+const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: [ 'ignore', 'pipe', 'ignore' ] }).trim()
+
 export function gitCommonDir(cwd) {
   try {
-    return resolve(cwd, execFileSync('git', [ 'rev-parse', '--git-common-dir' ], { cwd, encoding: 'utf8', stdio: [ 'ignore', 'pipe', 'ignore' ] }).trim())
+    return resolve(cwd, git(cwd, [ 'rev-parse', '--git-common-dir' ]))
   } catch {
     throw new Refusal(`${cwd} is not inside a git repository.`)
   }
 }
 
+export function stateRoot(cwd) {
+  let root
+  try {
+    root = git(cwd, [ 'rev-parse', '--show-toplevel' ])
+  } catch {
+    throw new Refusal(`${cwd} is not inside a git work tree; factory-foreman keeps its state in one.`)
+  }
+  const top = join(root, '.factory-foreman')
+  try {
+    mkdirSync(top, { recursive: true })
+  } catch (error) {
+    throw new Refusal(`Can't keep factory-foreman's state at ${top}: ${error.message}`)
+  }
+  const ignore = join(top, '.gitignore')
+  if (!existsSync(ignore)) writeFileSync(ignore, '# factory-foreman state: drafts, notes, reviews. Never committed.\n*\n')
+  return top
+}
+
 export function stateDir(cwd, issue) {
-  const dir = join(gitCommonDir(cwd), 'factory-foreman', String(issue))
+  const dir = join(stateRoot(cwd), String(issue))
   mkdirSync(dir, { recursive: true })
+  migrate(cwd, issue, dir)
   return dir
 }
 
-// Drafts are files an agent edits, and harnesses keep agents out of .git, so
-// they live in the working tree under .factory-foreman/<issue>/, which is
-// added to the clone's .git/info/exclude and never committed.
-export function worktreeDraftPath(cwd, issue, step) {
-  const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: [ 'ignore', 'pipe', 'ignore' ] }).trim()
-  let root
-  let exclude
+// State from before it moved out of .git is copied into each checkout once.
+// Copying only reads .git, so it works where .git is read-only too. It copies
+// file by file, never overwrites, skips anything odd, and always records that
+// it ran, so a damaged old layout can't block the issue.
+function migrate(cwd, issue, dir) {
+  const done = join(dir, '.migrated')
+  if (existsSync(done)) return
+  let old = null
   try {
-    root = git([ 'rev-parse', '--show-toplevel' ])
-    exclude = resolve(cwd, git([ 'rev-parse', '--git-path', 'info/exclude' ]))
-  } catch {
-    throw new Refusal(`${cwd} is not inside a git work tree; drafts need one.`)
-  }
-  const line = '/.factory-foreman/'
-  try {
-    const current = existsSync(exclude) ? readFileSync(exclude, 'utf8') : ''
-    if (!current.split(/\r?\n/).includes(line)) {
-      mkdirSync(join(exclude, '..'), { recursive: true })
-      appendFileSync(exclude, `${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`)
+    old = join(gitCommonDir(cwd), 'factory-foreman', String(issue))
+    const file = (from, to) => {
+      try {
+        if (statSync(from).isFile()) copyFileSync(from, to, constants.COPYFILE_EXCL)
+      } catch { /* missing, unreadable, or already there: skip it */ }
     }
-  } catch (error) {
-    throw new Refusal(`Can't add ${line} to ${exclude}: ${error.message}`)
+    const folder = (name, keep) => {
+      let names
+      try { names = readdirSync(join(old, name)) } catch { return }
+      mkdirSync(join(dir, name), { recursive: true })
+      for (const entry of names.filter(keep)) file(join(old, name, entry), join(dir, name, entry))
+    }
+    if (existsSync(old)) {
+      file(join(old, 'log.jsonl'), join(dir, 'log.jsonl'))
+      folder('reviews', (n) => n.endsWith('.json'))
+      folder('capture', (n) => n.endsWith('.json'))
+      for (const step of [ 'shape', 'design' ]) file(join(old, 'drafts', `${step}.md`), join(dir, `${step}.md`))
+    }
+  } catch { /* no old state to read */ } finally {
+    try { writeFileSync(done, `${old ?? ''}\n`) } catch { /* try again next time */ }
   }
-  const dir = join(root, '.factory-foreman', String(issue))
-  mkdirSync(dir, { recursive: true })
-  const file = join(dir, `${step}.md`)
-  // A draft started before drafts moved out of .git comes along, not lost.
-  const old = join(gitCommonDir(cwd), 'factory-foreman', String(issue), 'drafts', `${step}.md`)
-  if (!existsSync(file) && existsSync(old)) renameSync(old, file)
-  return file
 }
+
+export const worktreeDraftPath = (cwd, issue, step) => join(stateDir(cwd, issue), `${step}.md`)
 
 export const KINDS = [ 'decision', 'rejected', 'question' ]
 

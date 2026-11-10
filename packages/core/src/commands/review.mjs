@@ -40,13 +40,19 @@ export async function review(ctx, args) {
     const lines = [ `Review of the ${title(step)} draft for #${n} (draft hash ${digest}).` ]
     if (!briefs.length) lines.push(`No reviewers are configured for ${step}; checkpoint needs no review.`)
     for (const b of briefs) {
-      lines.push('', `=== ${b.reviewer}${b.command ? ` (pipe this brief into: ${b.command.join(' ')})` : ' (run as a subagent)'} ===`, b.brief)
+      lines.push('', `=== ${b.reviewer}${b.command ? ` (pipe this brief into: ${b.command.join(' ')})` : ` (run as a subagent: the ${b.reviewer} agent)`} ===`, b.brief)
     }
     if (briefs.length) lines.push('', `Settle every finding (accepted, changed or overruled with a reason), then: factory-foreman review save ${step} --findings <file>`)
     return { out: lines.join('\n'), json: { step, issue: n, hash: digest, briefs } }
   }
 
-  // --headless: every brief through a command, for harnesses without subagents.
+  // --headless: every brief through a command, for harnesses without subagents
+  // and CI. Inside Codex's sandbox a nested Codex can't start, and Codex has
+  // subagents, so say so instead of failing on each brief.
+  const agents = briefs.filter((b) => !b.command).map((b) => b.reviewer)
+  if (agents.length && (ctx.env.CODEX_SANDBOX !== undefined || ctx.env.CODEX_TOOL_CALL_ID !== undefined)) {
+    throw new Refusal(`review --headless doesn't run inside Codex: a nested Codex can't start there, and Codex has subagents. Get the briefs with factory-foreman review ${step} --issue ${n}, run each as a subagent by its agent name (${agents.join(', ')}), pipe any brief that names a command into that command, then factory-foreman review save ${step} --findings <file>.`)
+  }
   const findings = {}
   const failures = {}
   for (const b of briefs) {

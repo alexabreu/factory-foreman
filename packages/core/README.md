@@ -50,8 +50,10 @@ Without it, factory writes are refused rather than posted as you.
 `code-reviewer`, `product-engineer` and `principal-engineer`. Each loads the
 repo's `standards-*` skill for its role when there is one. Steps listed in
 `secondOpinion.steps` also get a brief for `secondOpinion.command`, and
-`review.headless.command` (default `codex exec -`) runs briefs for `--headless`.
-Each command reads its brief on stdin.
+`review.headless.command` (default `codex exec -`) runs briefs for `--headless`,
+which is for harnesses without subagents and for CI; Claude Code and Codex run
+reviewers as native subagents by agent name. Each command reads its brief on
+stdin.
 
 ## Hooks
 
@@ -69,10 +71,12 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
 
 ## Local state
 
-Drafts live in the working tree at `.factory-foreman/<issue>/<step>.md`, which
-factory-foreman adds to the clone's `.git/info/exclude`: harnesses keep agents
-out of `.git`, and drafts are files the agent edits. Each worktree has its own
-drafts, and `git clean -x` deletes them. Saved reviews
-(`reviews/<step>-<hash>.json`), capture markers and the decision log are shared
-by every worktree of the clone, under
-`$(git rev-parse --git-common-dir)/factory-foreman/<issue>/`, and never committed.
+All local state (drafts, the decision log, saved reviews and capture markers)
+lives in the working tree at `.factory-foreman/<issue>/`. The folder ignores
+itself with its own `.gitignore`, so it never shows as a change and is never
+committed, and nothing is written under `.git`: Claude Code refuses agent edits
+there and Codex's sandbox makes it read-only. State is per checkout (each
+worktree has its own). It isn't kept anywhere else, so `git clean -dx` and
+`git worktree remove` delete it, including notes and reviews not yet posted.
+State left at the old `.git/factory-foreman/` path is copied into each checkout
+once.

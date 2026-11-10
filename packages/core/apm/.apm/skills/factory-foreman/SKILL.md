@@ -67,11 +67,13 @@ Checkpoint refuses a draft that hasn't been reviewed exactly as it is now.
 
 1. `factory-foreman review shape` (or `design`) prints one brief per reviewer
    the repo configures, and the draft's hash.
-2. Run each brief as a subagent with that reviewer agent (for example
-   `test-verification-engineer`, `software-architect`, `ux-designer`), passing
-   the brief as its task. A `second-opinion` brief names its own command; run it
-   with that. In a harness without subagents, `factory-foreman review shape
-   --headless` runs every brief through the configured command for you.
+2. Run each brief as a native subagent of that reviewer agent, by its name
+   (for example `test-verification-engineer`, `software-architect`,
+   `ux-designer`), passing the brief as its task. In Claude Code that's the
+   Agent tool with the agent's name; in Codex, spawn the agent with that agent
+   type. A `second-opinion` brief names its own command; pipe the brief into it.
+   Only in a harness without subagents, or in CI, does `factory-foreman review
+   shape --headless` run every brief through the configured command instead.
 3. Each reviewer returns a JSON array of findings. Settle every one with the
    person: `accepted` (they agree, nothing to change), `changed` (you changed
    the draft) or `overruled` (with a reason the person gives).
@@ -107,7 +109,7 @@ open blocking questions.
 ## When a command refuses
 
 A refusal exits with code 2 and says what is missing. Fix that and rerun. Don't
-work around a refusal by editing files under `.git/factory-foreman/`, the issue
-body or its comments. The only state file you edit is the draft under
-`.factory-foreman/`; never commit it. A hook stops your shell from running approve, slice merge,
+work around a refusal by editing the issue body, its comments, or the notes,
+reviews and markers under `.factory-foreman/`. The only state file you edit is
+the draft there; never commit anything in that folder. A hook stops your shell from running approve, slice merge,
 or a pull request review or merge; those are for the person.
