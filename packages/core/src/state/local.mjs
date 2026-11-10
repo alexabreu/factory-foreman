@@ -115,7 +115,7 @@ export function claimCapture(dir, key, now = Date.now()) {
 // Code is detected as Codex; Claude Code started from Codex is reported as
 // Codex too. Only Codex's runtime variables count: a person's own shell may
 // export configuration such as CODEX_HOME.
-const inCodex = (env) => Boolean(env.CODEX_TOOL_CALL_ID)
+const inCodex = (env) => env.CODEX_TOOL_CALL_ID !== undefined
 const inClaude = (env) => env.CLAUDECODE === '1' || Boolean(env.CLAUDE_CODE_ENTRYPOINT)
 const codexRuntime = (env) => [ 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_SANDBOX', 'CODEX_SANDBOX_NETWORK_DISABLED', 'CODEX_CI' ].some((k) => env[k] !== undefined)
 export function detectHarness(env = process.env) {
