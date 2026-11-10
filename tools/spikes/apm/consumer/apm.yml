@@ -1,0 +1,9 @@
+name: spike-b-consumer
+version: 0.1.0
+targets:
+  - claude
+  - codex
+  - copilot
+dependencies:
+  apm:
+    - ./node_modules/factory-foreman/apm

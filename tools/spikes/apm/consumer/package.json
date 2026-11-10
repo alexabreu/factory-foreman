@@ -1,0 +1,7 @@
+{
+  "name": "spike-b-consumer",
+  "private": true,
+  "devDependencies": {
+    "factory-foreman": "file:../stand-in-core"
+  }
+}

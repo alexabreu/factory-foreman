@@ -1,0 +1,7 @@
+name: factory-foreman
+version: 0.0.0
+description: Stand-in APM package for spike B
+targets:
+  - claude
+  - codex
+  - copilot
