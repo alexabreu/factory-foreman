@@ -1,6 +1,6 @@
 // PreToolUse guard: an agent's shell may not approve a checkpoint, merge a slice, or review or
 // merge a pull request; a person does those in their own terminal. Reads the hook payload on
-// stdin and prints a deny decision. Zero deps. It stops honest mistakes, not determined ones.
+// stdin and denies (see decide). Zero deps. It stops honest mistakes, not determined ones.
 const SKIP = new Set([ 'env', 'command', 'exec', 'nohup', 'time', 'sudo', 'xargs', 'builtin', 'nice', 'timeout', 'watch', 'stdbuf', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', '}', '--' ])
 const SHELLS = new Set([ 'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish' ]); const base = (t) => t.split('/').pop()
 const VALUE = new Set([ '--issue', '--draft', '--kind', '--step', '--slice', '--findings', '--reason', '--transcript', '--session', '--event', '-R', '--repo' ])
@@ -59,7 +59,7 @@ const args = (t) => t.filter((w, i) => !w.startsWith('-') && !VALUE.has(t[i - 1]
 const GH_WRITE = (t) => !t.some((w, i) => (/^(-X|--method)$/.test(w) && /^GET$/i.test(t[i + 1])) || /^(-XGET|--method=GET)$/i.test(w)) && t.some((w, i) => (/^(-X|--method)$/.test(w) && /^(POST|PUT|PATCH|DELETE)$/i.test(t[i + 1] ?? '')) || /^(-X|--method=)(POST|PUT|PATCH|DELETE)$/i.test(w) || /^(-f|-F|--field|--raw-field|--input)$/.test(w) || /^--(field|raw-field|input)=/.test(w))
 // Why the command is denied, or null to let it run.
 export function verdict(command, depth = 0) {
-  if (Array.isArray(command)) command = command.join(' ')
+  if (Array.isArray(command)) command = command.map((w) => (/^[\w./=:@%+,-]+$/.test(w) ? w : `'${String(w).replace(/'/g, "'\\''")}'`)).join(' ')
   if (typeof command !== 'string' || !command.trim() || depth > 4) return null
   const nested = []; for (const words of lex(command, nested)) {
     const t = head(words)
@@ -80,19 +80,19 @@ export function verdict(command, depth = 0) {
   for (const text of nested) { const why = verdict(text, depth + 1); if (why) return why }
   return null
 }
+// Claude Code and Codex block on exit 2 with the reason on stderr (Codex rejects unknown JSON
+// fields and runs the command); Copilot's camelCase payload gets JSON, plus exit 2 if unread.
+const COPILOT = (p) => p?.tool_input === undefined && p?.tool_name === undefined && [ 'toolName', 'toolArgs', 'toolInput' ].some((k) => p?.[k] !== undefined)
+const deny = (why, copilot, code = copilot ? 0 : 2) => ({ code, stderr: code === 2 ? why : undefined, stdout: copilot ? JSON.stringify({ permissionDecision: 'deny', permissionDecisionReason: why }) : undefined })
 export function decide(payload) {
-  let command = payload?.tool_input?.command ?? payload?.toolInput?.command
-  if (command === undefined && typeof payload?.toolArgs === 'string') { try { command = JSON.parse(payload.toolArgs)?.command } catch { command = payload.toolArgs } }
-  const reason = verdict(command)
-  if (!reason) return null
-  const why = `${reason} Ask the person to run it.` // Copilot CLI reads the top level; others, hookSpecificOutput.
-  return { permissionDecision: 'deny', permissionDecisionReason: why, hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: why } }
+  let command = payload?.tool_input?.command ?? payload?.toolInput?.command; const args = payload?.toolArgs
+  if (command === undefined && args !== undefined) { try { command = (typeof args === 'string' ? JSON.parse(args) : args)?.command } catch { command = args } }
+  const reason = verdict(command); return reason ? deny(`${reason} Ask the person to run it.`, COPILOT(payload)) : null
 }
+const UNREAD = 'The approve guard couldn\'t read this command, and it may approve or merge. Ask the person to run it.'
+export function run(input) { try { return decide(JSON.parse(input || '{}')) } catch { return /factory-foreman|cli\.m?js|\bgh\b/.test(input) ? deny(UNREAD, /"tool(Name|Args|Input)"/.test(input) && !/"tool_(name|input)"/.test(input), 2) : null } } // fails closed
 if (import.meta.main) {
-  let input = ''
-  process.stdin.setEncoding('utf8').on('data', (chunk) => { input += chunk }).on('end', () => {
-    let payload = {}
-    try { payload = JSON.parse(input || '{}') } catch { /* not JSON: nothing to judge */ }
-    const out = decide(payload); if (out) process.stdout.write(`${JSON.stringify(out)}\n`)
+  let input = ''; process.stdin.setEncoding('utf8').on('error', () => { process.stderr.write(`${UNREAD}\n`); process.exitCode = 2 }).on('data', (chunk) => { input += chunk }).on('end', () => {
+    const out = run(input); if (out?.stdout) process.stdout.write(`${out.stdout}\n`); if (out?.stderr) process.stderr.write(`${out.stderr}\n`); process.exitCode = out?.code ?? 0
   })
 }
