@@ -113,28 +113,24 @@ image (titled, by reference, in HTML, or outside Wireframes). Reviewers
 configured with `?visual` (by default `ux-designer`) get the pinned images as
 files in their brief and look at them.
 
-### Known limitation: rendering inside Codex's sandbox
+## Known limitations
 
-Under Codex (workspace-write), `factory-foreman wireframes design` can't render:
+**Wireframes don't render inside Codex's sandbox.** agent-browser needs the
+sandbox's network on to open its local socket, and even then Chrome can't start
+inside Codex's sandbox without `--no-sandbox`. Under Codex, `wireframes design`
+checks the pages, then refuses and gives the command for the person to run in
+their own terminal; the agent then re-reads the draft, which that run updates,
+and carries on. Possible solutions:
 
-- agent-browser's daemon socket would go in `~/.agent-browser`, which is
-  read-only there. That one is handled: the socket goes in a fresh temp folder.
-- With the sandbox's network off, the daemon can't open its local socket
-  ("Failed to bind socket: Operation not permitted"). The command needs network
-  to push anyway.
-- With network on, Chrome still crashes at launch: its own sandbox can't start
-  inside Codex's.
-
-So in Codex, the agent writes the wireframe pages and asks the person to run
-`factory-foreman wireframes design` in their own terminal, then carries on with
-the draft it wrote. Claude Code and a terminal render as usual.
-
-Possible fix: under Codex only, start Chrome without its own sandbox
-(`AGENT_BROWSER_ARGS=--no-sandbox`). Chrome would still run inside Codex's
-sandbox, and the pages it renders are static, self-contained and can't load
-anything or run scripts, so the added risk is small; but it switches off one of
-Chrome's safety layers, so it should be a deliberate, opt-in setting (for
-example `wireframes.chromeSandbox: false` in the config), not a default.
+1. An opt-in setting that passes `--no-sandbox` to Chrome only under Codex:
+   reasonably safe, since the pages are self-contained and can't load anything
+   or run scripts, but it switches off one of Chrome's safety layers.
+2. Render in CI with a GitHub Action once the pages are pushed through the
+   assets repo (which still needs network): no local browser, at the cost of a
+   workflow and a wait for CI.
+3. Generate wireframes as SVG, which GitHub renders directly, removing the
+   browser step: loses the fidelity of laying them out with HTML and CSS.
+4. Revisit if Codex's sandbox gains a way to allow Chrome.
 
 ## Local state
 

@@ -67,9 +67,10 @@ before the review:
    `factory-foreman-assets/<n>` without touching the checkout, pushes it, and
    writes the draft's Wireframes section with each image pinned to that commit.
    Run it again after changing a page. It never writes to the repo's `.git`,
-   and it pushes, so it needs network access. Inside Codex's sandbox Chrome
-   can't start: there, ask the person to run it in their terminal, then go on
-   with the draft it wrote.
+   and it pushes, so it needs network access. In Codex it checks the pages,
+   then refuses, because Chrome can't start in Codex's sandbox: ask the person
+   to run the command it gives in their own terminal, don't edit the draft
+   meanwhile, then re-read the draft it updated and carry on.
 
 ## Reviews and amendments
 

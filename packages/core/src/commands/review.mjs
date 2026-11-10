@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { Refusal } from '../errors.mjs'
 import { SECOND_OPINION, brief, secondOpinionCommand, visualReviewers, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
+import { inCodexSandbox } from '../state/local.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { approvedBody, loadIssue, requireStep, title } from './common.mjs'
 import { pinnedImage } from './wireframes.mjs'
@@ -55,7 +56,7 @@ export async function review(ctx, args) {
   // and CI. Inside Codex's sandbox a nested Codex can't start, and Codex has
   // subagents, so say so instead of failing on each brief.
   const agents = briefs.filter((b) => !b.command).map((b) => b.reviewer)
-  if (agents.length && (ctx.env.CODEX_SANDBOX !== undefined || ctx.env.CODEX_TOOL_CALL_ID !== undefined)) {
+  if (agents.length && inCodexSandbox(ctx.env)) {
     throw new Refusal(`review --headless doesn't run inside Codex: a nested Codex can't start there, and Codex has subagents. Get the briefs with factory-foreman review ${step} --issue ${n}, run each as a subagent by its agent name (${agents.join(', ')}), pipe any brief that names a command into that command, then factory-foreman review save ${step} --findings <file>.`)
   }
   const findings = {}

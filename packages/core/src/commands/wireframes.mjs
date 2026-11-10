@@ -19,6 +19,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Refusal } from '../errors.mjs'
 import { readDraftFile } from '../review/briefs.mjs'
+import { inCodexSandbox } from '../state/local.mjs'
 import { FENCE, closes, parseDraft, splitFrontMatter, wireframePath, withFrontMatter } from '../steps/structure.mjs'
 import { approvedBody, loadIssue } from './common.mjs'
 
@@ -193,6 +194,21 @@ export async function wireframes(ctx, { positionals, flags }) {
   const n = ctx.issue()
   const file = flags.draft ?? ctx.draftPath('design')
   readDraftFile(file, 'design')
+  // Chrome can't start inside Codex's sandbox (see the README's known
+  // limitations). Pages are checked first, so what the person runs works.
+  const sandboxed = inCodexSandbox(ctx.env)
+  if (sandboxed) {
+    const dir = wireframesDir(ctx.stateDir())
+    const { files, problems } = wireframeFiles(dir)
+    for (const f of files) {
+      const why = notSelfContained(readFileSync(f.html, 'utf8'))
+      if (why) problems.push(`${f.name} isn't self-contained: ${why}.`)
+    }
+    if (!files.length && !problems.length) problems.push(`There are no wireframes to render: write them in ${dir}.`)
+    if (problems.length) throw new Refusal(`The wireframes can't be rendered yet:\n  - ${problems.join('\n  - ')}`, { problems })
+    const command = `cd ${JSON.stringify(ctx.cwd)} && factory-foreman wireframes design --issue ${n}${flags.draft ? ` --draft ${JSON.stringify(flags.draft)}` : ''}`
+    throw new Refusal(`Wireframes can't be rendered inside Codex's sandbox: Chrome can't start there. Ask the person to run this in their own terminal, then re-read the draft, which it updates, and carry on: ${command}`, { command })
+  }
   const state = await loadIssue(ctx.github(), n, ctx.config().approvals)
   const body = approvedBody(state.steps.shape)
   if (!body) throw new Refusal('Wireframes draw the approved Shape\'s visual criteria: approve a Shape first.')

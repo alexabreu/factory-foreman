@@ -906,3 +906,32 @@ test('only a posted version\'s wireframes commit is tagged, at checkpoint; an SS
   g('remote', 'set-url', 'origin', 'git@github-work:someone/else.git')
   assert.match((await ana.run('wireframes', 'design')).err, /but this issue is on owner\/sandbox/)
 })
+
+test('inside Codex, wireframes checks the pages, then refuses with the command for the person', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7, '')
+  for (const env of [ { CODEX_SANDBOX: 'seatbelt' }, { CODEX_TOOL_CALL_ID: 'c1' }, { CODEX_SANDBOX: 'seatbelt', CLAUDECODE: '1' } ]) {
+    const ana = developer(world, 'ana', { env })
+    ana.browser = { render: async () => assert.fail('no render in Codex'), close: async () => {} }
+    await ana.run('draft', 'design')
+    const pages = join(ana.dir(), 'wireframes')
+    mkdirSync(pages, { recursive: true })
+    // A bad page is reported first, so the command the person runs will work.
+    writeFileSync(join(pages, 'AC-1.html'), '<script>x()</script>')
+    assert.match((await ana.run('wireframes', 'design')).err, /AC-1\.html isn't self-contained/)
+    writeFileSync(join(pages, 'AC-1.html'), PAGE('ok'))
+    const draftBefore = readFileSync(ana.draft('design'), 'utf8')
+    const out = await ana.run('wireframes', 'design', '--draft', ana.draft('design'))
+    assert.equal(out.code, 2)
+    assert.match(out.err, /Chrome can't start there\. Ask the person to run this in their own terminal/)
+    assert.ok(out.err.endsWith(`cd ${JSON.stringify(ana.cwd)} && factory-foreman wireframes design --issue 7 --draft ${JSON.stringify(ana.draft('design'))}`), out.err)
+    assert.ok(!existsSync(join(pages, 'AC-1.png')))
+    assert.equal(readFileSync(ana.draft('design'), 'utf8'), draftBefore)
+  }
+  // Claude Code, a terminal, or a shell that only configures Codex aren't refused.
+  for (const env of [ { CLAUDECODE: '1' }, { CODEX_HOME: '/x' }, {} ]) {
+    const ana = developer(world, 'ana', { env })
+    await ana.run('draft', 'design')
+    assert.doesNotMatch((await ana.run('wireframes', 'design')).err ?? '', /Codex's sandbox/)
+  }
+})

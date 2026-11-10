@@ -175,6 +175,10 @@ export function claimCapture(dir, key, now = Date.now()) {
 const inCodex = (env) => env.CODEX_TOOL_CALL_ID !== undefined
 const inClaude = (env) => env.CLAUDECODE === '1' || Boolean(env.CLAUDE_CODE_ENTRYPOINT)
 const codexRuntime = (env) => [ 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_SANDBOX', 'CODEX_SANDBOX_NETWORK_DISABLED', 'CODEX_CI' ].some((k) => env[k] !== undefined)
+// Inside Codex's sandbox: a Codex shell call, or anything started from one
+// (Claude Code included), as Codex marks both.
+export const inCodexSandbox = (env = process.env) => env.CODEX_SANDBOX !== undefined || env.CODEX_TOOL_CALL_ID !== undefined
+
 export function detectHarness(env = process.env) {
   if (inCodex(env)) return 'codex'
   if (inClaude(env)) return 'claude-code'
