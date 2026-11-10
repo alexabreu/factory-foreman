@@ -100,10 +100,7 @@ never carries the assets into the product. It pushes to origin, which must name 
 credentials: the ssh command, credential helpers, http, URL-rewrite and signing
 settings your repo has (from its own config, its includes, or an includeIf that
 matches it) are passed on through the environment, and it signs the commit when
-you sign commits. A global `core.hooksPath` pre-push hook still runs. It needs network access. Inside Codex's sandbox, Chrome can't start (its own
-sandbox can't run inside Codex's), so there the person runs `factory-foreman
-wireframes design` from a terminal, or the agent asks them to; agent-browser's
-daemon socket goes in a temp folder, so that's the only thing that stops it.
+you sign commits. A global `core.hooksPath` pre-push hook still runs. It needs network access.
 Then it writes the draft's `## Wireframes` section.
 
 Each image's alt text carries the image's full sha256, and its link is this
@@ -115,6 +112,29 @@ visual criterion's wireframe, naming an unknown criterion, or holding any other
 image (titled, by reference, in HTML, or outside Wireframes). Reviewers
 configured with `?visual` (by default `ux-designer`) get the pinned images as
 files in their brief and look at them.
+
+### Known limitation: rendering inside Codex's sandbox
+
+Under Codex (workspace-write), `factory-foreman wireframes design` can't render:
+
+- agent-browser's daemon socket would go in `~/.agent-browser`, which is
+  read-only there. That one is handled: the socket goes in a fresh temp folder.
+- With the sandbox's network off, the daemon can't open its local socket
+  ("Failed to bind socket: Operation not permitted"). The command needs network
+  to push anyway.
+- With network on, Chrome still crashes at launch: its own sandbox can't start
+  inside Codex's.
+
+So in Codex, the agent writes the wireframe pages and asks the person to run
+`factory-foreman wireframes design` in their own terminal, then carries on with
+the draft it wrote. Claude Code and a terminal render as usual.
+
+Possible fix: under Codex only, start Chrome without its own sandbox
+(`AGENT_BROWSER_ARGS=--no-sandbox`). Chrome would still run inside Codex's
+sandbox, and the pages it renders are static, self-contained and can't load
+anything or run scripts, so the added risk is small; but it switches off one of
+Chrome's safety layers, so it should be a deliberate, opt-in setting (for
+example `wireframes.chromeSandbox: false` in the config), not a default.
 
 ## Local state
 
