@@ -1,0 +1,216 @@
+// The AC gate: the slice's frozen AC tests must fail at the slice's base for a
+// reason the slice will fix, and pass at its head.
+//
+// At base, a failure counts only if it is
+//   - an assertion that ran and didn't hold,
+//   - an import of a file the slice owns and base doesn't have, or
+//   - a locator waiting for a test id the slice's contract adds;
+// anything else (a passing test, an import of a file that isn't the slice's, a
+// crash, a page that won't load) means the test doesn't test the slice.
+// At head the runner must exit 0, and every frozen file and every owned AC
+// must have a passing test. The gate proves the tests fail before and pass
+// after; whether they assert enough is the reviewers' call.
+//
+// Each side is checked out into a fresh temporary folder outside the repo
+// with a temporary index (only reading .git, so it works where .git is
+// read-only), with the repo's installed node_modules linked in.
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, normalize, posix, relative } from 'node:path'
+import { Refusal } from '../errors.mjs'
+import { matchesAny } from '../util/glob.mjs'
+import { git, gitTest } from '../util/git.mjs'
+
+const attr = (tag, name) => tag.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] ?? ''
+const unescape = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d))).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, '&')
+
+// Test cases from JUnit XML: name, file, outcome, failure type and text.
+// Every <testcase> counts, however suites nest (node's reporter nests describe
+// blocks and puts top-level tests straight under <testsuites>); its file is its
+// own file or classname attribute, or else the nearest enclosing suite's.
+export function parseJUnit(xml) {
+  const src = String(xml)
+  const suites = []
+  for (const m of src.matchAll(/<(\/?)testsuite\b([^>]*?)(\/?)>/g)) suites.push({ at: m.index, close: m[1] === '/', self: m[3] === '/', attrs: m[2] })
+  const fileAt = (pos) => {
+    const stack = []
+    for (const e of suites) {
+      if (e.at >= pos) break
+      if (e.close) stack.pop()
+      else if (!e.self) stack.push(e.attrs)
+    }
+    const inner = stack.reverse()
+    for (const attrs of inner) { const f = attr(attrs, 'file'); if (f) return unescape(f) }
+    for (const attrs of inner) { const f = attr(attrs, 'name'); if (f) return unescape(f) }
+    return ''
+  }
+  const cases = []
+  for (const m of src.matchAll(/<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g)) {
+    const inner = m[3] ?? ''
+    const failure = inner.match(/<(failure|error)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/)
+    const skipped = /<skipped\b/.test(inner)
+    const body = (failure?.[3] ?? '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    const text = failure ? unescape(`${attr(failure[2], 'message')}\n${body}`).trim() : ''
+    cases.push({ name: unescape(attr(m[1], 'name')), file: unescape(attr(m[1], 'file') || attr(m[1], 'classname')) || fileAt(m.index), outcome: failure ? 'failed' : skipped ? 'skipped' : 'passed', type: failure ? unescape(attr(failure[2], 'type')) : '', text })
+  }
+  return cases
+}
+
+// The failure without code frames, stack lines and runners' headers, which
+// quote the test's source and would match anything. The call log stays: it's
+// where Playwright says what a locator was waiting for.
+export function failureMessage(text) {
+  const lines = []
+  for (const line of String(text).split('\n')) {
+    if (/^\s*>?\s*\d+\s*\|/.test(line) || /^\s*\|\s*\^/.test(line) || /^\s+at\s/.test(line) || /^\s*\S+:\d+:\d+ › /.test(line) || /^\s*❯ /.test(line)) continue
+    lines.push(line)
+  }
+  return lines.join('\n').trim()
+}
+
+const IMPORT = /Cannot find module ['"]([^'"]+)['"](?: imported from ['"]?([^'"\s]+))?|Failed to (?:resolve|load url) (?:import )?["']?([^"'\s]+)["']?(?: (?:from|in) ["']([^"']+)["'])?|Could not resolve ["']([^"']+)["'](?: from ["']([^"']+)["'])?|Cannot find package ['"]([^'"]+)['"]/
+const WAITED = /(?:waiting for|Locator:)\s*(?:locator\()?getByTestId\(\s*['"]([^'"]+)['"]\s*\)|(?:waiting for|Locator:)\s*(?:locator\()?['"]?\[data-testid=\\?["']([^"'\\]+)\\?["']\]/
+const MISSING = /TimeoutError|Timeout \d+ms exceeded|element\(s\) not found/
+const FOUND = /locator resolved to/
+const ASSERTION_TYPE = /^(?:\w*AssertionError|expect\.\w+)$/
+const ASSERTION_LINE = /^(?:\w*AssertionError\b|Error: expect\(|expect\(|Error: Timed out \d+ms waiting for expect\()/
+
+const noExt = (p) => p.replace(/\.[cm]?[jt]sx?$/, '')
+
+// Why a test failed at base, and whether that's a failure the slice fixes.
+// `owned` are the files the slice adds; `testIds` the contract's ids base lacks.
+export function classify(text, { owned, testIds }, type = '') {
+  const message = failureMessage(text)
+  const imported = message.match(IMPORT)
+  if (imported) {
+    const spec = imported[1] ?? imported[3] ?? imported[5] ?? imported[7]
+    const importer = imported[2] ?? imported[4] ?? imported[6] ?? null
+    let ok = false
+    if (spec.startsWith('/')) ok = owned.some((f) => noExt(spec).endsWith(`/${noExt(f)}`))
+    else if (spec.startsWith('.')) {
+      const target = importer && !importer.startsWith('/') ? noExt(posix.normalize(posix.join(posix.dirname(importer), spec))) : null
+      const bare = noExt(spec.replace(/^(\.\.?\/)+/, ''))
+      ok = Boolean(bare) && owned.some((f) => (target ? noExt(f) === target : noExt(f) === bare || noExt(f).endsWith(`/${bare}`)))
+    }
+    return { kind: 'import', detail: spec, ok, why: ok ? `imports ${spec}, which the slice adds` : `imports ${spec}, which isn't a file the slice adds: the test can't reach the code it's meant to test` }
+  }
+  // A locator that never found its element; one that found it and saw the
+  // wrong thing is an assertion.
+  const testId = message.match(WAITED)?.slice(1).find(Boolean)
+  if (testId && MISSING.test(message) && !FOUND.test(message)) {
+    const ok = testIds.includes(testId)
+    return { kind: 'locator', detail: testId, ok, why: ok ? `waits for test id ${testId}, which the slice's contract adds` : `waits for test id ${testId}, which the slice's contract doesn't add (or base already has)` }
+  }
+  const first = message.split('\n').map((l) => l.trim()).find((l) => /^\w*(Error|AssertionError)\b|^expect\(/.test(l)) ?? message.split('\n').find((l) => l.trim())?.trim() ?? ''
+  if (ASSERTION_TYPE.test(type) || ASSERTION_LINE.test(first)) return { kind: 'assertion', detail: first.slice(0, 160), ok: true, why: 'an assertion that doesn\'t hold yet' }
+  return { kind: 'other', detail: first.slice(0, 160), ok: false, why: `fails for a reason the slice doesn't fix: ${first.slice(0, 160)}` }
+}
+
+function walk(dir, root = dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    if (name === 'node_modules' || name === '.git') continue
+    const path = join(dir, name)
+    const stat = lstatSync(path)
+    if (stat.isDirectory()) walk(path, root, out)
+    else if (stat.isFile()) out.push(relative(root, path).split('\\').join('/'))
+  }
+  return out
+}
+
+// The repo's tree at a commit, with the frozen tests and installed packages.
+async function exportAt(ctx, { sha, into, top, tests, testsCommit, cwd }) {
+  mkdirSync(into, { recursive: true })
+  const index = join(dirname(into), `index-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  const env = { ...ctx.env, GIT_INDEX_FILE: index }
+  await git(ctx, [ 'read-tree', sha ], `Reading ${sha.slice(0, 12)}`, { cwd: top, env, timeout: 10 * 60_000 })
+  await git(ctx, [ 'checkout-index', '--all', `--prefix=${into}/` ], `Checking out ${sha.slice(0, 12)}`, { cwd: top, env, timeout: 10 * 60_000 })
+  rmSync(index, { force: true })
+  for (const path of tests) {
+    const blob = await ctx.exec([ 'git', 'cat-file', 'blob', `${testsCommit}:${path}` ], { cwd: top, timeout: 60_000 })
+    if (blob.code !== 0) throw new Refusal(`Reading the frozen test ${path} failed: ${String(blob.stderr).trim()}`)
+    mkdirSync(dirname(join(into, path)), { recursive: true })
+    writeFileSync(join(into, path), blob.stdout)
+  }
+  for (const rel of new Set([ '.', cwd ])) {
+    const modules = join(top, rel, 'node_modules')
+    if (existsSync(modules) && existsSync(join(into, rel)) && !existsSync(join(into, rel, 'node_modules'))) symlinkSync(modules, join(into, rel, 'node_modules'), 'dir')
+  }
+  if (!existsSync(join(into, cwd))) throw new Refusal(`tests.ac.cwd (${cwd}) isn't in the tree at ${sha.slice(0, 12)}.`)
+}
+
+async function runTests(ctx, { dir, config, tests }) {
+  const ac = config.tests.ac
+  const cwd = join(dir, ac.cwd ?? '.')
+  const files = tests.map((t) => relative(cwd, join(dir, t)).split('\\').join('/'))
+  const reportFiles = () => [ ...new Set([ ...walk(cwd).filter((f) => matchesAny(f, config.evidence.reports)).map((f) => join(cwd, f)), ...walk(dir).filter((f) => matchesAny(f, config.evidence.reports)).map((f) => join(dir, f)) ]) ]
+  // Reports from an earlier run (or committed ones) mustn't count.
+  for (const f of reportFiles()) rmSync(f, { force: true })
+  const result = await ctx.exec([ ...ac.run, ...files ], { cwd, timeout: ac.timeout, env: { ...ctx.env, CI: '1' } })
+  // Reports are looked for from the test folder and from the repo root.
+  const cases = reportFiles().flatMap((f) => parseJUnit(readFileSync(f, 'utf8')))
+  return { code: result.code, output: `${result.stdout}\n${result.stderr}`, cases }
+}
+
+// The test ids the slice's contract adds: those base doesn't mention, quoted.
+export async function newTestIds(ctx, { base, testIds, top }) {
+  const fresh = []
+  for (const id of testIds) {
+    const quoted = [ `"${id}"`, `'${id}'`, `\`${id}\`` ].flatMap((q) => [ '-e', q ])
+    if (!(await gitTest(ctx, [ 'grep', '-q', '-F', ...quoted, base, '--', '.' ], { cwd: top }))) fresh.push(id)
+  }
+  return fresh
+}
+
+// Which frozen file a case came from, matching whole path segments (Playwright's
+// classname is relative to its test folder).
+const samePath = (a, b) => { a = normalize(a); b = normalize(b); return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`) }
+const caseFile = (c, tests) => tests.find((t) => c.file && samePath(c.file, t)) ?? tests.find((t) => samePath(c.name, t)) ?? null
+
+// Runs the frozen tests at base (and, unless `baseOnly`, at head).
+export async function acGate(ctx, { base, head, tests, testsCommit, owned, testIds, acs, config, baseOnly = false }) {
+  const top = await git(ctx, [ 'rev-parse', '--show-toplevel' ], 'Finding the repo root')
+  const out = { base: [], head: [], problems: [] }
+  const ids = await newTestIds(ctx, { base, testIds, top })
+  const work = mkdtempSync(join(tmpdir(), 'ffg-'))
+  try {
+    for (const [ side, sha ] of baseOnly ? [ [ 'base', base ] ] : [ [ 'base', base ], [ 'head', head ] ]) {
+      const dir = join(work, side === 'base' ? 'a' : 'b')
+      await exportAt(ctx, { sha, into: dir, top, tests, testsCommit, cwd: config.tests.ac.cwd ?? '.' })
+      if (side === 'head') {
+        const run = await runTests(ctx, { dir, config, tests })
+        if (!run.cases.length) { out.problems.push(`At head (${sha.slice(0, 12)}) the AC tests wrote no report matching evidence.reports (${config.evidence.reports.join(', ')}); the runner exited with code ${run.code}: ${run.output.trim().split('\n').slice(-3).join(' / ')}`); continue }
+        if (run.code !== 0) out.problems.push(`At head the test runner exited with code ${run.code}: ${run.output.trim().split('\n').slice(-3).join(' / ')}`)
+        for (const c of run.cases) {
+          out.head.push({ name: c.name, file: caseFile(c, tests), outcome: c.outcome })
+          if (c.outcome !== 'passed') out.problems.push(`At head, "${c.name}" ${c.outcome === 'skipped' ? 'is skipped' : `fails: ${failureMessage(c.text).split('\n')[0].slice(0, 200)}`}.`)
+        }
+        const passing = out.head.filter((c) => c.outcome === 'passed')
+        for (const t of tests) if (!passing.some((c) => c.file === t)) out.problems.push(`At head, ${t} has no passing test: every frozen file must run and pass.`)
+        for (const ac of acs) if (!passing.some((c) => new RegExp(`\\b${ac}\\b`).test(`${c.name} ${c.file ?? ''}`))) out.problems.push(`At head, no passing test covers ${ac}.`)
+        continue
+      }
+      // At base each file runs alone, so one file that can't load (some runners
+      // then report nothing at all) doesn't hide the others.
+      for (const t of tests) {
+        const run = await runTests(ctx, { dir, config, tests: [ t ] })
+        const cases = run.cases.length ? run.cases : [ { name: t, file: t, outcome: 'failed', type: '', text: run.output.trim() || `the runner exited with code ${run.code} and wrote no report` } ]
+        for (const c of cases) {
+          if (c.outcome === 'passed') {
+            out.base.push({ name: c.name, kind: 'passed', ok: false })
+            out.problems.push(`At base, "${c.name}" already passes, so it doesn't test what the slice builds.`)
+          } else if (c.outcome === 'skipped') {
+            out.base.push({ name: c.name, kind: 'skipped', ok: false })
+            out.problems.push(`At base, "${c.name}" is skipped; an AC test runs.`)
+          } else {
+            const why = classify(c.text, { owned, testIds: ids }, c.type)
+            out.base.push({ name: c.name, file: t, ...why })
+            if (!why.ok) out.problems.push(`At base, "${c.name}" ${why.why}.`)
+          }
+        }
+      }
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
+  return { ok: !out.problems.length, ...out, newTestIds: ids }
+}

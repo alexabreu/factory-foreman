@@ -29,6 +29,8 @@ export const DEFAULTS = Object.freeze({
   secondOpinion: { command: { codex: [ 'claude', '-p' ], default: [ 'codex', 'exec', '-' ] }, steps: [ 'design', 'verify' ] },
   review: { headless: { command: [ 'codex', 'exec', '-' ] } },
   capture: { claude: [ 'claude', '-p', '--model', 'haiku' ], codex: [ 'codex', 'exec', '-' ], minChars: 4000 },
+  // No defaults for the AC tests: the files and runner are the repo's own choice.
+  tests: { ac: { files: null, run: null, cwd: '.', timeout: 600_000 }, show: { files: null } },
   checks: { tiers: { slice: [], verify: 'ci' }, plugins: [] },
   evidence: { reports: [ 'test-results/**/*.xml' ], providers: null },
   preview: null,

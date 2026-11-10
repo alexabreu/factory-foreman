@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="2" failures="2" errors="0" time="0.004676834">
+    <testsuite name="src/fail.test.ts" timestamp="2026-11-10T20:46:12.066Z" hostname="" tests="1" failures="1" errors="0" skipped="0" time="0">
+        <testcase classname="src/fail.test.ts" name="src/fail.test.ts" time="0">
+            <failure message="Cannot find module &apos;./undo&apos; imported from /work/src/fail.test.ts" type="Error">
+Error: Cannot find module &apos;./undo&apos; imported from /work/src/fail.test.ts
+ ❯ src/fail.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: &apos;ERR_MODULE_NOT_FOUND&apos; }
+            </failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/fail2.test.ts" timestamp="2026-11-10T20:46:12.068Z" hostname="" tests="1" failures="1" errors="0" skipped="0" time="0.004676834">
+        <testcase classname="src/fail2.test.ts" name="AC-6: vitest assertion" time="0.003863084">
+            <failure message="expected 1 to be 2 // Object.is equality" type="AssertionError">
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ src/fail2.test.ts:2:50
+            </failure>
+        </testcase>
+    </testsuite>
+</testsuites>

@@ -1,0 +1,105 @@
+<testsuites id="" name="" tests="3" failures="2" skipped="0" errors="1" time="7.1848019999999995">
+<testsuite name="fail.e2e.ts" timestamp="2026-11-10T20:44:49.239Z" hostname="" tests="3" failures="2" skipped="0" time="2.434" errors="1">
+<testcase name="AC-1: assertion fails" classname="fail.e2e.ts" time="1.249">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|fail.e2e.ts-AC-1-assertion-fails/video.webm]]
+
+[[ATTACHMENT|fail.e2e.ts-AC-1-assertion-fails/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveText(expected) failed" type="expect.toHaveText">
+<![CDATA[  fail.e2e.ts:2:1 › AC-1: assertion fails ──────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByTestId('summary')
+    Expected: "nope"
+    Received: "0 of 0 unread"
+    Timeout:  1000ms
+
+    Call log:
+      - Expect "toHaveText" getByTestId('summary') with timeout 1000ms
+      - waiting for getByTestId('summary')
+        11 × locator resolved to <p aria-live="polite" data-testid="summary">0 of 0 unread</p>
+           - unexpected value "0 of 0 unread"
+
+
+      2 | test('AC-1: assertion fails', async ({ page }) => {
+      3 |   await page.goto('/')
+    > 4 |   await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 1000 })
+        |                                             ^
+      5 | })
+      6 | test('AC-2: waits for a missing test id', async ({ page }) => {
+      7 |   await page.goto('/')
+        at /work/e2e/fail.e2e.ts:4:45
+
+    attachment #1: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/fail.e2e.ts-AC-1-assertion-fails/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/fail.e2e.ts-AC-1-assertion-fails/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="AC-2: waits for a missing test id" classname="fail.e2e.ts" time="1.181">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|fail.e2e.ts-AC-2-waits-for-a-missing-test-id/video.webm]]
+
+[[ATTACHMENT|fail.e2e.ts-AC-2-waits-for-a-missing-test-id/error-context.md]]
+]]>
+</system-out>
+<error message="locator.click: Timeout 1000ms exceeded." type="TimeoutError">
+<![CDATA[  fail.e2e.ts:6:1 › AC-2: waits for a missing test id ──────────────────────────────────────────────
+
+    TimeoutError: locator.click: Timeout 1000ms exceeded.
+    Call log:
+      - waiting for getByTestId('remove')
+
+
+       6 | test('AC-2: waits for a missing test id', async ({ page }) => {
+       7 |   await page.goto('/')
+    >  8 |   await page.getByTestId('remove').click({ timeout: 1000 })
+         |                                    ^
+       9 | })
+      10 | test('AC-3: plain toBe', async () => {
+      11 |   expect(1).toBe(2)
+        at /work/e2e/fail.e2e.ts:8:36
+
+    attachment #1: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/fail.e2e.ts-AC-2-waits-for-a-missing-test-id/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/fail.e2e.ts-AC-2-waits-for-a-missing-test-id/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="AC-3: plain toBe" classname="fail.e2e.ts" time="0.004">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|fail.e2e.ts-AC-3-plain-toBe/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+<![CDATA[  fail.e2e.ts:10:1 › AC-3: plain toBe ──────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: 1
+
+       9 | })
+      10 | test('AC-3: plain toBe', async () => {
+    > 11 |   expect(1).toBe(2)
+         |             ^
+      12 | })
+      13 |
+        at /work/e2e/fail.e2e.ts:11:13
+
+    Error Context: ../test-results/fail.e2e.ts-AC-3-plain-toBe/error-context.md
+]]>
+</failure>
+</testcase>
+</testsuite>
+</testsuites>
