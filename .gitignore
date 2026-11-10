@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+test-results/
+playwright-report/
+dist/
+.local/
+.research/
+# APM deploys into these when a spike or fixture runs `apm install`.
+apm_modules/
+/.claude/
+/.codex/
+/.agents/
+/.github/agents/

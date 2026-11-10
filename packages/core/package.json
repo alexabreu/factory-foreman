@@ -1,0 +1,23 @@
+{
+  "name": "factory-foreman",
+  "version": "0.0.0",
+  "description": "Checkpoints for agent-built features on GitHub: shape, design, slices and verify, with approvals, diffs and test evidence",
+  "type": "module",
+  "bin": {
+    "factory-foreman": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "apm",
+    "evals",
+    "templates",
+    "docs",
+    "factory-foreman.config.schema.json"
+  ],
+  "engines": {
+    "node": "^22.18.0 || >=24.2.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "ac": "AC-2",
+  "says": "A reader clears every read book at once (a feature the sample doesn't have, so a base replay must stop).",
+  "url": "/",
+  "steps": [
+    { "fill": "new-title", "text": "Dune" },
+    { "click": "add" },
+    { "check": "item-toggle" },
+    { "click": "clear-read" },
+    { "wait": "summary" }
+  ]
+}

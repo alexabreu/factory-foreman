@@ -1,0 +1,22 @@
+{
+  "name": "sample-target",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A small Vite app that factory-foreman's own tests and spikes run against",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 4173 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.7",
+    "vitest": "5.1.0"
+  }
+}

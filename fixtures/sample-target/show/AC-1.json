@@ -1,0 +1,12 @@
+{
+  "ac": "AC-1",
+  "says": "A reader adds a book, marks it read, and the Unread filter hides it.",
+  "url": "/",
+  "steps": [
+    { "fill": "new-title", "text": "Dune" },
+    { "click": "add" },
+    { "check": "item-toggle" },
+    { "select": "filter", "value": "unread" },
+    { "wait": "summary" }
+  ]
+}

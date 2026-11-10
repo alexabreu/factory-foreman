@@ -1,0 +1,6 @@
+body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 32rem; padding: 0 1rem; }
+form { display: flex; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+input#new-title { flex: 1; padding: .4rem; }
+ul { list-style: none; padding: 0; }
+li { padding: .25rem 0; }
+li label { display: inline-flex; gap: .5rem; align-items: center; }

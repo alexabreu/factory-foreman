@@ -1,0 +1,7 @@
+{
+  "name": "factory-foreman",
+  "version": "0.0.0-spike",
+  "description": "Stand-in for packages/core, so spike B can run before core has an APM package",
+  "type": "module",
+  "files": [ "apm" ]
+}
