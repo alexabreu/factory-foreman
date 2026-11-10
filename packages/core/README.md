@@ -11,7 +11,7 @@ verify arrive in later phases.
 
 | Command | What it does |
 | --- | --- |
-| `note "<text>" [--kind decision\|rejected\|question] [--blocking] [--step s]` | Logs a decision in your private log for the issue |
+| `note "<text>" [--kind decision\|rejected\|question] [--blocking] [--step s] [--slice n]` | Logs a decision in your private log for the issue |
 | `draft <shape\|design> [--reset]` | Prints the drafting brief and writes the draft file |
 | `checkpoint <shape\|design> [--draft <file>]` | Checks the draft and posts it as the next version |
 | `approve <shape\|design> v<N>` | A person approves that version, from their own terminal |

@@ -78,7 +78,7 @@
       "additionalProperties": false,
       "properties": {
         "reports": { "$ref": "#/$defs/globs" },
-        "providers": { "type": "array", "items": { "enum": ["playwright-video", "agent-browser"] } }
+        "providers": { "oneOf": [ { "type": "null" }, { "type": "array", "items": { "enum": ["playwright-video", "agent-browser"] } } ] }
       }
     },
     "preview": {

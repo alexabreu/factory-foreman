@@ -1,21 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { artifactEntry, bodyLine, unifiedDiff } from '../changelog.mjs'
 import { Refusal } from '../errors.mjs'
-import { hash, nextVersion, recordComment } from '../issue/records.mjs'
-import { addChangelogLine, addDecisionRows, setSection } from '../issue/sections.mjs'
+import { byBot, hash, nextVersion, recordComment } from '../issue/records.mjs'
+import { addChangelogLine, addDecisionRows, setSection, updateBody } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { checkStructure, parseDraft } from '../steps/structure.mjs'
 import { readLog } from '../state/local.mjs'
 import { entriesSince } from './draft.mjs'
 import { approvedBody, loadIssue, requireStep, sameText, title, today } from './common.mjs'
-
-// True unless the version names an actor other than the App. GraphQL names a
-// bot without the [bot] suffix, so compare without it.
-const byBot = (version, botLogin) => {
-  const actor = version?.actor?.login ?? version?.actor
-  const bare = (login) => String(login).replace(/\[bot\]$/, '').toLowerCase()
-  return typeof actor !== 'string' || !botLogin || bare(actor) === bare(botLogin)
-}
 
 // factory-foreman checkpoint <shape|design> --draft <file>
 export async function checkpoint(ctx, { positionals, flags }) {
@@ -30,6 +22,7 @@ export async function checkpoint(ctx, { positionals, flags }) {
   }
   const draft = parseDraft(text)
   if (draft.meta.step && draft.meta.step !== step) throw new Refusal(`${file} is a ${draft.meta.step} draft, not ${step}.`)
+  if (draft.meta.issue !== undefined && draft.meta.issue !== ctx.issue()) throw new Refusal(`${file} is a draft for #${draft.meta.issue}, not #${ctx.issue()}.`)
   if (!Number.isInteger(draft.meta.base)) throw new Refusal(`${file} has no "base" in its front matter, so it can't be checked for staleness. Run factory-foreman draft ${step}.`)
 
   const github = ctx.github()
@@ -86,22 +79,26 @@ export async function checkpoint(ctx, { positionals, flags }) {
     else {
       number = await github.createArtifact(n, title(step), body, 'app')
       const firstNumber = Math.min(...(await github.artifacts(n)).filter((a) => a.name === title(step)).map((a) => a.number))
-      if (firstNumber !== number) throw new Error(`Someone created ${title(step)} at the same moment (artifact ${firstNumber}), so artifact ${number} isn't recorded. Run factory-foreman draft ${step} --reset and checkpoint again.`)
+      if (firstNumber !== number) throw new Refusal(`Someone created ${title(step)} at the same moment (artifact ${firstNumber}), so artifact ${number} isn't recorded. Run factory-foreman draft ${step} --reset and checkpoint again.`)
     }
     const history = await github.history(n, number)
     posted = history.versions.at(-1)
     if (!posted || posted.version !== latest + 1 || !sameText(posted.body, body) || !byBot(posted, github.botLogin)) {
-      throw new Error(`Someone wrote ${title(step)} at the same moment, so artifact version ${posted?.version ?? '?'} isn't recorded. Run factory-foreman draft ${step} --reset, check it, and checkpoint again.`)
+      throw new Refusal(`Someone wrote ${title(step)} at the same moment, so artifact version ${posted?.version ?? '?'} isn't recorded. Run factory-foreman draft ${step} --reset, check it, and checkpoint again.`)
     }
   }
 
   // 2. The changelog artifact, one full entry per version.
   const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, notes: notes.map((e) => `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`) })
-  if (state.changelog) {
-    const log = await github.history(n, state.changelog.number)
-    await github.editArtifact(n, state.changelog.number, `${log.versions.at(-1)?.body.trimEnd() ?? '# Changelog'}\n\n${entry}`, 'app')
-  } else {
-    await github.createArtifact(n, 'Changelog', `# Changelog\n\n${entry}`, 'app')
+  // Another checkpoint may append at the same moment and write over ours, so
+  // read it back and append again until the latest version holds our entry.
+  let changelog = state.changelog?.number
+  if (!changelog) changelog = await github.createArtifact(n, 'Changelog', `# Changelog\n\n${entry}`, 'app')
+  for (let i = 0; ; i++) {
+    const latestLog = (await github.history(n, changelog)).versions.at(-1)?.body ?? '# Changelog'
+    if (latestLog.includes(entry.trim())) break
+    if (i === 3) throw new Refusal(`The Changelog on #${n} kept changing, so ${title(step)} ${version}'s entry isn't in it. Checkpoint again.`)
+    await github.editArtifact(n, changelog, `${latestLog.trimEnd()}\n\n${entry}`, 'app')
   }
 
   // 3. The record that makes the version count.
@@ -111,11 +108,8 @@ export async function checkpoint(ctx, { positionals, flags }) {
   // 4. The issue body: changelog line, decisions, and a status read afresh,
   // so a checkpoint or approval that landed meanwhile shows too.
   const states = (await loadIssue(github, n, config.approvals)).steps
-  let issueBody = (await github.issue(n))?.body ?? ''
-  issueBody = addChangelogLine(issueBody, bodyLine({ step, version, date, author, diff }))
-  issueBody = addDecisionRows(issueBody, notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}` })))
-  issueBody = setSection(issueBody, 'status', statusLine(states))
-  await github.setBody(n, issueBody, 'app')
+  const rows = notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}` }))
+  await updateBody(github, n, (b) => setSection(addDecisionRows(addChangelogLine(b, bodyLine({ step, version, date, author, diff })), rows), 'status', statusLine(states)))
 
   return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}). Approve it from a terminal: factory-foreman approve ${step} ${version}`, json: record }
 }

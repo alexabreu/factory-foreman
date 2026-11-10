@@ -1,6 +1,6 @@
 import { Refusal } from '../errors.mjs'
 import { hash, recordComment } from '../issue/records.mjs'
-import { addDecisionRows, inert, setSection } from '../issue/sections.mjs'
+import { addDecisionRows, inert, setSection, updateBody } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { agentShell } from '../state/local.mjs'
@@ -39,6 +39,9 @@ export async function approve(ctx, { positionals }) {
   const phrase = `approve ${step} ${version}`
   const typed = (await ctx.prompt(`Approving ${title(step)} ${version} on #${n} as @${approver}. Type "${phrase}" to confirm: `)).trim()
   if (typed !== phrase) throw new Refusal('Not approved: the confirmation didn\'t match.')
+  // Someone may have checkpointed while the person was reading and typing.
+  const fresh = (await loadIssue(github, n, config.approvals)).steps[step]
+  if (fresh.latest?.comment.id !== info.latest.comment.id) throw new Refusal(`${title(step)} ${fresh.latest?.version ?? '?'} was posted while you were confirming, so ${version} isn't the latest any more. Read it and approve that one.`)
 
   const now = ctx.now()
   const record = { type: 'approval', repo: github.repo, issue: n, step, version, checkpoint: info.latest.comment.id, artifact: info.latest.artifact, hash: info.latest.hash, approver, at: now.toISOString() }
@@ -46,11 +49,8 @@ export async function approve(ctx, { positionals }) {
 
   const draft = parseDraft(current.body)
   const states = (await loadIssue(github, n, config.approvals)).steps
-  // Re-read the body: the person may have edited it while the prompt waited.
-  let body = (await github.issue(n))?.body ?? ''
-  body = setSection(body, step, `## ${title(step)} ${version} (approved)\n\n${inert(draft.lead)}\n\n<details><summary>Full ${title(step)} ${version}</summary>\n\n${inert(current.body.trim())}\n\n</details>`)
-  body = addDecisionRows(body, [ { date: today(now), text: `Approved ${title(step)} ${version}`, by: `@${approver}`, step: `${title(step)} ${version}` } ])
-  body = setSection(body, 'status', statusLine(states))
-  await github.setBody(n, body, 'app')
+  const section = `## ${title(step)} ${version} (approved)\n\n${inert(draft.lead)}\n\n<details><summary>Full ${title(step)} ${version}</summary>\n\n${inert(current.body.trim())}\n\n</details>`
+  const row = { date: today(now), text: `Approved ${title(step)} ${version}`, by: `@${approver}`, step: `${title(step)} ${version}` }
+  await updateBody(github, n, (b) => setSection(addDecisionRows(setSection(b, step, section), [ row ]), 'status', statusLine(states)))
   return { out: `Approved ${title(step)} ${version} on #${n}.`, json: record }
 }

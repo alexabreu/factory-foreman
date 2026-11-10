@@ -125,9 +125,11 @@ test('records are trusted only from the App, or from the approver themselves wit
   assert.equal((await ana.run('checkpoint', 'shape')).code, 0)
   const issue = world.issues.get(7)
   const [ real ] = parseRecords(issue.comments)
+  // Bound to the real checkpoint, so only the trust rule can drop them.
+  const bound = { checkpoint: real.comment.id, repo: real.repo, issue: 7 }
   // A forged approval for ana posted by eve, and eve approving herself without write access.
-  issue.comments.push({ id: 90, login: 'eve', type: 'User', createdAt: '2026-11-10T13:00:00Z', body: `<!-- factory-foreman:record ${JSON.stringify({ type: 'approval', step: 'shape', version: 'v1', hash: real.hash, artifact: real.artifact, approver: 'ana' })} -->` })
-  issue.comments.push({ id: 91, login: 'eve', type: 'User', createdAt: '2026-11-10T13:00:01Z', body: `<!-- factory-foreman:record ${JSON.stringify({ type: 'approval', step: 'shape', version: 'v1', hash: real.hash, artifact: real.artifact, approver: 'eve' })} -->` })
+  issue.comments.push({ id: 90, login: 'eve', type: 'User', createdAt: '2026-11-10T13:00:00Z', body: `<!-- factory-foreman:record ${JSON.stringify({ type: 'approval', ...bound, step: 'shape', version: 'v1', hash: real.hash, artifact: real.artifact, approver: 'ana' })} -->` })
+  issue.comments.push({ id: 91, login: 'eve', type: 'User', createdAt: '2026-11-10T13:00:01Z', body: `<!-- factory-foreman:record ${JSON.stringify({ type: 'approval', ...bound, step: 'shape', version: 'v1', hash: real.hash, artifact: real.artifact, approver: 'eve' })} -->` })
   // A forged checkpoint posted by a person.
   issue.comments.push({ id: 92, login: 'eve', type: 'User', createdAt: '2026-11-10T13:00:02Z', body: `<!-- factory-foreman:record ${JSON.stringify({ ...real, comment: undefined, version: 'v2' })} -->` })
   await ana.run('draft', 'design')
@@ -233,7 +235,7 @@ test('a write that lands between the stale check and ours is reported, not recor
   let once = true
   view.editArtifact = async (...args) => { if (once) { once = false; await edit.call(view, 7, 1, 'interloper', 'user') } return edit.apply(view, args) }
   const raced = await main([ 'checkpoint', 'shape' ], () => ({ ...ctxOf(ana), github: () => view }))
-  assert.equal(raced.code, 1)
+  assert.equal(raced.code, 2)
   assert.match(raced.err, /at the same moment, so artifact version 3 isn't recorded/)
   assert.equal(parseRecords(world.issues.get(7).comments).filter((r) => r.type === 'checkpoint').length, 1)
 })
@@ -333,9 +335,88 @@ test('two first checkpoints at once: the first artifact wins and the other run s
   writeDraft(ana.draft('shape'), SHAPE)
   writeDraft(ben.draft('shape'), SHAPE.replace('Syncing between devices.', 'Ben\'s text.'))
   const results = await Promise.all([ ana.run('checkpoint', 'shape'), ben.run('checkpoint', 'shape') ])
-  assert.deepEqual(results.map((r) => r.code).sort(), [ 0, 1 ])
-  assert.match(results.find((r) => r.code === 1).err, /created Shape at the same moment/)
+  assert.deepEqual(results.map((r) => r.code).sort(), [ 0, 2 ])
+  assert.match(results.find((r) => r.code === 2).err, /created Shape at the same moment/)
   const records = parseRecords(world.issues.get(7).comments).filter((r) => r.type === 'checkpoint')
   assert.equal(records.length, 1)
   assert.equal(records[0].artifact.number, 1)
+})
+
+test('two checkpoints appending to the Changelog at once both keep their entries', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7)
+  const ana = developer(world, 'ana')
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  await ana.run('checkpoint', 'shape')
+  await ana.run('draft', 'shape', '--reset')
+  writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Sharing.'))
+  // Another run writes the Changelog from the version this one read, just after it.
+  const view = world.as('ana')
+  const edit = view.editArtifact
+  let once = true
+  view.editArtifact = async (n, number, body, w) => {
+    const result = await edit.call(view, n, number, body, w)
+    if (number === 2 && once) { once = false; await edit.call(view, n, 2, '# Changelog\n\n## Design v9, other run', 'app') }
+    return result
+  }
+  const posted = await main([ 'checkpoint', 'shape' ], () => ({ ...ctxOf(ana), github: () => view }))
+  assert.equal(posted.code, 0, posted.err)
+  const log = world.issues.get(7).artifacts.find((a) => a.number === 2).versions.at(-1).body
+  assert.match(log, /## Design v9, other run/)
+  assert.match(log, /## Shape v2, /)
+})
+
+test('a draft for another issue is refused, and a Windows draft is read', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7)
+  const ana = developer(world, 'ana')
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  const text = readFileSync(ana.draft('shape'), 'utf8')
+  writeFileSync(ana.draft('shape'), text.replace('issue: 7', 'issue: 8'))
+  assert.match((await ana.run('checkpoint', 'shape')).err, /is a draft for #8, not #7/)
+  writeFileSync(ana.draft('shape'), text.replace(/\n/g, '\r\n'))
+  assert.equal((await ana.run('checkpoint', 'shape')).code, 0)
+})
+
+test('--reset keeps the old draft as a backup', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7)
+  const ana = developer(world, 'ana')
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  const reset = await ana.run('draft', 'shape', '--reset')
+  assert.match(reset.out, /previous draft is at .*shape\.md\.bak/)
+  assert.match(readFileSync(`${ana.draft('shape')}.bak`, 'utf8'), /Syncing between devices/)
+})
+
+test('approve stops if a new version is posted while the person confirms', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7)
+  const ana = developer(world, 'ana')
+  await ana.run('draft', 'shape')
+  writeDraft(ana.draft('shape'), SHAPE)
+  await ana.run('checkpoint', 'shape')
+  const terminal = developer(world, 'ana', { isTTY: true })
+  const result = await main([ 'approve', 'shape', 'v1' ], () => ({
+    ...terminal.ctx(),
+    prompt: async () => {
+      await ana.run('draft', 'shape', '--reset')
+      writeDraft(ana.draft('shape'), SHAPE.replace('Syncing between devices.', 'Sharing.'))
+      await ana.run('checkpoint', 'shape')
+      return 'approve shape v1'
+    },
+  }))
+  assert.equal(result.code, 2)
+  assert.match(result.err, /Shape v2 was posted while you were confirming/)
+})
+
+test('note checks --step and --slice, and -- ends the flags', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7)
+  const ana = developer(world, 'ana')
+  assert.match((await ana.run('note', 'x', '--step', 'build')).err, /--step is shape or design/)
+  assert.match((await ana.run('note', 'x', '--slice', 'abc')).err, /--slice is a slice number/)
+  assert.match((await ana.run('note', '--', '--kind', 'is text here')).out, /Noted decision: --kind is text here/)
 })

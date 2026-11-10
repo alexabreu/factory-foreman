@@ -16,6 +16,16 @@ export function recordComment(visible, record) {
   return `${visible.trim()}\n\n<!-- factory-foreman:record ${JSON.stringify(record).replace(/--/g, '-\\u002d')} -->`
 }
 
+// True only when the version names the App as its actor: its exact login, or
+// the slug GraphQL uses for it when the actor is marked as a Bot. A person
+// can't register a login ending in [bot], but could take the bare slug.
+export const byBot = (version, botLogin) => {
+  const actor = version?.actor
+  const login = actor?.login ?? actor
+  if (typeof login !== 'string' || !botLogin) return false
+  return login === botLogin || (actor?.type === 'Bot' && `${login}[bot]` === botLogin)
+}
+
 // An edited comment is never trusted: anyone with write access can edit
 // someone else's comment on GitHub, and the login would still read as theirs.
 export const edited = (c) => Boolean(c.updatedAt && c.createdAt && Date.parse(c.updatedAt) > Date.parse(c.createdAt))
@@ -55,7 +65,7 @@ export async function trustedRecords(comments, { botLogin, permission, repo, iss
 // An approval counts when it names a posted checkpoint by its comment, came
 // after it, matches its version and hash, and (when the repo asks for a second
 // approver) wasn't given by the checkpoint's author.
-export function stepState(records, step, { requireSecondApprover = false, comments: allComments = [] } = {}) {
+export function stepState(records, step, { requireSecondApprover = false, comments: allComments = [], botLogin = null } = {}) {
   const checkpoints = records.filter((r) => r.type === 'checkpoint' && r.step === step)
   const byComment = new Map(checkpoints.map((c) => [ c.comment.id, c ]))
   const approvals = records.filter((r) => {
@@ -66,9 +76,10 @@ export function stepState(records, step, { requireSecondApprover = false, commen
     return !(requireSecondApprover && r.approver === cp.author)
   })
   const approved = approvals.at(-1) ?? null
-  // Every label this step has used, from any record or comment that names one,
-  // trusted or not, so numbering only ever goes up.
-  const highest = parseRecords(allComments, { includeEdited: true }).filter((r) => r.step === step).map((r) => labelNumber(r.version))
+  // Every label this step has used in a comment the App posted, edited or
+  // not, so numbering only ever goes up. Others' comments don't count, so
+  // nobody can push the numbering to its end.
+  const highest = parseRecords(allComments, { includeEdited: true }).filter((r) => r.step === step && botLogin && r.comment.login === botLogin).map((r) => labelNumber(r.version))
   return { checkpoints, latest: checkpoints.at(-1) ?? null, approved, approvedCheckpoint: approved ? byComment.get(approved.checkpoint) : null, highest: [ ...highest, ...checkpoints.map((c) => labelNumber(c.version)) ] }
 }
 

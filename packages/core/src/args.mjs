@@ -5,7 +5,9 @@ export function parseArgs(argv, { booleans = [] } = {}) {
   const flags = {}
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    if (!arg.startsWith('--') || arg === '--') { positionals.push(arg); continue }
+    // Everything after a bare -- is text, even if it starts with --.
+    if (arg === '--') { positionals.push(...argv.slice(i + 1)); break }
+    if (!arg.startsWith('--')) { positionals.push(arg); continue }
     const eq = arg.indexOf('=')
     const key = arg.slice(2, eq === -1 ? undefined : eq)
     if (eq !== -1) flags[key] = arg.slice(eq + 1)

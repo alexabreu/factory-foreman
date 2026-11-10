@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hash, nextVersion, parseRecords, recordComment, stepState, trustedRecords } from '../src/issue/records.mjs'
+import { byBot, hash, nextVersion, parseRecords, recordComment, stepState, trustedRecords } from '../src/issue/records.mjs'
 import { addDecisionRows, getSection, inert, setSection } from '../src/issue/sections.mjs'
 import { statusLine } from '../src/issue/status.mjs'
 
@@ -75,15 +75,33 @@ test('a fresh checkpoint with no approval yet is awaiting approval', () => {
   assert.equal(statusLine({ shape: { latest: { version: 'v1' }, approved: null }, design: {} }), '**Status:** Shape v1 awaiting approval · Design not started')
 })
 
-test('a huge label someone posted is ignored, so numbering stays exact', () => {
-  const comment = (version) => ({ id: 1, login: 'mallory', type: 'User', body: recordComment('x', { step: 'shape', version }), createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' })
-  for (const version of [ 'v99999999999999999', `v${'9'.repeat(400)}` ]) {
-    assert.equal(nextVersion(stepState([], 'shape', { comments: [ comment(version) ] })), 'v1')
-  }
-  assert.equal(nextVersion(stepState([], 'shape', { comments: [ comment('v41') ] })), 'v42')
+test('labels count from the App\'s comments only, and a huge one is ignored', () => {
+  const comment = (version, login = 'ff[bot]') => ({ id: 1, login, type: 'Bot', body: recordComment('x', { step: 'shape', version }), createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' })
+  const next = (c) => nextVersion(stepState([], 'shape', { comments: [ c ], botLogin: 'ff[bot]' }))
+  for (const version of [ 'v99999999999999999', `v${'9'.repeat(400)}` ]) assert.equal(next(comment(version)), 'v1')
+  assert.equal(next(comment('v41')), 'v42', 'an edited App comment still counts')
+  assert.equal(next({ ...comment('v999999', 'mallory'), type: 'User' }), 'v1', 'someone else\'s label is ignored')
 })
 
 test('labels stop at v999999 instead of repeating', () => {
-  const comments = [ { id: 1, login: 'mallory', type: 'User', body: recordComment('x', { step: 'shape', version: 'v999999' }), createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' } ]
-  assert.throws(() => nextVersion(stepState([], 'shape', { comments })), /reached v999999/)
+  const comments = [ { id: 1, login: 'ff[bot]', type: 'Bot', body: recordComment('x', { step: 'shape', version: 'v999999' }), createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' } ]
+  assert.throws(() => nextVersion(stepState([], 'shape', { comments, botLogin: 'ff[bot]' })), /reached v999999/)
+})
+
+test('a marker quoted in the person\'s text is left alone', () => {
+  const body = 'Note: the bot owns `<!-- factory-foreman:shape -->` blocks.\n\n```\n<!-- factory-foreman:shape -->\n```\n\nIMPORTANT user paragraph.'
+  const once = setSection(body, 'shape', 'one')
+  const twice = setSection(once, 'shape', 'two')
+  assert.match(twice, /IMPORTANT user paragraph\./)
+  assert.equal(getSection(twice, 'shape'), 'two')
+  assert.equal(twice.split('<!-- /factory-foreman:shape -->').length, 2)
+  assert.match(setSection('Text.\r\n<!-- factory-foreman:shape -->\r\nold\r\n<!-- /factory-foreman:shape -->\r\nAfter.', 'shape', 'new'), /Text\.\r\n<!-- factory-foreman:shape -->\nnew\n<!-- \/factory-foreman:shape -->\r\nAfter\./)
+})
+
+test('byBot is true only for the App\'s own login', () => {
+  assert.equal(byBot({ actor: { login: 'ff[bot]' } }, 'ff[bot]'), true)
+  assert.equal(byBot({ actor: { login: 'ff', type: 'Bot' } }, 'ff[bot]'), true)
+  assert.equal(byBot({ actor: { login: 'ff', type: 'User' } }, 'ff[bot]'), false)
+  assert.equal(byBot({ actor: null }, 'ff[bot]'), false)
+  assert.equal(byBot({ actor: { login: 'ff[bot]' } }, null), false)
 })

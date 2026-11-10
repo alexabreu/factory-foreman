@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { hash } from '../issue/records.mjs'
 import { parseDraft, splitFrontMatter, withFrontMatter } from '../steps/structure.mjs'
 import { readLog } from '../state/local.mjs'
@@ -26,10 +26,16 @@ export async function draft(ctx, { positionals, flags }) {
   const entries = entriesSince(readLog(ctx.stateDir()), current?.createdAt, step)
 
   let stale = null
+  let backup = null
   if (existsSync(file) && !flags.reset) {
     const { meta } = splitFrontMatter(readFileSync(file, 'utf8'))
     if (meta.base !== base) stale = `Your draft started from version ${meta.base}; the latest is ${base}. Redraft from the latest, or run draft ${step} --reset to start over from it.`
   } else {
+    // --reset keeps the old draft next to the new one, so no work is lost.
+    if (flags.reset && existsSync(file)) {
+      renameSync(file, `${file}.bak`)
+      backup = `${file}.bak`
+    }
     const body = current?.body ?? SKELETON[step]
     writeFileSync(file, withFrontMatter({ step, issue: n, base, baseHash: current ? hash(current.body) : '' }, body))
   }
@@ -42,6 +48,7 @@ export async function draft(ctx, { positionals, flags }) {
     current ? `Latest: version ${base}${info.latest ? ` (${info.latest.version} by @${info.latest.author})` : ''}${info.approved ? `; ${info.approved.version} is approved` : ''}.` : `No ${title(step)} yet: this will be v1.`,
   ]
   if (stale) lines.push(`STALE: ${stale}`)
+  if (backup) lines.push(`Your previous draft is at ${backup}; fold back in what should stay.`)
   if (step === 'design' && !shape) lines.push('Shape has no approved version yet; Design can be drafted but not checkpointed until it does.')
   lines.push('', entries.length ? `Notes since the latest version (${entries.length}):` : 'No notes since the latest version.')
   for (const e of entries) lines.push(`- [${e.kind}${e.confirmed ? '' : ', unconfirmed: keep, edit or drop'}] ${e.text}`)

@@ -20,6 +20,7 @@ export const REQUIRED_SECTIONS = {
 }
 
 export function splitFrontMatter(text) {
+  text = text.replace(/\r\n/g, '\n')
   const match = text.match(/^---\n([\s\S]*?)\n---\n?/)
   if (!match) return { meta: {}, body: text }
   const meta = {}
@@ -141,7 +142,7 @@ export function parseDraft(text) {
 export function checkStructure(step, draft, { budgets, shape } = {}) {
   const problems = []
   const words = budgets?.words ?? {}
-  if (/factory-foreman:/.test(draft.body)) problems.push('The draft mustn\'t contain "factory-foreman:" markers; they belong to the issue body.')
+  if (/<!--\s*\/?factory-foreman:/.test(draft.body)) problems.push('The draft mustn\'t contain "factory-foreman:" markers; they belong to the issue body.')
   if (!draft.lead) problems.push('Start with a lead paragraph before the first section.')
   else if (words.lead && draft.leadWords > words.lead) problems.push(`The lead is ${draft.leadWords} words; the budget is ${words.lead}.`)
   if (words[step] && draft.words > words[step]) problems.push(`The draft is ${draft.words} words; the ${step} budget is ${words[step]}.`)
