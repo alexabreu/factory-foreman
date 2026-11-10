@@ -12,12 +12,14 @@ pnpm install --ignore-workspace --silent
 echo "== node_modules/factory-foreman is a $( [ -L node_modules/factory-foreman ] && echo symlink || echo directory )"
 apm install
 echo "== files apm wrote:"
-git ls-files --others --exclude-standard | grep -vE '^(node_modules|apm_modules|\.apm-local)/' | sort
+git ls-files --others --exclude-standard | { grep -vE '^(node_modules|apm_modules|\.apm-local)/' || true; } | sort
 echo "== audit through the pnpm symlink:"
 apm audit --ci -f json 2>/dev/null | node -e 'const d = JSON.parse(require("fs").readFileSync(0, "utf8")); for (const c of d.checks) console.log(c.passed ? "pass" : "FAIL", c.name, "-", c.message)' || true
 
 # The same package as a plain directory, to separate APM's behavior from pnpm's layout.
-cd "$work" && mkdir plain && cd plain && git init -q
+mkdir "$work/plain"
+cd "$work/plain"
+git init -q
 cp -r "$work/stand-in-core/apm" vendor-apm
 sed 's#./node_modules/factory-foreman/apm#./vendor-apm#' "$work/consumer/apm.yml" > apm.yml
 apm install > /dev/null

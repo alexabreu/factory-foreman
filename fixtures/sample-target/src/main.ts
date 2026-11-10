@@ -33,12 +33,23 @@ function render() {
     box.type = 'checkbox'
     box.checked = item.read
     box.dataset.testid = 'item-toggle'
-    box.setAttribute('aria-label', `Mark ${item.title} as read`)
-    box.addEventListener('change', () => { list = toggle(list, item.id); render() })
+    box.dataset.itemId = String(item.id)
+    box.addEventListener('change', () => {
+      list = toggle(list, item.id)
+      render()
+      // render() replaces every row, so put keyboard focus back on this item's
+      // checkbox, or on the filter when the item is no longer shown.
+      const again = items.querySelector<HTMLInputElement>(`[data-item-id="${item.id}"]`)
+      ;(again ?? app.querySelector<HTMLSelectElement>('[data-testid="filter"]')!).focus()
+    })
     const title = document.createElement('span')
     title.dataset.testid = 'item-title'
     title.textContent = item.title
-    row.append(box, title)
+    // The label names the checkbox after the book and makes the title clickable;
+    // the checked state says whether it has been read.
+    const label = document.createElement('label')
+    label.append(box, title)
+    row.append(label)
     return row
   }))
   status.textContent = summary(list)

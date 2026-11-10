@@ -14,9 +14,14 @@ concurrency:
 
 jobs:
   check:
-    name: Lint and unit tests
+    name: Lint and unit tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest versions the engines range allows, and the current line.
+        node: [ '22.18', '24' ]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -26,7 +31,7 @@ jobs:
           run_install: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -53,3 +58,10 @@ jobs:
           pnpm typecheck
           pnpm exec playwright install --with-deps chromium
           pnpm test:e2e
+      - name: Keep the browser test evidence
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sample-target-test-results
+          path: fixtures/sample-target/test-results/
+          retention-days: 7

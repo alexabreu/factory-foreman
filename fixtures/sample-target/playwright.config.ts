@@ -11,5 +11,5 @@ export default defineConfig({
     // A machine with its own Chromium (a sandbox, a dev container) can point at it.
     launchOptions: { executablePath: process.env.SAMPLE_TARGET_CHROMIUM || undefined },
   },
-  webServer: { command: 'pnpm dev', url: 'http://localhost:4173', reuseExistingServer: true },
+  webServer: { command: 'pnpm dev', url: 'http://localhost:4173', reuseExistingServer: !process.env.CI },
 })

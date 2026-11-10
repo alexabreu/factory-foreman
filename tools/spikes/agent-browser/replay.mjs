@@ -35,31 +35,49 @@ export function replay(script, baseUrl, out) {
   mkdirSync(out, { recursive: true })
   const url = new URL(script.url ?? '/', baseUrl).href
   const result = { ac: script.ac, url, steps: [], video: null, ok: true }
-  run([ 'open', url ])
-  try {
-    run([ 'record', 'start', join(out, 'replay.webm') ])
-    result.video = 'replay.webm'
-  } catch (error) {
-    result.videoError = String(error.stderr || error.message).trim()
+  const firstLine = error => String(error.stderr || error.message).trim().split('\n')[0]
+  // Screenshots are best-effort: a failed one is recorded, never thrown, so it
+  // can't be mistaken for a failed step or skip the cleanup below.
+  const shot = name => {
+    try { run([ 'screenshot', join(out, name) ]); return name } catch { return null }
   }
-  const shot = name => { run([ 'screenshot', join(out, name) ]); return name }
-  result.steps.push({ step: 'open', ok: true, screenshot: shot('00-open.png') })
-  for (const [ index, step ] of script.steps.entries()) {
-    const name = `${String(index + 1).padStart(2, '0')}-${Object.keys(step)[0]}.png`
+  try {
     try {
-      run(command(step))
-      result.steps.push({ step, ok: true, screenshot: shot(name) })
+      run([ 'open', url ])
     } catch (error) {
       result.ok = false
-      result.steps.push({ step, ok: false, error: String(error.stderr || error.message).trim().split('\n')[0], screenshot: shot(name) })
-      break
+      result.steps.push({ step: 'open', ok: false, error: firstLine(error), screenshot: null })
+      return result
     }
+    try {
+      run([ 'record', 'start', join(out, 'replay.webm') ])
+      result.video = 'replay.webm'
+    } catch (error) {
+      result.videoError = String(error.stderr || error.message).trim()
+    }
+    result.steps.push({ step: 'open', ok: true, screenshot: shot('00-open.png') })
+    for (const [ index, step ] of script.steps.entries()) {
+      const name = `${String(index + 1).padStart(2, '0')}-${Object.keys(step)[0]}.png`
+      try {
+        run(command(step))
+      } catch (error) {
+        result.ok = false
+        result.steps.push({ step, ok: false, error: firstLine(error), screenshot: shot(name) })
+        break
+      }
+      result.steps.push({ step, ok: true, screenshot: shot(name) })
+    }
+  } finally {
+    if (result.video) {
+      try { run([ 'record', 'stop' ]) } catch (error) {
+        // The file may be missing or cut short, so don't point at it.
+        result.video = null
+        result.videoError = String(error.stderr || error.message).trim()
+      }
+    }
+    try { run([ 'close' ]) } catch { /* the session may already be gone */ }
+    writeFileSync(join(out, 'replay.json'), `${JSON.stringify(result, null, 2)}\n`)
   }
-  if (result.video) {
-    try { run([ 'record', 'stop' ]) } catch (error) { result.videoError = String(error.stderr || error.message).trim() }
-  }
-  run([ 'close' ])
-  writeFileSync(join(out, 'replay.json'), `${JSON.stringify(result, null, 2)}\n`)
   return result
 }
 
