@@ -95,13 +95,15 @@ posts leaves no tag. The tag is made through your gh login, which needs write ac
 to the repo's contents; if it can't, checkpoint still posts and prints the
 `gh api` command that makes the tag. It builds and pushes that commit from a bare repo of its own,
 `.factory-foreman/assets.git`, so nothing is written to your repo's `.git`: your
-working tree, index and current branch are never touched, it runs inside
-Codex's sandbox, and the issue branch never carries the assets into the
-product. It pushes to origin, which must name the issue's repo, with your git
+working tree, index and current branch are never touched, and the issue branch
+never carries the assets into the product. It pushes to origin, which must name the issue's repo, with your git
 credentials: the ssh command, credential helpers, http, URL-rewrite and signing
 settings your repo has (from its own config, its includes, or an includeIf that
 matches it) are passed on through the environment, and it signs the commit when
-you sign commits. A global `core.hooksPath` pre-push hook still runs. It needs network access (in Codex, turn the sandbox's network on).
+you sign commits. A global `core.hooksPath` pre-push hook still runs. It needs network access. Inside Codex's sandbox, Chrome can't start (its own
+sandbox can't run inside Codex's), so there the person runs `factory-foreman
+wireframes design` from a terminal, or the agent asks them to; agent-browser's
+daemon socket goes in a temp folder, so that's the only thing that stops it.
 Then it writes the draft's `## Wireframes` section.
 
 Each image's alt text carries the image's full sha256, and its link is this

@@ -796,6 +796,25 @@ test('without agent-browser, wireframes refuses with how to install it', async (
   assert.equal(ana.calls[0].argv[0], 'agent-browser')
 })
 
+test('agent-browser runs with its socket folder in a fresh temp folder, removed on close', async () => {
+  const { agentBrowser } = await import('../src/commands/wireframes.mjs')
+  const calls = []
+  const exec = async (argv, opts) => { calls.push({ argv, opts }); if (argv.includes('screenshot')) writeFileSync(argv.at(-2), 'png'); return { code: 0, stdout: '', stderr: '' } }
+  const browser = agentBrowser({ env: { HOME: '/home/x' }, exec }, 'ffw-test')
+  const dir = mkdtempSync(join(tmpdir(), 'ff-ab-'))
+  writeFileSync(join(dir, 'AC-1.html'), PAGE('x'))
+  await browser.render(join(dir, 'AC-1.html'), join(dir, 'AC-1.png'))
+  await browser.close()
+  assert.deepEqual(calls.map((c) => c.argv.slice(3, 4)[0] ?? c.argv[3]), [ 'set', 'open', 'screenshot', 'close' ])
+  assert.deepEqual(calls[0].argv, [ 'agent-browser', '--session', 'ffw-test', 'set', 'viewport', '960', '640' ])
+  assert.deepEqual(calls[2].argv, [ 'agent-browser', '--session', 'ffw-test', 'screenshot', join(dir, 'AC-1.png'), '--full' ])
+  const sockets = calls[0].opts.env.AGENT_BROWSER_SOCKET_DIR
+  assert.ok(sockets.startsWith(tmpdir()), sockets)
+  assert.equal(calls[0].opts.env.HOME, '/home/x')
+  assert.ok(calls.every((c) => c.opts.env.AGENT_BROWSER_SOCKET_DIR === sockets))
+  assert.ok(!existsSync(sockets))
+})
+
 test('checkpoint refuses a wireframe whose pinned image is missing or isn\'t the one its hash names', async () => {
   const { ana } = await approvedShape()
   const { pages } = withOrigin(ana)

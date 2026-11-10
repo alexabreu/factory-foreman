@@ -13,7 +13,8 @@
 // carries them, so they can't be merged into the product.
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Refusal } from '../errors.mjs'
@@ -61,9 +62,15 @@ export function wireframeFiles(dir) {
 }
 
 // Renders one HTML file to a PNG with agent-browser, in a session of its own.
+// Its daemon socket goes in a fresh temp folder rather than ~/.agent-browser,
+// which Codex's sandbox makes read-only; the temp folder is writable there and
+// short enough for a socket path. The browser itself is only read from
+// ~/.agent-browser/browsers.
 export function agentBrowser(ctx, session = `factory-foreman-wireframes-${process.pid}`) {
+  const sockets = mkdtempSync(join(tmpdir(), 'ffw-'))
+  const env = { ...ctx.env, AGENT_BROWSER_SOCKET_DIR: sockets }
   const run = async (args) => {
-    const result = await ctx.exec([ 'agent-browser', '--session', session, ...args ], { timeout: 120_000 })
+    const result = await ctx.exec([ 'agent-browser', '--session', session, ...args ], { env, timeout: 120_000 })
     if (result.code === 127) throw new Refusal(INSTALL)
     if (result.code !== 0) throw new Refusal(`agent-browser ${args[0]} failed: ${String(result.stderr || result.stdout).trim().split('\n').at(-1)}`)
     return result
@@ -74,7 +81,13 @@ export function agentBrowser(ctx, session = `factory-foreman-wireframes-${proces
       await run([ 'open', pathToFileURL(html).href ])
       await run([ 'screenshot', png, '--full' ])
     },
-    close: () => ctx.exec([ 'agent-browser', '--session', session, 'close' ], { timeout: 30_000 }),
+    async close() {
+      try {
+        await ctx.exec([ 'agent-browser', '--session', session, 'close' ], { env, timeout: 30_000 })
+      } finally {
+        rmSync(sockets, { recursive: true, force: true })
+      }
+    },
   }
 }
 
