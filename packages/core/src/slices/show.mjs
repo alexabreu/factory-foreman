@@ -3,9 +3,9 @@
 // Each step targets a test id. Replayed with agent-browser against the repo's
 // preview server (config preview: { start, url, ready }).
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { Refusal } from '../errors.mjs'
 
 const STEPS = { fill: (s) => [ 'fill', id(s.fill), String(s.text ?? '') ], click: (s) => [ 'click', id(s.click) ], check: (s) => [ 'check', id(s.check) ], select: (s) => [ 'select', id(s.select), String(s.value ?? '') ], wait: (s) => [ 'wait', id(s.wait) ] }
@@ -59,8 +59,10 @@ async function stop(server) {
   if (leaderGone) { await new Promise((resolve) => setTimeout(resolve, 500)); group('SIGKILL') }
 }
 
-// Starts the preview server, replays each script, stops the server.
-export async function replayShowScripts(ctx, { scripts, preview, cwd }) {
+// Starts the preview server, replays each script, stops the server. With
+// `shots` ({ dir, prefix }), it screenshots each script once the page is open
+// and again where it ends (its last step, or the step that failed).
+export async function replayShowScripts(ctx, { scripts, preview, cwd, shots = null }) {
   if (!preview) throw new Refusal('Replaying show scripts needs the app running: set preview in factory-foreman.config.json, for example { "start": ["npm", "run", "dev"], "url": "http://localhost:5173" }.')
   // Something already answering there (your own dev server, say) may be another branch's app.
   if (await answers(preview.url)) throw new Refusal(`Something is already serving ${preview.url}. Stop it, so the show scripts replay against this slice's app.`)
@@ -80,12 +82,23 @@ export async function replayShowScripts(ctx, { scripts, preview, cwd }) {
       const opened = await run([ 'open', new URL(script.url ?? '/', preview.url).href ])
       if (opened.code === 127) throw new Refusal('Install agent-browser to replay show scripts: npm install -g agent-browser, then agent-browser install.')
       let failed = opened.code === 0 ? null : { step: 'open', error: String(opened.stderr || opened.stdout).trim().split('\n').at(-1) }
+      const taken = []
+      // Screenshots are evidence, not checks: one that fails is left out, never fatal.
+      const shot = async (moment) => {
+        if (!shots) return
+        // Named by the script's file, so two scripts for one AC never collide.
+        const file = join(shots.dir, `${shots.prefix}-${basename(path).replace(/\.json$/, '').replace(/[^\w.-]/g, '-')}-${moment}.png`)
+        const r = await run([ 'screenshot', file, '--full' ])
+        if (r.code === 0 && existsSync(file)) taken.push({ path: file, moment })
+      }
+      if (!failed) await shot('open')
       for (const [ i, step ] of script.steps.entries()) {
         if (failed) break
         const r = await run(stepArgs(step))
         if (r.code !== 0) failed = { step: i + 1, error: String(r.stderr || r.stdout).trim().split('\n').at(-1) }
       }
-      results.push({ path, ac: script.ac, ok: !failed, failed })
+      if (opened.code === 0) await shot('end')
+      results.push({ path, ac: script.ac, says: script.says ?? '', ok: !failed, failed, shots: taken })
     }
   } finally {
     await ctx.exec([ 'agent-browser', '--session', session, 'close' ], { env, timeout: 30_000 })

@@ -118,7 +118,7 @@ function walk(dir, root = dir, out = []) {
 }
 
 // The repo's tree at a commit, with the frozen tests and installed packages.
-async function exportAt(ctx, { sha, into, top, tests, testsCommit, cwd }) {
+export async function exportAt(ctx, { sha, into, top, tests = [], testsCommit = null, cwd = '.' }) {
   mkdirSync(into, { recursive: true })
   const index = join(dirname(into), `index-${Date.now()}-${Math.random().toString(16).slice(2)}`)
   const env = { ...ctx.env, GIT_INDEX_FILE: index }
@@ -138,14 +138,18 @@ async function exportAt(ctx, { sha, into, top, tests, testsCommit, cwd }) {
   if (!existsSync(join(into, cwd))) throw new Refusal(`tests.ac.cwd (${cwd}) isn't in the tree at ${sha.slice(0, 12)}.`)
 }
 
-async function runTests(ctx, { dir, config, tests }) {
+async function runTests(ctx, { dir, config, tests, providers = [] }) {
   const ac = config.tests.ac
   const cwd = join(dir, ac.cwd ?? '.')
   const files = tests.map((t) => relative(cwd, join(dir, t)).split('\\').join('/'))
   const reportFiles = () => [ ...new Set([ ...walk(cwd).filter((f) => matchesAny(f, config.evidence.reports)).map((f) => join(cwd, f)), ...walk(dir).filter((f) => matchesAny(f, config.evidence.reports)).map((f) => join(dir, f)) ]) ]
   // Reports from an earlier run (or committed ones) mustn't count.
   for (const f of reportFiles()) rmSync(f, { force: true })
-  const result = await ctx.exec([ ...ac.run, ...files ], { cwd, timeout: ac.timeout, env: { ...ctx.env, CI: '1' } })
+  // Evidence providers may adjust the run (Playwright video, say); only at head.
+  let run = [ ...ac.run, ...files ]
+  let env = { ...ctx.env, CI: '1' }
+  for (const p of providers) ({ run = run, env = env } = (await p.headRun({ run, env, cwd, config })) ?? {})
+  const result = await ctx.exec(run, { cwd, timeout: ac.timeout, env })
   // Reports are looked for from the test folder and from the repo root.
   const cases = reportFiles().flatMap((f) => parseJUnit(readFileSync(f, 'utf8')))
   return { code: result.code, output: `${result.stdout}\n${result.stderr}`, cases }
@@ -167,9 +171,10 @@ const samePath = (a, b) => { a = normalize(a); b = normalize(b); return a === b 
 const caseFile = (c, tests) => tests.find((t) => c.file && samePath(c.file, t)) ?? tests.find((t) => samePath(c.name, t)) ?? null
 
 // Runs the frozen tests at base (and, unless `baseOnly`, at head).
-export async function acGate(ctx, { base, head, tests, testsCommit, owned, testIds, acs, config, baseOnly = false }) {
+export async function acGate(ctx, { base, head, tests, testsCommit, owned, testIds, acs, config, baseOnly = false, providers = [], evidenceDir = null, slice = null }) {
   const top = await git(ctx, [ 'rev-parse', '--show-toplevel' ], 'Finding the repo root')
-  const out = { base: [], head: [], problems: [] }
+  const out = { base: [], head: [], problems: [], evidence: [] }
+  const recording = providers.filter((p) => p.headRun)
   const ids = await newTestIds(ctx, { base, testIds, top })
   const work = mkdtempSync(join(tmpdir(), 'ffg-'))
   try {
@@ -177,7 +182,13 @@ export async function acGate(ctx, { base, head, tests, testsCommit, owned, testI
       const dir = join(work, side === 'base' ? 'a' : 'b')
       await exportAt(ctx, { sha, into: dir, top, tests, testsCommit, cwd: config.tests.ac.cwd ?? '.' })
       if (side === 'head') {
-        const run = await runTests(ctx, { dir, config, tests })
+        const run = await runTests(ctx, { dir, config, tests, providers: recording })
+        // Providers that recorded the head run collect from its checkout before it goes.
+        for (const p of recording) {
+          const into = join(evidenceDir, p.name.replace(/[^\w.-]/g, '-'))
+          mkdirSync(into, { recursive: true })
+          out.evidence.push({ name: p.name, ...(await p.collect({ ctx, slice, base, head, config, top, cwd: join(dir, config.tests.ac.cwd ?? '.'), out: into })) })
+        }
         if (!run.cases.length) { out.problems.push(`At head (${sha.slice(0, 12)}) the AC tests wrote no report matching evidence.reports (${config.evidence.reports.join(', ')}); the runner exited with code ${run.code}: ${run.output.trim().split('\n').slice(-3).join(' / ')}`); continue }
         if (run.code !== 0) out.problems.push(`At head the test runner exited with code ${run.code}: ${run.output.trim().split('\n').slice(-3).join(' / ')}`)
         for (const c of run.cases) {

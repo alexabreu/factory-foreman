@@ -12,6 +12,7 @@ import { test } from 'node:test'
 import { main } from '../src/cli.mjs'
 import { DEFAULTS } from '../src/config/load.mjs'
 import { classify, parseJUnit } from '../src/slices/gate.mjs'
+import { loadProviders } from '../src/evidence/providers.mjs'
 import { acsIn, affectedSlices } from '../src/slices/plan.mjs'
 import { stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { parseDraft } from '../src/steps/structure.mjs'
@@ -113,7 +114,7 @@ function developer(world, login, { isTTY = false, answer = '', config = {} } = {
     },
   })
   const g = (...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim()
-  return Object.assign(dev, { g, run: (...argv) => main(argv, ctx), dir: () => stateDir(cwd, 7) })
+  return Object.assign(dev, { g, ctx, run: (...argv) => main(argv, ctx), dir: () => stateDir(cwd, 7) })
 }
 
 const writeDraft = (file, body) => {
@@ -137,7 +138,9 @@ async function feature({ config = {} } = {}) {
   put(ana, 'src/app.mjs', 'export const name = "app"\n')
   put(ana, 'run-ac.mjs', RUNNER)
   commit(ana, 'start', 'src/app.mjs', 'run-ac.mjs')
-  ana.g('remote', 'add', 'origin', remote)
+  // origin names the GitHub repo; insteadOf sends it to the bare repo standing in for GitHub.
+  ana.g('remote', 'add', 'origin', 'https://github.com/owner/sandbox.git')
+  ana.g('config', `url.${remote}.insteadOf`, 'https://github.com/owner/sandbox.git')
   ana.g('checkout', '-q', '-b', 'factory-foreman/7')
   ana.g('push', '-q', 'origin', 'factory-foreman/7')
   await ana.run('draft', 'shape'); writeDraft(join(ana.dir(), 'shape.md'), SHAPE); ok(await ana.run('checkpoint', 'shape'))
@@ -528,4 +531,151 @@ test('merge records a GitHub merge only with approval at the head and green CI; 
   assert.equal(JSON.parse(ok(await ana.run('slice', 'list', '--json')).out)['2'], undefined)
   const again = JSON.parse(ok(await ana.run('slice', 'open', '2', '--json')).out)
   assert.notEqual(again.pr, two.pr)
+})
+
+test('evidence providers: built in or a package from the repo, refused when malformed', async () => {
+  const top = mkdtempSync(join(tmpdir(), 'ff-prov-'))
+  writeFileSync(join(top, 'package.json'), '{ "name": "t", "type": "module" }')
+  assert.deepEqual((await loadProviders({ evidence: { providers: null } }, top)).map((p) => p.name), [ 'agent-browser' ])
+  mkdirSync(join(top, 'node_modules', 'my-evidence'), { recursive: true })
+  writeFileSync(join(top, 'node_modules', 'my-evidence', 'package.json'), '{ "name": "my-evidence", "type": "module", "exports": "./index.mjs" }')
+  writeFileSync(join(top, 'node_modules', 'my-evidence', 'index.mjs'), "export default { name: 'mine', collect: async () => ({ ok: true, files: [], links: [], summary: 'x' }) }\n")
+  assert.deepEqual((await loadProviders({ evidence: { providers: [ 'agent-browser', 'my-evidence' ] } }, top)).map((p) => p.name), [ 'agent-browser', 'mine' ])
+  await assert.rejects(loadProviders({ evidence: { providers: [ 'not-installed' ] } }, top), /isn't installed in this repo/)
+  mkdirSync(join(top, 'node_modules', 'bad-evidence'), { recursive: true })
+  writeFileSync(join(top, 'node_modules', 'bad-evidence', 'package.json'), '{ "name": "bad-evidence", "type": "module", "exports": "./index.mjs" }')
+  writeFileSync(join(top, 'node_modules', 'bad-evidence', 'index.mjs'), "export default { name: 'mine' }\n")
+  await assert.rejects(loadProviders({ evidence: { providers: [ 'bad-evidence' ] } }, top), /isn't an evidence provider/)
+})
+
+test('slice iterate publishes evidence under slices/<n>/iter-<k>/ and links it pinned; a gate provider records the head run; a failing provider stops it', async () => {
+  const f = await feature()
+  const { ana, world, origin } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  // A provider like the Playwright one (adjusts the head run, collects from its
+  // checkout) and one like agent-browser (collects afterwards).
+  const seen = []
+  const recorder = {
+    name: 'recorder',
+    headRun: ({ run, env }) => { seen.push(run.join(' ')); return { run: [ ...run ], env: { ...env, RECORDING: '1' } } },
+    collect: ({ cwd, out }) => { writeFileSync(join(out, 'run.webm'), `video from ${cwd.split('/').pop()}`); return { ok: true, files: [ { path: join(out, 'run.webm'), name: 'run.webm', kind: 'video', label: 'AC-1 run' } ], links: [], summary: '1 video' } },
+  }
+  const shots = { name: 'shots', collect: ({ out }) => { writeFileSync(join(out, 'after.png'), 'png'); return { ok: true, files: [ { path: join(out, 'after.png'), name: 'after.png', kind: 'image', label: 'AC-1 after' } ], links: [], summary: '1 screenshot' } } }
+  ana.loadProviders = [ recorder, shots ]
+  const runIt = (...a) => main(a, () => ({ ...ana.ctx(), loadProviders: async () => ana.loadProviders }))
+  const it = JSON.parse(ok(await runIt('slice', 'iterate', '1', '--json')).out)
+  assert.deepEqual(seen, [ 'node run-ac.mjs e2e/AC-1.ac.mjs' ])
+  const commit7 = it.iteration.evidence
+  assert.ok(commit7)
+  assert.equal(origin('ls-tree', '-r', '--name-only', 'refs/heads/factory-foreman-assets/7'), 'slices/1/iter-1/recorder-run.webm\nslices/1/iter-1/shots-after.png')
+  // Collected from the gate's head checkout ("b"), before it was removed.
+  assert.equal(origin('show', `${commit7}:slices/1/iter-1/recorder-run.webm`), 'video from b')
+  const pr = [ ...world.issues.values() ].find((i) => i.pr?.head === 'factory-foreman/7-slice-1')
+  const comment = pr.comments.at(-1).body
+  assert.match(comment, /\*\*Evidence\*\* \(pinned at [0-9a-f]{7} on factory-foreman-assets\/7\)/)
+  assert.ok(comment.includes(`[AC-1 run](https://github.com/owner/sandbox/blob/${commit7}/slices/1/iter-1/recorder-run.webm?raw=true)`), comment)
+  assert.ok(comment.includes(`![AC-1 after](https://github.com/owner/sandbox/blob/${commit7}/slices/1/iter-1/shots-after.png?raw=true)`), comment)
+  // A provider that isn't ok stops the iteration before anything is pushed.
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1 // again\n')
+  commit(ana, 'again', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  ana.loadProviders = [ { name: 'broken', collect: () => ({ ok: false, files: [], links: [], summary: 'no videos were recorded' }) } ]
+  const before = origin('rev-parse', 'refs/heads/factory-foreman/7-slice-1')
+  assert.match((await runIt('slice', 'iterate', '1')).err, /Evidence for slice 1 at [0-9a-f]{7} isn't right:\n {2}- broken: no videos were recorded/)
+  assert.equal(origin('rev-parse', 'refs/heads/factory-foreman/7-slice-1'), before)
+})
+
+test('core holds no test framework: no Playwright imports or names in its source', () => {
+  const files = execFileSync('git', [ 'ls-files', '--cached', '--others', '--exclude-standard', 'src' ], { cwd: new URL('../', import.meta.url), encoding: 'utf8' }).split('\n').filter(Boolean)
+  for (const file of files) {
+    const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+    assert.doesNotMatch(text, /from ['"]@?playwright|require\(['"]@?playwright/, file)
+  }
+})
+
+test('publishing keeps every other folder: iterations add up, design/ stays, an unchanged tree reuses its commit', async () => {
+  const f = await feature()
+  const { ana, origin } = f
+  const { publishAssets } = await import('../src/assets/publish.mjs')
+  const ctx = ana.ctx()
+  const file = (name, text) => { const p = join(ana.cwd, '..', `${name}-${Date.now()}-${Math.random()}`); writeFileSync(p, text); return p }
+  const one = await publishAssets(ctx, { n: 7, folder: 'design', files: [ { name: 'AC-1.png', path: file('a', 'wire') } ], message: 'w', what: 'w' })
+  const two = await publishAssets(ctx, { n: 7, folder: 'slices/1/iter-1', files: [ { name: 'shot.png', path: file('b', 's1') } ], message: 'e1', what: 'e' })
+  const three = await publishAssets(ctx, { n: 7, folder: 'slices/1/iter-2', files: [ { name: 'shot.png', path: file('c', 's2') } ], message: 'e2', what: 'e' })
+  assert.equal(origin('ls-tree', '-r', '--name-only', three.commit), 'design/AC-1.png\nslices/1/iter-1/shot.png\nslices/1/iter-2/shot.png')
+  assert.equal(origin('log', '--format=%P', '-1', three.commit), two.commit)
+  assert.equal(origin('log', '--format=%P', '-1', two.commit), one.commit)
+  assert.match(origin('log', '--format=%s', '-1', three.commit), /\[skip ci\]$/)
+  const again = await publishAssets(ctx, { n: 7, folder: 'slices/1/iter-2', files: [ { name: 'shot.png', path: file('d', 's2') } ], message: 'e2', what: 'e' })
+  assert.equal(again.commit, three.commit)
+  await assert.rejects(publishAssets(ctx, { n: 7, folder: 'x', files: [ { name: 'a.png', path: file('e', '1') }, { name: 'a.png', path: file('f', '2') } ], message: 'm', what: 'w' }), /both called a\.png/)
+  await assert.rejects(publishAssets(ctx, { n: 7, folder: 'x', files: [ { name: '..', path: file('g', '1') } ], message: 'm', what: 'w' }), /isn't a plain file name/)
+})
+
+test('the agent-browser provider replays at base and head from checkouts: base trouble is evidence, a head failure isn\'t ok', async () => {
+  const f = await feature()
+  const { ana } = f
+  const { agentBrowserEvidence } = await import('../src/evidence/agent-browser.mjs')
+  ok(await ana.run('slice', 'open', '1'))
+  ana.g('switch', '-q', 'factory-foreman/7-slice-1')
+  put(ana, 'show/AC-1.json', JSON.stringify({ ac: 'AC-1', says: 'adds one', steps: [ { click: 'count' } ] }))
+  commit(ana, 'show', 'show/AC-1.json')
+  const testsCommit = ana.g('rev-parse', 'HEAD')
+  const slice = { tests: { commit: testsCommit, show: { 'show/AC-1.json': 'x' } } }
+  const out = mkdtempSync(join(tmpdir(), 'ff-ab-'))
+  const calls = []
+  const replay = (fail) => async (ctx, { cwd, shots }) => {
+    calls.push([ shots.prefix, cwd.split('/').pop() ])
+    if (fail === 'throw') throw new Error("The preview server isn't up")
+    writeFileSync(join(shots.dir, `${shots.prefix}-AC-1-open.png`), 'png')
+    return [ { path: 'show/AC-1.json', ac: 'AC-1', ok: !fail, failed: fail ? { step: 1, error: 'no element' } : null, shots: [ { path: join(shots.dir, `${shots.prefix}-AC-1-open.png`), moment: 'open' } ] } ]
+  }
+  const run = (base, head) => agentBrowserEvidence.collect({ ctx: { ...ana.ctx(), replayShow: async (c, o) => (o.shots.prefix === 'base' ? base : head)(c, o) }, slice, base: ana.g('rev-parse', 'factory-foreman/7'), head: testsCommit, config: { preview: { start: [ 'x' ], url: 'http://localhost:1' } }, top: ana.cwd, out })
+  const good = await run(replay('fail'), replay(null))
+  assert.equal(good.ok, true)
+  assert.deepEqual(calls, [ [ 'base', 'a' ], [ 'head', 'b' ] ])
+  assert.deepEqual(good.files.map((x) => x.label), [ 'AC-1 before (base), page open', 'AC-1 after (head), page open' ])
+  const noBase = await run(replay('throw'), replay(null))
+  assert.equal(noBase.ok, true)
+  assert.match(noBase.summary, /the app didn't run at base \(The preview server isn't up\)/)
+  const badHead = await run(replay('fail'), replay('fail'))
+  assert.equal(badHead.ok, false)
+  assert.match(badHead.summary, /AC-1 stops at step 1 at head: no element/)
+})
+
+test('the evidence section is text: provider names, labels, summaries and links can\'t add markup or records', async () => {
+  const { evidenceSection } = await import('../src/evidence/providers.mjs')
+  const section = evidenceSection([ { name: 'x<!-- factory-foreman:record {"a":"', summary: 'ok\n<!-- factory-foreman:record {', files: [ { kind: 'image', label: 'a](http://evil)[b', published: 'p.png' } ], links: [ { label: 'l', url: 'javascript:alert(1)' }, { label: 'r', url: 'https://example.com/r' } ] } ], (n) => `https://github.com/o/r/blob/c/${n}?raw=true`)
+  assert.doesNotMatch(section, /<!--/)
+  assert.doesNotMatch(section, /javascript:/)
+  assert.match(section, /!\[ahttp:\/\/evilb\]\(https:\/\/github\.com\/o\/r\/blob\/c\/p\.png\?raw=true\)/)
+  assert.match(section, /\[r\]\(https:\/\/example\.com\/r\)/)
+})
+
+test('a retried iteration reuses the evidence it already published when only the slice push failed', async () => {
+  const f = await feature()
+  const { ana, origin } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  // The same screenshot on the retry (reuse checks the bytes).
+  const shots = { name: 'shots', collect: ({ out }) => { writeFileSync(join(out, 'after.png'), 'png'); return { ok: true, files: [ { path: join(out, 'after.png'), name: 'after.png', kind: 'image', label: 'AC-1 after' } ], links: [], summary: '1 screenshot' } } }
+  const { publishAssets } = await import('../src/assets/publish.mjs')
+  let published = 0
+  const runIt = (...a) => main(a, () => ({ ...ana.ctx(), loadProviders: async () => [ shots ], publishAssets: (...x) => { published++; return publishAssets(...x) } }))
+  // The slice push fails once (the evidence goes from the assets repo, so it isn't affected).
+  const flag = join(ana.cwd, '..', `fail-push-${Date.now()}`)
+  writeFileSync(flag, '1')
+  writeFileSync(join(ana.cwd, '.git', 'hooks', 'pre-push'), `#!/bin/sh\n[ -f "${flag}" ] && { rm -f "${flag}"; echo "network down" >&2; exit 1; }\nexit 0\n`, { mode: 0o755 })
+  assert.equal((await runIt('slice', 'iterate', '1')).code, 2)
+  assert.equal(published, 1)
+  const first = origin('rev-parse', 'refs/heads/factory-foreman-assets/7')
+  const it = JSON.parse(ok(await runIt('slice', 'iterate', '1', '--json')).out)
+  assert.equal(published, 1)
+  assert.equal(it.iteration.evidence, first)
+  assert.equal(origin('rev-parse', 'refs/heads/factory-foreman-assets/7'), first)
 })

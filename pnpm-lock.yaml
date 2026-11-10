@@ -38,6 +38,8 @@ importers:
 
   packages/core: {}
 
+  packages/evidence-playwright: {}
+
 packages:
 
   '@cacheable/memory@2.2.0':

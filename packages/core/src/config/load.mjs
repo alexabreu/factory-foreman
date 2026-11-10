@@ -27,7 +27,7 @@ export const DEFAULTS = Object.freeze({
   // Each command reads its prompt on stdin. The second opinion comes from the
   // other vendor's model: Claude under Codex, Codex everywhere else.
   secondOpinion: { command: { codex: [ 'claude', '-p' ], default: [ 'codex', 'exec', '-' ] }, steps: [ 'design', 'verify' ] },
-  review: { headless: { command: [ 'codex', 'exec', '-' ] } },
+  review: { headless: { command: [ 'codex', 'exec', '-' ] }, maxRounds: 2 },
   capture: { claude: [ 'claude', '-p', '--model', 'haiku' ], codex: [ 'codex', 'exec', '-' ], minChars: 4000 },
   // No defaults for the AC tests: the files and runner are the repo's own choice.
   tests: { ac: { files: null, run: null, cwd: '.', timeout: 600_000 }, show: { files: null } },

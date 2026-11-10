@@ -79,6 +79,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "maxRounds": { "type": "integer", "minimum": 1, "description": "Review rounds a draft gets per version it builds on (default 2); after the last, the person settles what's left." },
         "headless": {
           "type": "object",
           "required": ["command"],
@@ -138,7 +139,7 @@
       "additionalProperties": false,
       "properties": {
         "reports": { "$ref": "#/$defs/globs" },
-        "providers": { "oneOf": [ { "type": "null" }, { "type": "array", "items": { "enum": ["playwright-video", "agent-browser"] } } ] }
+        "providers": { "description": "Evidence providers: \"agent-browser\" (built in) or package names resolved from the repo. Default: [\"agent-browser\"].", "oneOf": [ { "type": "null" }, { "type": "array", "items": { "type": "string", "minLength": 1 } } ] }
       }
     },
     "preview": {

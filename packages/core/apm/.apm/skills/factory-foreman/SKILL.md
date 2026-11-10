@@ -95,6 +95,15 @@ Checkpoint refuses a draft that hasn't been reviewed exactly as it is now.
 The review is saved against the draft's text as it is when you save, so make
 your changes before saving. Any edit afterwards needs a new review save.
 
+A draft gets at most two review rounds (`review.maxRounds`) per version it
+builds on. Round 1 briefs every reviewer. If settling it changed the draft,
+`review shape` again is round 2: it briefs only the reviewers whose findings
+caused the changes, on what changed; save round 2 with their findings only (the
+others carry over). There's no third round: after round 2, the person settles
+whatever is left (accepted, or overruled with their reason), or it becomes an
+open question (`note … --kind question`). Polish is never a reason to review
+again.
+
 ## Build the slices
 
 Once Shape and Design are approved, build the Design's slices in order, one

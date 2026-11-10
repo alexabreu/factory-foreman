@@ -14,7 +14,9 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pinnedUrl, publishAssets } from '../assets/publish.mjs'
 import { CONFIG_FILE, loadConfig } from '../config/load.mjs'
+import { evidenceSection, loadProviders } from '../evidence/providers.mjs'
 import { Refusal } from '../errors.mjs'
 import { isApproved } from '../issue/records.mjs'
 import { inert, setSection, updateBody } from '../issue/sections.mjs'
@@ -371,20 +373,62 @@ async function iterate(ctx, { positionals }) {
   const failed = checks.filter((c) => !c.ok)
   if (failed.length) throw new Refusal(`Light checks failed:\n${failed.map((c) => `  - ${c.name} (exit ${c.code}):\n${c.tail.replace(/^/gm, '      ')}`).join('\n')}`, { checks })
   const owned = await ownedNew(ctx, plan, slice.base.sha)
-  const gate = await (ctx.acGate ?? acGate)(ctx, { base: slice.base.sha, head: tip, tests: Object.keys(slice.tests.files), testsCommit: slice.tests.commit, owned, testIds: plan.testIds, acs: plan.acs, config })
-  if (!gate.ok) throw new Refusal(`The AC gate refused slice ${s} at ${short(tip)}:\n  - ${gate.problems.join('\n  - ')}`, { gate })
-  const scripts = []
-  for (const path of Object.keys(slice.tests.show)) scripts.push({ path, script: JSON.parse(await git(ctx, [ 'show', `${slice.tests.commit}:${path}` ], `Reading ${path}`)) })
-  const shows = scripts.length ? await (ctx.replayShow ?? replayShowScripts)(ctx, { scripts, preview: config.preview, cwd: top }) : []
-  const unshown = shows.filter((r) => !r.ok)
-  if (unshown.length) throw new Refusal(`Show scripts don't replay at ${short(tip)}:\n${unshown.map((r) => `  - ${r.path} (${r.ac}) stops at step ${r.failed.step}: ${r.failed.error}`).join('\n')}`, { shows })
+  if (Object.keys(slice.tests.show).length && !config.preview) throw new Refusal('Slice ' + s + ' has show scripts, which replay against the running app: set preview in factory-foreman.config.json, for example { "start": ["npm", "run", "dev"], "url": "http://localhost:5173" }.')
+  const providers = await (ctx.loadProviders ?? loadProviders)(config, top)
+  const evidenceDir = mkdtempSync(join(tmpdir(), 'ffv-'))
+  try {
+    const gate = await (ctx.acGate ?? acGate)(ctx, { base: slice.base.sha, head: tip, tests: Object.keys(slice.tests.files), testsCommit: slice.tests.commit, owned, testIds: plan.testIds, acs: plan.acs, config, providers, evidenceDir, slice })
+    if (!gate.ok) throw new Refusal(`The AC gate refused slice ${s} at ${short(tip)}:\n  - ${gate.problems.join('\n  - ')}`, { gate })
+    // Show scripts must replay at head. The agent-browser provider does that
+    // (with screenshots); without it they're replayed here as a plain check.
+    let shows = []
+    if (!providers.some((p) => p.name === 'agent-browser')) {
+      const scripts = []
+      for (const path of Object.keys(slice.tests.show)) scripts.push({ path, script: JSON.parse(await git(ctx, [ 'show', `${slice.tests.commit}:${path}` ], `Reading ${path}`)) })
+      shows = scripts.length ? await (ctx.replayShow ?? replayShowScripts)(ctx, { scripts, preview: config.preview, cwd: top }) : []
+      const unshown = shows.filter((r) => !r.ok)
+      if (unshown.length) throw new Refusal(`Show scripts don't replay at ${short(tip)}:\n${unshown.map((r) => `  - ${r.path} (${r.ac}) stops at step ${r.failed.step}: ${r.failed.error}`).join('\n')}`, { shows })
+    }
+    const evidence = [ ...(gate.evidence ?? []) ]
+    for (const p of providers.filter((x) => !x.headRun)) {
+      // Each provider writes into a folder of its own.
+      const out = join(evidenceDir, p.name.replace(/[^\w.-]/g, '-'))
+      mkdirSync(out, { recursive: true })
+      evidence.push({ name: p.name, ...(await p.collect({ ctx, slice, base: slice.base.sha, head: tip, config, top, cwd: top, out })) })
+    }
+    const unwell = evidence.filter((e) => !e.ok)
+    if (unwell.length) throw new Refusal(`Evidence for slice ${s} at ${short(tip)} isn't right:\n${unwell.map((e) => `  - ${e.name}: ${e.summary}`).join('\n')}`, { evidence })
+    return await pushIteration(ctx, { n, s, slice, tip, github, config, reviewers, checks, gate, shows, evidence, changed, lines, warnings })
+  } finally {
+    rmSync(evidenceDir, { recursive: true, force: true })
+  }
+}
+
+// Publishes the evidence, pushes the slice, posts the iteration and tags it.
+async function pushIteration(ctx, { n, s, slice, tip, github, config, reviewers, checks, gate, shows, evidence, changed, lines, warnings }) {
+  const k = (slice.iterations?.length ?? 0) + 1
+  // Evidence first, on the assets branch under slices/<n>/iter-<k>/, so the
+  // comment can link it pinned; a failure stops before the slice is pushed.
+  const files = evidence.flatMap((e) => e.files.map((f) => ({ ...f, published: `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-') })))
+  const folder = `slices/${s}/iter-${k}`
+  // A retry of this same head and iteration (the slice push failed after the
+  // evidence went up) reuses that commit instead of publishing it again.
+  const pendingFile = join(ctx.stateDir(), `evidence-slice-${s}.json`)
+  let pending = null
+  try { pending = JSON.parse(readFileSync(pendingFile, 'utf8')) } catch { /* none */ }
+  // Reused only when it's exactly these files, byte for byte.
+  const digests = Object.fromEntries(files.map((f) => [ f.published, sha256(readFileSync(f.path)) ]))
+  const reuse = pending?.head === tip && pending?.k === k && pending.repo === github.repo && files.length && files.length === Object.keys(pending.files ?? {}).length && files.every((f) => pending.files[f.published] === digests[f.published])
+  const published = !files.length ? null : reuse
+    ? { commit: pending.commit, branch: pending.branch, url: (name) => pinnedUrl(github.repo, pending.commit, `${folder}/${name}`) }
+    : await (ctx.publishAssets ?? publishAssets)(ctx, { n, folder, files: files.map((f) => ({ name: f.published, path: f.path })), message: `Evidence for slice ${s}, iteration ${k} (#${n})`, what: 'the evidence' })
+  if (published && !reuse) writeFileSync(pendingFile, `${JSON.stringify({ head: tip, k, repo: github.repo, commit: published.commit, branch: published.branch, files: digests })}\n`)
 
   // Push, record, then tag: a rerun on the same commit only re-tags.
   await git(ctx, [ 'push', '--quiet', 'origin', `HEAD:refs/heads/${slice.branch}` ], `Pushing ${slice.branch}`)
-  const k = (slice.iterations?.length ?? 0) + 1
   const tag = iterationTag(n, s, k)
   const runs = await github.runsFor(tip)
-  const iteration = { k, head: tip, tag, lines, at: ctx.now().toISOString() }
+  const iteration = { k, head: tip, tag, lines, at: ctx.now().toISOString(), ...(published ? { evidence: published.commit } : {}) }
   const updated = writeSlice(ctx.stateDir(), { ...slice, iterations: [ ...(slice.iterations ?? []), iteration ] })
   const text = [
     `**Iteration ${k}** of slice ${s} at ${short(tip)} (\`${tag}\`).`,
@@ -392,14 +436,16 @@ async function iterate(ctx, { positionals }) {
     `- Light checks: ${checks.length ? checks.map((c) => `${c.name} ${c.skipped ? 'skipped' : 'passed'}`).join(', ') : 'none configured'}.`,
     `- AC gate: ${gate.base.length} test(s) fail at base ${short(slice.base.sha)} for the right reason (${[ ...new Set(gate.base.map((b) => b.kind)) ].join(', ')}); ${gate.head.length} pass at head.`,
     `- Code review: settled by ${reviewers.join(', ') || 'no reviewers configured'}.`,
-    `- Show scripts: ${shows.length ? `${shows.length} replay at head` : 'none'}.`,
+    `- Show scripts: ${!Object.keys(slice.tests.show).length ? 'none (no visual criteria)' : shows.length ? `${shows.length} replay at head` : 'replayed by agent-browser (below)'}.`,
     `- Diff: ${changed.length} file(s), ${lines} of ${config.budgets.sliceLines} lines.`,
     `- CI: ${runs.length ? runs.map((r) => `[${inert(r.name).replace(/[[\]]/g, '')}](${r.url})`).join(', ') : 'not started yet'}.`,
+    ...(evidence.length ? [ '', `**Evidence**${published ? ` (pinned at ${short(published.commit)} on ${published.branch})` : ''}:`, evidenceSection(evidence.map((e) => ({ ...e, summary: inert(e.summary ?? ''), files: e.files.map((f) => ({ ...f, label: inert(f.label), published: f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-') })) })), (name) => published.url(name)) ] : []),
   ].join('\n')
   await postSliceRecord(github, { issue: n, slice: updated, text })
+  rmSync(pendingFile, { force: true })
   await github.ensureTag(tag, tip)
   await updateChecklist(ctx, github, n)
-  return { out: [ ...warnings.map((w) => `Note: ${w}`), `Iteration ${k} of slice ${s} pushed at ${short(tip)} and tagged ${tag}.`, `When the PR is approved and CI is green, the person merges it: factory-foreman slice merge ${s}` ].join('\n'), json: { iteration, gate, checks, shows } }
+  return { out: [ ...warnings.map((w) => `Note: ${w}`), `Iteration ${k} of slice ${s} pushed at ${short(tip)} and tagged ${tag}.${files.length ? ` Evidence: ${files.length} file(s) on ${published.branch} at ${short(published.commit)}.` : ''}`, `When the PR is approved and CI is green, the person merges it: factory-foreman slice merge ${s}` ].join('\n'), json: { iteration, gate, checks, shows, evidence: evidence.map((e) => ({ name: e.name, ok: e.ok, summary: e.summary, files: e.files.map((f) => ({ label: f.label, kind: f.kind, url: published?.url(f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-')) })) })) } }
 }
 
 // ── merge (a person, in their own terminal) ─────────────────────────────────
