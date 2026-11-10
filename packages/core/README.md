@@ -69,6 +69,10 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
 
 ## Local state
 
-Drafts, saved reviews (`reviews/<step>-<hash>.json`), capture markers and the
-decision log live under `$(git rev-parse --git-common-dir)/factory-foreman/<issue>/`,
-shared by every worktree of a clone and never committed.
+Drafts live in the working tree at `.factory-foreman/<issue>/<step>.md`, which
+factory-foreman adds to the clone's `.git/info/exclude`: harnesses keep agents
+out of `.git`, and drafts are files the agent edits. Each worktree has its own
+drafts, and `git clean -x` deletes them. Saved reviews
+(`reviews/<step>-<hash>.json`), capture markers and the decision log are shared
+by every worktree of the clone, under
+`$(git rev-parse --git-common-dir)/factory-foreman/<issue>/`, and never committed.

@@ -11,7 +11,7 @@ import { main } from '../src/cli.mjs'
 import { DEFAULTS } from '../src/config/load.mjs'
 import { parseRecords } from '../src/issue/records.mjs'
 import { getSection } from '../src/issue/sections.mjs'
-import { draftPath, stateDir } from '../src/state/local.mjs'
+import { stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { fakeGitHub } from './fixtures/github.mjs'
 import { DESIGN, SHAPE } from './structure.test.mjs'
 
@@ -34,13 +34,13 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
     config: () => ({ ...structuredClone(DEFAULTS), reviewers: { shape: [], design: [] }, secondOpinion: null, ...config }),
     issue: () => 7,
     stateDir: () => stateDir(cwd, 7),
-    draftPath: (step) => draftPath(stateDir(cwd, 7), step),
+    draftPath: (step) => worktreeDraftPath(cwd, 7, step),
     author: () => login,
     github: () => world.as(login),
     prompt: async () => answer,
   })
   const run = (...argv) => main(argv, ctxFor)
-  return { cwd, run, ctx: ctxFor, draft: (step) => draftPath(stateDir(cwd, 7), step) }
+  return { cwd, run, ctx: ctxFor, draft: (step) => worktreeDraftPath(cwd, 7, step) }
 }
 
 const ctxOf = (dev) => dev.ctx()

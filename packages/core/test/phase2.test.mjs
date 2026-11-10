@@ -11,7 +11,7 @@ import { DEFAULTS } from '../src/config/load.mjs'
 import { isBotLogin, nextMinor, nextVersion, parseLabel, parseRecords, stepState, trustedRecords } from '../src/issue/records.mjs'
 import { checkSettlements, parseFindings, reviewersFor } from '../src/review/briefs.mjs'
 import { parseExtracted, transcriptText } from '../src/capture/extract.mjs'
-import { draftPath, readLog, stateDir } from '../src/state/local.mjs'
+import { readLog, stateDir, worktreeDraftPath } from '../src/state/local.mjs'
 import { parseDraft, structuralBlocks } from '../src/steps/structure.mjs'
 import { fakeGitHub } from './fixtures/github.mjs'
 import { DESIGN, SHAPE } from './structure.test.mjs'
@@ -32,13 +32,13 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
     config: () => ({ ...structuredClone(DEFAULTS), ...REVIEWED, ...config }),
     issue: () => 7,
     stateDir: () => stateDir(cwd, 7),
-    draftPath: (step) => draftPath(stateDir(cwd, 7), step),
+    draftPath: (step) => worktreeDraftPath(cwd, 7, step),
     author: () => login,
     github: () => world.as(login),
     prompt: async () => answer,
     exec: async (argv, opts) => { calls.push({ argv, opts }); return exec ? exec(argv, opts) : { code: 0, stdout: '[]', stderr: '' } },
   })
-  return { cwd, calls, run: (...argv) => main(argv, ctx), draft: (step) => draftPath(stateDir(cwd, 7), step), dir: () => stateDir(cwd, 7) }
+  return { cwd, calls, run: (...argv) => main(argv, ctx), draft: (step) => worktreeDraftPath(cwd, 7, step), dir: () => stateDir(cwd, 7) }
 }
 
 function writeDraft(file, body) {
@@ -403,7 +403,7 @@ function ctxFrom(owner, capturer) {
     config: () => ({ ...structuredClone(DEFAULTS), ...REVIEWED }),
     issue: () => 7,
     stateDir: () => stateDir(cwd, 7),
-    draftPath: (step) => draftPath(stateDir(cwd, 7), step),
+    draftPath: (step) => worktreeDraftPath(cwd, 7, step),
     author: () => 'ana',
     github: () => null,
     exec: async (argv, opts) => { capturer.calls.push({ argv, opts }); return { code: 0, stdout: JSON.stringify([ { kind: 'decision', text: 'Syncing is out of scope', step: 'shape' }, { kind: 'rejected', text: 'Sharing lists', step: 'shape' }, { kind: 'question', text: 'Do we need export?', step: null, blocking: true } ]), stderr: '' } },
@@ -560,4 +560,32 @@ test('harness detection: the innermost harness wins when one was started from an
   assert.equal(detectHarness({ CODEX_HOME: '/x' }), 'terminal')
   assert.equal(agentShell({ env: {}, isTTY: true }), null)
   assert.equal(detectHarness({}), 'terminal')
+})
+
+test('drafts live in the working tree under .factory-foreman, excluded from git', async () => {
+  const { worktreeDraftPath } = await import('../src/state/local.mjs')
+  const cwd = mkdtempSync(join(tmpdir(), 'ff-draftdir-'))
+  execFileSync('git', [ 'init', '-q' ], { cwd })
+  const sub = join(cwd, 'src')
+  execFileSync('mkdir', [ '-p', sub ])
+  const file = worktreeDraftPath(sub, 7, 'shape')
+  assert.equal(file, join(execFileSync('git', [ 'rev-parse', '--show-toplevel' ], { cwd, encoding: 'utf8' }).trim(), '.factory-foreman', '7', 'shape.md'))
+  writeFileSync(file, 'draft')
+  worktreeDraftPath(cwd, 7, 'design')
+  const exclude = readFileSync(join(cwd, '.git', 'info', 'exclude'), 'utf8')
+  assert.equal(exclude.split('\n').filter((l) => l === '/.factory-foreman/').length, 1, 'added once')
+  assert.equal(execFileSync('git', [ 'status', '--porcelain', '--untracked-files=all' ], { cwd, encoding: 'utf8' }), '', 'never shows as a change')
+  // A linked worktree gets its own drafts, excluded through the shared exclude file.
+  execFileSync('git', [ '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init' ], { cwd })
+  const linked = join(cwd, '..', `${cwd.split('/').pop()}-wt`)
+  execFileSync('git', [ 'worktree', 'add', '-q', linked ], { cwd })
+  writeFileSync(worktreeDraftPath(linked, 7, 'shape'), 'linked draft')
+  assert.equal(execFileSync('git', [ 'status', '--porcelain', '--untracked-files=all' ], { cwd: linked, encoding: 'utf8' }), '')
+  // A draft from before drafts moved out of .git is moved over.
+  const { gitCommonDir } = await import('../src/state/local.mjs')
+  const old = join(gitCommonDir(cwd), 'factory-foreman', '8', 'drafts')
+  execFileSync('mkdir', [ '-p', old ])
+  writeFileSync(join(old, 'design.md'), 'old draft')
+  assert.equal(readFileSync(worktreeDraftPath(cwd, 8, 'design'), 'utf8'), 'old draft')
+  assert.ok(!existsSync(join(old, 'design.md')))
 })

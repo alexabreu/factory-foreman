@@ -108,5 +108,6 @@ open blocking questions.
 
 A refusal exits with code 2 and says what is missing. Fix that and rerun. Don't
 work around a refusal by editing files under `.git/factory-foreman/`, the issue
-body or its comments. A hook stops your shell from running approve, slice merge,
+body or its comments. The only state file you edit is the draft under
+`.factory-foreman/`; never commit it. A hook stops your shell from running approve, slice merge,
 or a pull request review or merge; those are for the person.

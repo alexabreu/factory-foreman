@@ -17,7 +17,7 @@ import { loadConfig } from './config/load.mjs'
 import { Refusal } from './errors.mjs'
 import { appTokens, readApp } from './github/app.mjs'
 import { createGitHub, ghRunner } from './github/gh.mjs'
-import { detectHarness, draftPath, gitCommonDir, stateDir } from './state/local.mjs'
+import { detectHarness, gitCommonDir, stateDir, worktreeDraftPath } from './state/local.mjs'
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
@@ -77,7 +77,7 @@ export function context({ cwd = process.cwd(), env = process.env, flags = {} } =
     config: once(() => loadConfig(root())),
     issue,
     stateDir: once(() => stateDir(cwd, issue())),
-    draftPath: (step) => draftPath(stateDir(cwd, issue()), step),
+    draftPath: (step) => worktreeDraftPath(cwd, issue(), step),
     author: () => git(cwd, [ 'config', 'user.name' ]) || env.USER || 'unknown',
     github,
     // Runs a command with no shell, collecting its output; stopped after `timeout` ms.

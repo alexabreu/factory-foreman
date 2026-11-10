@@ -17,11 +17,41 @@ export function gitCommonDir(cwd) {
 
 export function stateDir(cwd, issue) {
   const dir = join(gitCommonDir(cwd), 'factory-foreman', String(issue))
-  mkdirSync(join(dir, 'drafts'), { recursive: true })
+  mkdirSync(dir, { recursive: true })
   return dir
 }
 
-export const draftPath = (dir, step) => join(dir, 'drafts', `${step}.md`)
+// Drafts are files an agent edits, and harnesses keep agents out of .git, so
+// they live in the working tree under .factory-foreman/<issue>/, which is
+// added to the clone's .git/info/exclude and never committed.
+export function worktreeDraftPath(cwd, issue, step) {
+  const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: [ 'ignore', 'pipe', 'ignore' ] }).trim()
+  let root
+  let exclude
+  try {
+    root = git([ 'rev-parse', '--show-toplevel' ])
+    exclude = resolve(cwd, git([ 'rev-parse', '--git-path', 'info/exclude' ]))
+  } catch {
+    throw new Refusal(`${cwd} is not inside a git work tree; drafts need one.`)
+  }
+  const line = '/.factory-foreman/'
+  try {
+    const current = existsSync(exclude) ? readFileSync(exclude, 'utf8') : ''
+    if (!current.split(/\r?\n/).includes(line)) {
+      mkdirSync(join(exclude, '..'), { recursive: true })
+      appendFileSync(exclude, `${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`)
+    }
+  } catch (error) {
+    throw new Refusal(`Can't add ${line} to ${exclude}: ${error.message}`)
+  }
+  const dir = join(root, '.factory-foreman', String(issue))
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, `${step}.md`)
+  // A draft started before drafts moved out of .git comes along, not lost.
+  const old = join(gitCommonDir(cwd), 'factory-foreman', String(issue), 'drafts', `${step}.md`)
+  if (!existsSync(file) && existsSync(old)) renameSync(old, file)
+  return file
+}
 
 export const KINDS = [ 'decision', 'rejected', 'question' ]
 
