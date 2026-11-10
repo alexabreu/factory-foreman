@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/alexabreu/factory-foreman/factory-foreman.config.schema.json",
+  "title": "factory-foreman.config.json",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "extends": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "baseBranch": { "type": "string", "minLength": 1 },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "requireSecondApprover": { "type": "boolean" } }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "words": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lead": { "type": "integer", "minimum": 1 },
+            "shape": { "type": "integer", "minimum": 1 },
+            "design": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "sliceLines": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "stackDepth": { "type": "integer", "minimum": 1 },
+    "sharedFiles": { "$ref": "#/$defs/globs" },
+    "publicEntries": { "$ref": "#/$defs/globs" },
+    "reviewers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shape": { "$ref": "#/$defs/names" },
+        "design": { "$ref": "#/$defs/names" },
+        "slice": { "$ref": "#/$defs/names" },
+        "verify": { "$ref": "#/$defs/names" }
+      }
+    },
+    "secondOpinion": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["command", "steps"],
+          "additionalProperties": false,
+          "properties": {
+            "command": { "$ref": "#/$defs/argv" },
+            "steps": { "$ref": "#/$defs/names" }
+          }
+        }
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tiers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "slice": { "type": "array", "items": { "$ref": "#/$defs/check" } },
+            "verify": { "const": "ci" }
+          }
+        },
+        "plugins": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reports": { "$ref": "#/$defs/globs" },
+        "providers": { "oneOf": [ { "type": "null" }, { "type": "array", "items": { "enum": ["playwright-video", "agent-browser"] } } ] }
+      }
+    },
+    "preview": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["start", "url"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "$ref": "#/$defs/argv" },
+            "url": { "type": "string", "pattern": "^https?://" },
+            "ready": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "specSnapshot": { "type": ["string", "null"] },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tracked": { "type": "string", "minLength": 1 },
+        "light": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": { "type": "string", "minLength": 1 },
+        "judge": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "required": ["command"], "additionalProperties": false, "properties": { "command": { "$ref": "#/$defs/argv" } } }
+          ]
+        },
+        "maxDrop": { "type": "number", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "globs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "names": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "check": {
+      "type": "object",
+      "required": ["name", "run"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "run": { "$ref": "#/$defs/argv" },
+        "when": { "type": "string", "pattern": "^(always|changed:.+)$" }
+      }
+    }
+  }
+}
