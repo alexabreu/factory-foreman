@@ -58,6 +58,27 @@
         }
       ]
     },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headless": {
+          "type": "object",
+          "required": ["command"],
+          "additionalProperties": false,
+          "properties": { "command": { "$ref": "#/$defs/argv" } }
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claude": { "$ref": "#/$defs/argv" },
+        "codex": { "$ref": "#/$defs/argv" },
+        "minChars": { "type": "integer", "minimum": 0 }
+      }
+    },
     "checks": {
       "type": "object",
       "additionalProperties": false,

@@ -1,7 +1,7 @@
 // What every issue command reads first: the issue, its trusted records, and
 // each step's artifact with its full history.
 import { Refusal } from '../errors.mjs'
-import { byBot, hash, labelNumber, stepState, trustedRecords } from '../issue/records.mjs'
+import { byBot, hash, stepState, trustedRecords } from '../issue/records.mjs'
 
 export const STEPS = [ 'shape', 'design' ]
 export const title = (step) => step[0].toUpperCase() + step.slice(1)
@@ -21,11 +21,11 @@ export async function loadIssue(github, n, policy = {}) {
   const changelog = first('Changelog')
   // Every label the Changelog has ever named, in a version the App wrote,
   // counts towards the next one.
-  const logged = changelog ? (await github.history(n, changelog.number)).versions.filter((v) => byBot(v, github.botLogin)).flatMap((v) => [ ...String(v.body ?? '').matchAll(/^## (Shape|Design) (v\d+),/gm) ]) : []
+  const logged = changelog ? (await github.history(n, changelog.number)).versions.filter((v) => byBot(v, github.botLogin)).flatMap((v) => [ ...String(v.body ?? '').matchAll(/^## (Shape|Design) (v\d+(?:\.\d+)?),/gm) ]) : []
   const steps = {}
   for (const step of STEPS) {
     const state = stepState(records, step, { ...policy, comments, botLogin: github.botLogin })
-    state.highest.push(...logged.filter((m) => m[1] === title(step)).map((m) => labelNumber(m[2])))
+    state.highest.push(...logged.filter((m) => m[1] === title(step)).map((m) => m[2]))
     const number = state.latest?.artifact?.number ?? first(title(step))?.number
     const history = number ? await github.history(n, number) : { number: null, versions: [] }
     steps[step] = { ...state, artifact: history.number ? history : null, current: history.versions.at(-1) ?? null }

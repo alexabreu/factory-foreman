@@ -30,7 +30,8 @@ function developer(world, login, { env = {}, isTTY = false, answer = '', config 
     harness: env.CLAUDECODE ? 'claude-code' : 'terminal',
     isTTY,
     now: () => new Date(Date.parse('2026-11-10T12:00:00Z') + (minute++) * 60_000),
-    config: () => ({ ...structuredClone(DEFAULTS), ...config }),
+    // Phase 1's flow needs no review; the review tests turn reviewers on.
+    config: () => ({ ...structuredClone(DEFAULTS), reviewers: { shape: [], design: [] }, secondOpinion: null, ...config }),
     issue: () => 7,
     stateDir: () => stateDir(cwd, 7),
     draftPath: (step) => draftPath(stateDir(cwd, 7), step),
@@ -421,7 +422,7 @@ test('note checks --step and --slice, and -- ends the flags', async () => {
   const ana = developer(world, 'ana')
   assert.match((await ana.run('note', 'x', '--step', 'build')).err, /--step is shape or design/)
   assert.match((await ana.run('note', 'x', '--slice', 'abc')).err, /--slice is a slice number/)
-  assert.match((await ana.run('note', '--', '--kind', 'is text here')).out, /Noted decision: --kind is text here/)
+  assert.match((await ana.run('note', '--', '--kind', 'is text here')).out, /Noted decision \([0-9a-f]{8}\): --kind is text here/)
 })
 
 test('a Changelog write that lands just before ours, from the version we read, is kept', async () => {

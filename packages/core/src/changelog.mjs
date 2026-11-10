@@ -63,15 +63,21 @@ export function diffStats(diff) {
 const title = (step) => step[0].toUpperCase() + step.slice(1)
 
 // One line in the issue body's Changelog section.
-export function bodyLine({ step, version, date, author, diff }) {
+export function bodyLine({ step, version, date, author, diff, amend = null }) {
   const { added, removed } = diffStats(diff ?? '')
   const change = diff ? `+${added} −${removed} lines` : 'first version'
-  return `- ${date}: ${title(step)} ${version} by @${author} (${change})`
+  const kind = amend ? `, ${amend.minor ? 'minor' : 'material'} amendment` : ''
+  return `- ${date}: ${title(step)} ${version} by @${author} (${change}${kind})`
 }
 
 // One full entry in the Changelog artifact: the diff and how we got here.
-export function artifactEntry({ step, version, previous, date, author, harness, diff, notes = [] }) {
+// An amendment also says why, whether it was minor (wording only, keeps the
+// approval) or material (needs a new one), and which slices it affects.
+export function artifactEntry({ step, version, previous, date, author, harness, diff, notes = [], amend = null }) {
   const lines = [ `## ${title(step)} ${version}, ${date}`, '', `By @${author}${harness ? ` from ${harness}` : ''}.${previous ? ` Changes since ${previous}:` : ''}`, '' ]
+  if (amend) {
+    lines.push(`Amendment (${amend.minor ? `minor: wording only, keeps ${amend.carries}'s approval` : 'material: needs approval'}). Reason: ${amend.reason.replace(/\s+/g, ' ').trim()}`, '', `Affected slices: ${amend.slices?.length ? amend.slices.join(', ') : 'none'}.`, '')
+  }
   if (notes.length) {
     lines.push('How we got here:', '', ...notes.map((n) => `- ${n}`), '')
   }

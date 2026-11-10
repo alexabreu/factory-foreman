@@ -16,14 +16,19 @@ export function recordComment(visible, record) {
   return `${visible.trim()}\n\n<!-- factory-foreman:record ${JSON.stringify(record).replace(/--/g, '-\\u002d')} -->`
 }
 
-// True only when the version names the App as its actor: its exact login, or
-// the slug GraphQL uses for it when the actor is marked as a Bot. A person
-// can't register a login ending in [bot], but could take the bare slug.
+// True only for the App's own login: its exact REST form (`slug[bot]`), or the
+// bare slug GraphQL reports, and that only when the account is marked as a
+// Bot. A person can't register a login ending in [bot], but could take the
+// bare slug, so the bare form never counts without the Bot type.
+export const isBotLogin = (login, type, botLogin) => {
+  if (typeof login !== 'string' || typeof botLogin !== 'string' || !botLogin) return false
+  return login === botLogin || (type === 'Bot' && `${login}[bot]` === botLogin)
+}
+
+// True only when an artifact version names the App as its actor.
 export const byBot = (version, botLogin) => {
   const actor = version?.actor
-  const login = actor?.login ?? actor
-  if (typeof login !== 'string' || !botLogin) return false
-  return login === botLogin || (actor?.type === 'Bot' && `${login}[bot]` === botLogin)
+  return isBotLogin(actor?.login ?? actor, actor?.type, botLogin)
 }
 
 // An edited comment is never trusted: anyone with write access can edit
@@ -54,7 +59,7 @@ export async function trustedRecords(comments, { botLogin, permission, repo, iss
   }
   const trusted = []
   for (const r of records) {
-    if (r.type === 'checkpoint' && r.comment.login === botLogin) trusted.push(r)
+    if (r.type === 'checkpoint' && isBotLogin(r.comment.login, r.comment.type, botLogin)) trusted.push(r)
     else if (r.type === 'approval' && r.comment.type === 'User' && r.comment.login === r.approver && (await canWrite(r.approver))) trusted.push(r)
   }
   return trusted
@@ -76,27 +81,60 @@ export function stepState(records, step, { requireSecondApprover = false, commen
     return !(requireSecondApprover && r.approver === cp.author)
   })
   const approved = approvals.at(-1) ?? null
+  // A minor amendment (vN.M) keeps vN's approval: the approved checkpoint
+  // carries forward through the minors posted right after it, and stops at
+  // the first material version.
+  let approvedCheckpoint = approved ? byComment.get(approved.checkpoint) : null
+  if (approvedCheckpoint) {
+    for (const cp of checkpoints.slice(checkpoints.indexOf(approvedCheckpoint) + 1)) {
+      const parts = parseLabel(cp.version)
+      if (!cp.minor || cp.carries !== approved.version || !parts?.minor || `v${parts.major}` !== approved.version) break
+      approvedCheckpoint = cp
+    }
+  }
   // Every label this step has used in a comment the App posted, edited or
   // not, so numbering only ever goes up. Others' comments don't count, so
   // nobody can push the numbering to its end.
-  const highest = parseRecords(allComments, { includeEdited: true }).filter((r) => r.step === step && botLogin && r.comment.login === botLogin).map((r) => labelNumber(r.version))
-  return { checkpoints, latest: checkpoints.at(-1) ?? null, approved, approvedCheckpoint: approved ? byComment.get(approved.checkpoint) : null, highest: [ ...highest, ...checkpoints.map((c) => labelNumber(c.version)) ] }
+  const highest = parseRecords(allComments, { includeEdited: true }).filter((r) => r.step === step && isBotLogin(r.comment.login, r.comment.type, botLogin)).map((r) => r.version)
+  return { checkpoints, latest: checkpoints.at(-1) ?? null, approved, approvedCheckpoint, highest: [ ...highest, ...checkpoints.map((c) => c.version) ] }
 }
 
-// A label's number, or 0 when it isn't a plain v1 to v999999. Labels never
-// go past v999999 (nextVersion refuses), so a longer one is never ours.
+// A label is vN (a material version, approved on its own) or vN.M (a minor
+// amendment of vN, which keeps vN's approval). Anything else isn't ours.
+// Labels never go past 999999 (nextVersion refuses), so a longer one isn't either.
 const MAX_LABEL = 999999
-export const labelNumber = (label) => Number(String(label).match(/^v(\d{1,6})$/)?.[1] ?? 0)
+export function parseLabel(label) {
+  const m = String(label).match(/^v(\d{1,6})(?:\.(\d{1,6}))?$/)
+  if (!m) return null
+  const major = Number(m[1])
+  const minor = m[2] === undefined ? 0 : Number(m[2])
+  if (major < 1 || (m[2] !== undefined && minor < 1)) return null
+  return { major, minor }
+}
 
-// The next label is one past the highest ever posted, so a deleted or edited
-// checkpoint comment can't make a label repeat. loadIssue adds the labels the
-// Changelog artifact names, since its history outlives a deleted comment.
+// The highest major ever used, counting a vN.M as using vN.
+export const labelNumber = (label) => parseLabel(label)?.major ?? 0
+
+// The next material label is one past the highest major ever posted, so a
+// deleted or edited checkpoint comment can't make a label repeat. loadIssue
+// adds the labels the Changelog artifact names, since its history outlives a
+// deleted comment.
 export function nextVersion(state) {
-  const next = Math.max(0, ...state.highest) + 1
+  const next = Math.max(0, ...state.highest.map(labelNumber)) + 1
   if (next > MAX_LABEL) throw new Refusal(`Version labels have reached v${MAX_LABEL}, so a new one could repeat. Someone may have posted a record with a huge label; look through this issue's comments and Changelog.`)
   return `v${next}`
 }
 
-export const isApproved = (state) => Boolean(state.latest && state.approved && state.approved.checkpoint === state.latest.comment.id)
+// The next minor label of vN: one past the highest vN.M ever posted.
+export function nextMinor(state, major) {
+  const minors = state.highest.map(parseLabel).filter((p) => p && p.major === major).map((p) => p.minor)
+  const next = Math.max(0, ...minors) + 1
+  if (next > MAX_LABEL) throw new Refusal(`Minor labels of v${major} have reached v${major}.${MAX_LABEL}; checkpoint a new version instead.`)
+  return `v${major}.${next}`
+}
+
+// The latest version is approved: by its own approval, or as a minor
+// amendment that carries an approval forward.
+export const isApproved = (state) => Boolean(state.latest && state.approvedCheckpoint && state.approvedCheckpoint.comment.id === state.latest.comment.id)
 
 export const sameRepo = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase()

@@ -1,5 +1,5 @@
 import { Refusal } from '../errors.mjs'
-import { hash, recordComment } from '../issue/records.mjs'
+import { hash, isApproved, parseLabel, recordComment } from '../issue/records.mjs'
 import { addDecisionRows, inert, setSection, updateBody } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { parseDraft } from '../steps/structure.mjs'
@@ -14,7 +14,9 @@ const WRITE = new Set([ 'admin', 'maintain', 'write' ])
 export async function approve(ctx, { positionals }) {
   const step = requireStep(positionals[0])
   const version = positionals[1]
-  if (!/^v\d+(\.\d+)?$/.test(version ?? '')) throw new Refusal(`Name the version: factory-foreman approve ${step} v<N>.`)
+  const label = parseLabel(version ?? '')
+  if (!label) throw new Refusal(`Name the version: factory-foreman approve ${step} v<N>.`)
+  if (label.minor) throw new Refusal(`${version} is a minor amendment: it carries v${label.major}'s approval, so there is nothing to approve. A material change gets its own version (v<N>) to approve.`)
   const blocked = agentShell({ env: ctx.env, isTTY: ctx.isTTY })
   if (blocked) throw new Refusal(`approve must be run by a person in their own terminal, and ${blocked}.`)
 
@@ -26,7 +28,7 @@ export async function approve(ctx, { positionals }) {
   const info = state.steps[step]
   if (!info.latest) throw new Refusal(`${title(step)} has no posted version on #${n}.`)
   if (info.latest.version !== version) throw new Refusal(`${version} isn't the latest ${title(step)}; ${info.latest.version} is. Read it and approve that one.`)
-  if (info.approved && info.approved.checkpoint === info.latest.comment.id) throw new Refusal(`${title(step)} ${version} is already approved.`)
+  if (isApproved(info)) throw new Refusal(`${title(step)} ${version} is already approved.`)
   const current = info.current
   if (!current || current.version !== info.latest.artifact.version || hash(current.body) !== info.latest.hash) {
     throw new Refusal(`${title(step)} was changed on GitHub after ${version} was posted, so ${version} can't be approved as is. Checkpoint the change first.`)

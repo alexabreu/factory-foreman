@@ -2,7 +2,8 @@
 // dir so every worktree shares it and nothing is ever committed:
 //   $(git rev-parse --git-common-dir)/factory-foreman/<issue>/
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Refusal } from '../errors.mjs'
 
@@ -24,20 +25,60 @@ export const draftPath = (dir, step) => join(dir, 'drafts', `${step}.md`)
 
 export const KINDS = [ 'decision', 'rejected', 'question' ]
 
+// The log is append-only, so a hook and a command writing at once can't lose
+// each other's lines. Entries get a short id; keeping, editing or dropping one
+// appends an op ({ "op": "keep", "id": … }) that readLog applies in order.
+export const newId = () => randomBytes(4).toString('hex')
+
 export function appendLog(dir, entry) {
   appendFileSync(join(dir, 'log.jsonl'), `${JSON.stringify(entry)}\n`)
 }
 
-export function readLog(dir) {
+export const OPS = [ 'keep', 'drop', 'edit' ]
+
+export function readLog(dir, { includeDropped = false } = {}) {
   const file = join(dir, 'log.jsonl')
   if (!existsSync(file)) return []
-  return readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap((line) => {
+  const entries = []
+  const byId = new Map()
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!line) continue
+    let item
     try {
-      return [ JSON.parse(line) ]
+      item = JSON.parse(line)
     } catch {
-      return []
+      continue
     }
-  })
+    if (!item || typeof item !== 'object') continue
+    if (item.op) {
+      const target = byId.get(item.id)
+      if (!target) continue
+      if (item.op === 'keep') target.confirmed = true
+      else if (item.op === 'drop') target.dropped = true
+      else if (item.op === 'edit' && typeof item.text === 'string' && item.text.trim()) { target.text = item.text.trim(); target.confirmed = true }
+      continue
+    }
+    const entry = { ...item }
+    entries.push(entry)
+    if (typeof entry.id === 'string') byId.set(entry.id, entry)
+  }
+  return includeDropped ? entries : entries.filter((e) => !e.dropped)
+}
+
+// Where capture last stopped reading each session's transcript.
+export function readMarkers(dir) {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'capture.json'), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+export function writeMarkers(dir, markers) {
+  const file = join(dir, 'capture.json')
+  const tmp = `${file}.${process.pid}.tmp`
+  writeFileSync(tmp, `${JSON.stringify(markers, null, 2)}\n`)
+  renameSync(tmp, file)
 }
 
 // Which harness the command runs under, as best the environment tells.
