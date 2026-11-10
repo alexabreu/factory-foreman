@@ -15,47 +15,54 @@ const MAX_TEXT = 60_000
 // turn, so it waits until enough has been said.
 const FINAL_EVENTS = new Set([ 'SessionEnd', 'sessionEnd', 'PreCompact', 'preCompact' ])
 
-// Text the people and agents said, from a JSONL transcript (Claude Code and
-// Codex both write one object per line). Tool calls and their output are
-// skipped: decisions are in what was said, not in command output.
+// What was said, from a JSONL transcript (Claude Code and Codex both write one
+// object per line), as "PERSON:" and "AGENT:" turns. Tool calls and their
+// output are skipped: decisions are in what was said. Text a harness puts in
+// the user's role (environment blocks, project instructions, reminders, command
+// wrappers) isn't the person, and neither is a developer or system message.
+const INJECTED = /^\s*(<environment_context>|<user_instructions>|<system-reminder>|<command-(name|message|args)>|<local-command-std(out|err)>|# AGENTS\.md instructions|Caveat: The messages below)/
 export function transcriptText(chunk) {
   const out = []
-  const gather = (value, depth = 0) => {
+  const gather = (value, into, depth = 0) => {
     if (depth > 6 || value == null) return
-    if (typeof value === 'string') { out.push(value); return }
-    if (Array.isArray(value)) { value.forEach((v) => gather(v, depth + 1)); return }
+    if (typeof value === 'string') { into.push(value); return }
+    if (Array.isArray(value)) { value.forEach((v) => gather(v, into, depth + 1)); return }
     if (typeof value !== 'object') return
     if (/tool|function_call|reasoning/i.test(String(value.type ?? ''))) return
-    if (typeof value.text === 'string') out.push(value.text)
-    else if (value.content !== undefined) gather(value.content, depth + 1)
-    else if (value.message !== undefined) gather(value.message, depth + 1)
-    else if (value.payload !== undefined) gather(value.payload, depth + 1)
+    if (typeof value.text === 'string') into.push(value.text)
+    else if (value.content !== undefined) gather(value.content, into, depth + 1)
+    else if (value.message !== undefined) gather(value.message, into, depth + 1)
+    else if (value.payload !== undefined) gather(value.payload, into, depth + 1)
   }
   for (const line of chunk.split('\n')) {
     if (!line.trim()) continue
     try {
       const item = JSON.parse(line)
-      const role = item?.message?.role ?? item?.role ?? item?.payload?.role ?? item?.type
-      if (/^(system|tool)/i.test(String(role))) continue
-      const before = out.length
-      gather(item.message ?? item.payload ?? item)
-      if (out.length > before && /^(user|assistant)$/i.test(String(role))) out.splice(before, 0, `${role}:`)
+      const role = String(item?.message?.role ?? item?.role ?? item?.payload?.role ?? item?.type ?? '')
+      if (!/^(user|assistant)$/i.test(role)) continue
+      const said = []
+      gather(item.message ?? item.payload ?? item, said)
+      const text = said.filter((t) => t.trim() && !INJECTED.test(t)).join('\n').trim()
+      if (text) out.push(`${/^user$/i.test(role) ? 'PERSON' : 'AGENT'}: ${text}`)
     } catch {
       // A partial last line, or not JSON: skip it.
     }
   }
-  const text = out.join('\n').trim()
+  const text = out.join('\n\n').trim()
   return text.length > MAX_TEXT ? text.slice(-MAX_TEXT) : text
 }
 
+// Whether the person said anything in a stretch of transcript.
+export const personSpoke = (text) => /^PERSON: /m.test(text)
+
 export function extractionPrompt(text) {
-  return `Below is part of a conversation between a developer and a coding agent working on a feature.
-List the decisions made, the options considered and rejected, and the open questions, as JSON only:
+  return `Below is part of a conversation between a person and a coding agent working on a feature. Turns start with "PERSON:" or "AGENT:".
+List what the PERSON decided, ruled out, or asked that must be answered, as JSON only:
 [{ "kind": "decision|rejected|question", "text": "<one sentence, self-contained>", "step": "shape|design|null", "blocking": true|false }]
-Only include what was actually decided, rejected or asked by the people in it; skip routine steps and tool output.
-"step" is shape for what the feature must do, design for how it is built, null when unclear.
+Only the person's own turns are sources. Use the agent's turns only to understand what the person was answering or agreeing to: a person's "yes" to an agent's proposal is the person's decision, but anything the agent proposed, did, planned or concluded that the person didn't confirm is not a decision.
+Skip routine steps and tool output. "step" is shape for what the feature must do, design for how it is built, null when unclear.
 "blocking" is true only for a question that must be answered before the work can go on.
-Reply [] when there is nothing.
+Reply [] when the person decided, ruled out or asked nothing.
 
 <conversation>
 ${text}
@@ -127,6 +134,11 @@ async function capture(ctx, { dir, key, transcript, event }) {
     return { out: '', skipped: 'nothing new' }
   }
   if (!FINAL_EVENTS.has(event) && text.length < config.capture.minChars) return { out: '', skipped: 'not enough new text yet' }
+  // Nothing the person said: nothing to extract, however much the agent said.
+  if (!personSpoke(text)) {
+    advance()
+    return { out: '', skipped: 'the person said nothing new' }
+  }
 
   const command = ctx.harness === 'codex' ? config.capture.codex : config.capture.claude
   // Well inside the ten minutes after which another capture may take the claim over.

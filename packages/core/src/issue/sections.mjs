@@ -62,14 +62,10 @@ export const cell = (text) => String(text).replace(/</g, '&lt;').replace(/\|/g, 
 // comments, and no closing tag that would end the <details> around it.
 export const inert = (text) => String(text).replace(/<!--/g, '&lt;!--').replace(/<\/details>/gi, '&lt;/details>')
 
-export function addDecisionRows(body, rows) {
-  if (!rows.length) return body
-  const header = '## Decisions\n\n| Date | Decision | By | Step |\n| --- | --- | --- | --- |'
-  const current = getSection(body, 'decisions') ?? header
-  const have = new Set(current.split('\n').map((l) => l.replace(/\s+$/, '')))
-  const lines = rows.map((r) => `| ${cell(r.date)} | ${cell(r.text)} | ${cell(r.by)} | ${cell(r.step ?? '')} |`).filter((l) => !have.has(l))
-  if (!lines.length) return body
-  return setSection(body, 'decisions', `${current}\n${lines.join('\n')}`)
+// The body's Decisions section is one line: how many, and where they are.
+export function withDecisionsLine(body, count) {
+  if (!count) return body
+  return setSection(body, 'decisions', `## Decisions\n\n${count} decision${count === 1 ? '' : 's'} so far: see the Decisions artifact on this issue.`)
 }
 
 export function addChangelogLine(body, line) {

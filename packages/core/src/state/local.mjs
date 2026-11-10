@@ -179,6 +179,11 @@ const codexRuntime = (env) => [ 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_SA
 // (Claude Code included), as Codex marks both.
 export const inCodexSandbox = (env = process.env) => env.CODEX_SANDBOX !== undefined || env.CODEX_TOOL_CALL_ID !== undefined
 
+// A session with no person in it: a headless agent (claude -p and the SDK set
+// an "sdk-…" entrypoint; codex exec sets CODEX_CI) or CI. Notes extracted
+// there are left for a person to confirm.
+export const noPersonInLoop = (env = process.env) => /^sdk/.test(env.CLAUDE_CODE_ENTRYPOINT ?? '') || env.CODEX_CI !== undefined || /^(1|true)$/i.test(env.CI ?? '')
+
 export function detectHarness(env = process.env) {
   if (inCodex(env)) return 'codex'
   if (inClaude(env)) return 'claude-code'

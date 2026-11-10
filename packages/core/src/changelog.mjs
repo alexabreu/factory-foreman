@@ -73,14 +73,14 @@ export function bodyLine({ step, version, date, author, diff, amend = null }) {
 // One full entry in the Changelog artifact: the diff and how we got here.
 // An amendment also says why, whether it was minor (wording only, keeps the
 // approval) or material (needs a new one), and which slices it affects.
-export function artifactEntry({ step, version, previous, date, author, harness, diff, notes = [], amend = null }) {
+export function artifactEntry({ step, version, previous, date, author, harness, diff, decisions = 0, questions = [], amend = null }) {
   const lines = [ `## ${title(step)} ${version}, ${date}`, '', `By @${author}${harness ? ` from ${harness}` : ''}.${previous ? ` Changes since ${previous}:` : ''}`, '' ]
   if (amend) {
     lines.push(`Amendment (${amend.minor ? `minor: wording only, keeps ${amend.carries}'s approval` : 'material: needs approval'}). Reason: ${amend.reason.replace(/\s+/g, ' ').trim()}`, '', `Affected slices: ${amend.slices?.length ? amend.slices.join(', ') : 'none'}.`, '')
   }
-  if (notes.length) {
-    lines.push('How we got here:', '', ...notes.map((n) => `- ${n}`), '')
-  }
+  // Decisions are in the Decisions artifact; the Changelog only counts them.
+  if (decisions) lines.push(`${decisions} decision${decisions === 1 ? '' : 's'} added (see the Decisions artifact).`, '')
+  if (questions.length) lines.push('Open questions:', '', ...questions.map((q) => `- ${q}`), '')
   if (diff) lines.push('```diff', diff.trimEnd(), '```', '')
   return lines.join('\n')
 }

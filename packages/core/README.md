@@ -35,8 +35,12 @@ and says what is missing; any other error exits with code 1.
 
 ## Who posts what
 
-Factory output (the Shape, Design and Changelog artifacts, the records, the issue
-body) posts as the factory's GitHub App. Approvals post under the approver's own
+Factory output (the Shape, Design, Changelog and Decisions artifacts, the
+records, the issue body) posts as the factory's GitHub App. Decisions live only
+in the Decisions artifact, a table with a version per checkpoint and approval;
+the issue body just counts them and points there, and each Changelog entry says
+how many decisions its version added. A Decisions table an older version left in
+the body moves into the artifact the first time it's written. Approvals post under the approver's own
 `gh` login, so a person's login only carries their own words, and an approval
 counts only when it comes from the person it names and they have write access.
 
@@ -85,6 +89,12 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
   model (`capture.claude`, or `capture.codex` under Codex) for decisions,
   rejected options and questions, and logs them unconfirmed. `Stop` waits until
   `capture.minChars` of new text. It never blocks or fails a session.
+  Only what the person says is extracted (the agent's turns are context, and
+  text a harness injects isn't the person); a stretch with nothing from the
+  person makes no model call. In a session with no person in it (a headless
+  `claude -p`, `codex exec`, or CI), notes stay unconfirmed: `note
+  --keep/--edit/--drop` refuses there, and checkpoint posts without them and
+  names them for the person.
 
 ## Wireframes
 

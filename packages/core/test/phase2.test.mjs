@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { main } from '../src/cli.mjs'
+import { getSection } from '../src/issue/sections.mjs'
 import { CONFIG_FILE, DEFAULTS, loadConfig } from '../src/config/load.mjs'
 import { isBotLogin, nextMinor, nextVersion, parseLabel, parseRecords, stepState, trustedRecords } from '../src/issue/records.mjs'
 import { checkSettlements, parseFindings, reviewersFor, secondOpinionCommand } from '../src/review/briefs.mjs'
@@ -352,10 +353,12 @@ test('notes: keep, edit and drop extracted entries; checkpoint waits for them; o
 
   const posted = await ana.run('checkpoint', 'shape')
   assert.equal(posted.code, 0, posted.err)
-  const body = world.issues.get(7).body
-  assert.match(body, /Syncing is out of scope/)
-  assert.match(body, /Rejected: Sharing lists is for later/)
-  assert.doesNotMatch(body, /export/)
+  // Confirmed decisions go to the Decisions artifact; the body only counts them.
+  const decisions = world.issues.get(7).artifacts.find((a) => a.versions.at(-1).name === 'Decisions').versions.at(-1).body
+  assert.match(decisions, /Syncing is out of scope/)
+  assert.match(decisions, /Rejected: Sharing lists is for later/)
+  assert.doesNotMatch(decisions, /export/)
+  assert.match(getSection(world.issues.get(7).body, 'decisions'), /^## Decisions\n\n2 decisions so far: see the Decisions artifact on this issue\.$/)
 })
 
 test('capture: reads only what is new, waits on Stop for enough text, and never fails a session', async () => {
@@ -374,7 +377,7 @@ test('capture: reads only what is new, waits on Stop for enough text, and never 
   // SessionEnd reads it.
   assert.equal((await run('--event', 'SessionEnd')).code, 0)
   assert.equal(replies, 1)
-  assert.match(dev.calls[0].opts.input, /user:\nWe chose the checkbox\./)
+  assert.match(dev.calls[0].opts.input, /PERSON: We chose the checkbox\./)
   assert.deepEqual(dev.calls[0].argv, [ 'claude', '-p' ])
   assert.equal(dev.calls[0].opts.env.FACTORY_FOREMAN_CAPTURE, '1')
   // Nothing new: no model call.
@@ -414,10 +417,19 @@ test('transcripts: text from users and assistants, not tools or system lines', (
     '{"partial',
   ].join('\n')
   const text = transcriptText(chunk)
-  assert.match(text, /user:\nUse a select\./)
-  assert.match(text, /assistant:\nOK, a select\./)
+  assert.match(text, /^PERSON: Use a select\./m)
+  assert.match(text, /^AGENT: OK, a select\./m)
   assert.doesNotMatch(text, /secret|big output/)
   assert.deepEqual(parseExtracted('[{"kind":"question","text":" Export? ","blocking":true,"step":"x"},{"kind":"nope","text":"y"}]'), [ { kind: 'question', text: 'Export?', step: null, blocking: true } ])
+  // What a harness puts in the user's role isn't the person.
+  const injected = transcriptText([
+    JSON.stringify({ type: 'response_item', payload: { role: 'user', content: [ { type: 'input_text', text: '<environment_context>\n  <cwd>/x</cwd>' } ] } }),
+    JSON.stringify({ type: 'response_item', payload: { role: 'user', content: [ { type: 'input_text', text: '# AGENTS.md instructions\nRules' } ] } }),
+    JSON.stringify({ type: 'response_item', payload: { role: 'developer', content: [ { type: 'input_text', text: 'You are Codex' } ] } }),
+    JSON.stringify({ message: { role: 'user', content: '<system-reminder>be brief</system-reminder>' } }),
+    JSON.stringify({ message: { role: 'assistant', content: [ { type: 'text', text: 'I will refactor the list.' } ] } }),
+  ].join('\n'))
+  assert.equal(injected, 'AGENT: I will refactor the list.')
 })
 
 test('status lists open blocking questions and slices', async () => {
@@ -1009,4 +1021,41 @@ test('review rounds: a reviewer new since round 1 gets a full brief; nothing cha
   // Printed again, the new reviewer's brief is still the full one.
   const again = JSON.parse((await main([ 'review', 'shape', '--json' ], () => ({ ...bob.ctx(), config: () => ({ ...structuredClone(DEFAULTS), ...REVIEWED, reviewers: { shape: [ 'test-verification-engineer', 'product-engineer' ], design: [] } }) }))).out)
   assert.deepEqual(again.briefs.map((b) => b.brief), r2.briefs.map((b) => b.brief))
+})
+
+test('capture: an agent-only stretch makes no model call; with no person in the session, notes are left for the person', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7, '')
+  let calls = 0
+  const exec = () => { calls++; return { code: 0, stdout: '[{"kind":"decision","text":"Use a select","step":"shape"}]', stderr: '' } }
+  const dev = developer(world, 'ana', { exec, config: { capture: { claude: [ 'claude', '-p' ], codex: [ 'codex', 'exec' ], minChars: 10 } } })
+  const transcript = join(dev.cwd, 't.jsonl')
+  const say = (role, text) => `${JSON.stringify({ message: { role, content: text } })}\n`
+  // Only the agent talked: nothing to extract, and no model call.
+  writeFileSync(transcript, say('assistant', 'I decided to use a select and refactored the list into three modules.'))
+  assert.equal((await dev.run('note', '--extract', '--transcript', transcript, '--session', 's1', '--event', 'SessionEnd')).code, 0)
+  assert.equal(calls, 0)
+  // The person speaks: extracted, unconfirmed.
+  writeFileSync(transcript, `${readFileSync(transcript, 'utf8')}${say('user', 'Yes, a select.')}`)
+  assert.equal((await dev.run('note', '--extract', '--transcript', transcript, '--session', 's1', '--event', 'SessionEnd')).code, 0)
+  assert.equal(calls, 1)
+  const [ entry ] = readLog(dev.dir())
+  assert.equal(entry.confirmed, false)
+  // A headless agent (claude -p, codex exec) can't confirm it...
+  for (const env of [ { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }, { CODEX_CI: '1', CODEX_TOOL_CALL_ID: 'c' } ]) {
+    const r = await main([ 'note', '--keep', entry.id ], () => ({ ...dev.ctx(), env }))
+    assert.equal(r.code, 2)
+    assert.match(r.err, /the person's to keep, edit or drop, and this session has no person in it/)
+  }
+  // ...and its checkpoint posts without it and names it for the person.
+  await dev.run('draft', 'shape')
+  writeDraft(dev.draft('shape'), SHAPE)
+  const env = { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }
+  const posted = await main([ 'checkpoint', 'shape' ], () => ({ ...dev.ctx(), env, config: () => ({ ...structuredClone(DEFAULTS), ...REVIEWED, reviewers: { shape: [], design: [] } }) }))
+  assert.equal(posted.code, 0, posted.err)
+  assert.match(posted.out, new RegExp(`Left for the person to keep, edit or drop \\(this session has no person in it\\): ${entry.id} \\[decision\\] Use a select`))
+  assert.match(world.issues.get(7).comments.at(-1).body, /1 extracted note from this session awaits the person's keep, edit or drop\./)
+  assert.equal(world.issues.get(7).artifacts.find((a) => a.versions.at(-1).name === 'Decisions'), undefined)
+  // With a person, the same checkpoint waits for them.
+  assert.equal(readLog(dev.dir()).find((e) => e.id === entry.id).confirmed, false)
 })

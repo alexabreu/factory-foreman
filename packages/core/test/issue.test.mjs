@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { byBot, hash, nextVersion, parseRecords, recordComment, stepState, trustedRecords } from '../src/issue/records.mjs'
-import { addChangelogLine, addDecisionRows, getSection, inert, setSection, updateBody } from '../src/issue/sections.mjs'
+import { addChangelogLine, getSection, inert, setSection, updateBody, withDecisionsLine } from '../src/issue/sections.mjs'
+import { decisionRow, tableRows, writeDecisions } from '../src/issue/decisions.mjs'
+import { fakeGitHub } from './fixtures/github.mjs'
 import { statusLine } from '../src/issue/status.mjs'
 
 test('sections keep the person\'s text and sit in a fixed order', () => {
@@ -19,9 +21,25 @@ test('sections keep the person\'s text and sit in a fixed order', () => {
   assert.equal(getSection('no markers', 'shape'), null)
 })
 
-test('decision rows escape pipes and newlines', () => {
-  const body = addDecisionRows('', [ { date: 'd', text: 'a | b\nc', by: '@x', step: 'Shape v1' } ])
-  assert.match(getSection(body, 'decisions'), /\| d \| a \\\| b c \| @x \| Shape v1 \|$/)
+test('decision rows escape pipes and newlines; the body only counts them', () => {
+  assert.equal(decisionRow({ date: 'd', text: 'a | b\nc', by: '@x', step: 'Shape v1' }), '| d | a \\| b c | @x | Shape v1 |')
+  assert.equal(getSection(withDecisionsLine('', 1), 'decisions'), '## Decisions\n\n1 decision so far: see the Decisions artifact on this issue.')
+  assert.equal(withDecisionsLine('x', 0), 'x')
+})
+
+test('the Decisions artifact keeps every row any App version held, and takes over an old body table', async () => {
+  const world = fakeGitHub()
+  world.addIssue(7, '')
+  const gh = world.as('ana')
+  const old = setSection('', 'decisions', '## Decisions\n\n| Date | Decision | By | Step |\n| --- | --- | --- | --- |\n| d0 | Old one | @x | Shape v1 |')
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd1', text: 'First', by: '@a', step: 'Shape v2' } ], { body: old }), 2)
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd2', text: 'Second', by: '@a', step: 'Design v1' } ]), 3)
+  // A row someone dropped by hand (a non-App version) comes back.
+  const a = world.issues.get(7).artifacts[0]
+  a.versions.push({ version: a.versions.length + 1, name: 'Decisions', body: '# Decisions\n\n| Date | Decision | By | Step |\n| --- | --- | --- | --- |\n| d2 | Second | @a | Design v1 |', createdAt: 'x', actor: { login: 'mallory' } })
+  assert.equal(await writeDecisions(gh, 7, []), 3)
+  assert.deepEqual(tableRows(a.versions.at(-1).body), [ '| d0 | Old one | @x | Shape v1 |', '| d1 | First | @a | Shape v2 |', '| d2 | Second | @a | Design v1 |' ])
+  assert.equal(world.issues.get(7).artifacts.length, 1)
 })
 
 test('a record survives a "--" in its text and round-trips', () => {
@@ -66,8 +84,7 @@ test('a second approver is enforced when reading records, not only when approvin
 })
 
 test('table cells and inserted draft text can\'t open markers or close details', () => {
-  const body = addDecisionRows('', [ { date: 'd', text: '<!-- factory-foreman:status -->', by: '@x' } ])
-  assert.equal(body.match(/<!-- factory-foreman:status -->/g), null)
+  assert.equal(decisionRow({ date: 'd', text: '<!-- factory-foreman:status -->', by: '@x' }).match(/<!-- factory-foreman:status -->/g), null)
   assert.equal(inert('a <!-- b --> </details> c'), 'a &lt;!-- b --> &lt;/details> c')
 })
 
