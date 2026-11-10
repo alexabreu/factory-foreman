@@ -554,5 +554,10 @@ test('harness detection: the innermost harness wins when one was started from an
   assert.equal(detectHarness({ CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', CODEX_THREAD_ID: 't', CODEX_TOOL_CALL_ID: 'c' }), 'codex')
   assert.equal(agentShell({ env: { CLAUDECODE: '1', CODEX_TOOL_CALL_ID: 'c' }, isTTY: true }), 'this is Codex\'s shell')
   assert.equal(detectHarness({ TERM_PROGRAM: 'vscode' }), 'vscode')
+  // Each Codex runtime variable alone still refuses; a person's CODEX_HOME doesn't.
+  for (const k of [ 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_SANDBOX', 'CODEX_SANDBOX_NETWORK_DISABLED', 'CODEX_CI', 'CODEX_TOOL_CALL_ID' ]) assert.ok(agentShell({ env: { [k]: '' }, isTTY: true }), k)
+  assert.equal(agentShell({ env: { CODEX_HOME: '/x' }, isTTY: true }), null)
+  assert.equal(detectHarness({ CODEX_HOME: '/x' }), 'terminal')
+  assert.equal(agentShell({ env: {}, isTTY: true }), null)
   assert.equal(detectHarness({}), 'terminal')
 })
