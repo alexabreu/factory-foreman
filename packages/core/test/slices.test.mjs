@@ -5,7 +5,7 @@
 // and head runs are real.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -450,6 +450,46 @@ test('chat approval: the hook\'s describe run writes a one-shot ticket; the allo
   assert.match(pr1.comments.at(-1).body, /Slice 1 merged.* \(confirmed in the chat\)/)
   // Replaying the used ticket is refused (the slice is merged too, which is refused first).
   assert.match((await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: again.nonce }).run('approve', 'slice', '1')).err, /isn't open|ticket is gone/)
+})
+
+test('relayed approval: with the person\'s own opt-in, an agent runs approve slice --relayed with what they were shown; it approves and merges', async () => {
+  const f = await feature()
+  const { ana, world } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  ok(await ana.run('slice', 'iterate', '1'))
+  const head = ana.g('rev-parse', 'HEAD')
+  const pr1 = [ ...world.issues.values() ].find((i) => i.pr?.head === 'factory-foreman/7-slice-1')
+  world.checks = new Map([ [ head, [ { name: 'CI', state: 'success' } ] ] ])
+  const home = mkdtempSync(join(tmpdir(), 'ff-home-'))
+  const agent = (env) => { const d = developer(world, 'ana', { isTTY: false }); const base = d.ctx; d.ctx = () => ({ ...base(), env: { CLAUDECODE: '1', FACTORY_FOREMAN_USER_DIR: home, ...env } }); d.run = (...argv) => main(argv, d.ctx); return d }
+  const relay = [ 'approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--expect', `approve:${head.slice(0, 7)}`, '--as', 'ana' ]
+  // Not without the person's own opt-in.
+  assert.match((await agent({}).run(...relay)).err, /from claude-app aren't turned on\. Only the person turns them on/)
+  // A settings file someone else could write doesn't count, nor a reserved channel name.
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'claude-app', 'terminal' ] } }), { mode: 0o666 })
+  chmodSync(join(home, 'config.json'), 0o666)
+  assert.match((await agent({}).run(...relay)).err, /aren't turned on/)
+  chmodSync(join(home, 'config.json'), 0o600)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'terminal:x', '--expect', `approve:${head.slice(0, 7)}`, '--as', 'ana')).err, /from terminal aren't turned on/)
+  // Not in CI, not with a chat ticket too, not for another action or approver.
+  assert.match((await agent({ CI: 'true' }).run(...relay)).err, /needs a person behind it/)
+  assert.match((await agent({ FACTORY_FOREMAN_ASK: 'a'.repeat(32) }).run(...relay)).err, /doesn't also carry a chat ticket/)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--expect', `merge:${head.slice(0, 7)}`, '--as', 'ana')).err, /asked to merge, not to approve/)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--expect', `approve:${head.slice(0, 7)}`, '--as', 'ben')).err, /it's @ana here/)
+  // Not for a channel they didn't list, not without what they were shown, not if it changed.
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'slack:x', '--expect', `approve:${head.slice(0, 7)}`, '--as', 'ana')).err, /from slack aren't turned on/)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--as', 'ana')).err, /Pass --expect/)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--expect', 'approve:deadbeef', '--as', 'ana')).err, /isn't what this would approve now/)
+  assert.equal(pr1.comments.filter((c) => c.login === 'ana').length, 0)
+  const done = ok(await agent({}).run(...relay))
+  assert.match(done.out, /Approved slice 1 .* Merged slice 1/)
+  assert.deepEqual(pr1.pr.merged, { sha: head, by: 'ana' })
+  const record = JSON.parse(pr1.comments.find((c) => c.login === 'ana').body.match(/record (\{.*\}) -->/)[1])
+  assert.deepEqual([ record.via, record.channel, record.ref ], [ 'relayed', 'claude-app', 'card-1' ])
+  assert.match(pr1.comments.at(-1).body, /\(confirmed in claude-app, as relayed by the agent\)/)
 })
 
 test('chat approval: a change between the prompt and the run is refused, and tickets expire', async () => {

@@ -508,7 +508,7 @@ export async function mergeChecks(ctx, github, n, s, { readOnly = false, approve
 
 // Merges a slice that passed mergeChecks (or records one merged on GitHub), then restacks.
 export async function finishMerge(ctx, github, n, s, { slice, pr, sha }, via = null) {
-  const how = via ? ` (confirmed ${via === 'claude-code-ask' ? 'in the chat' : 'in a terminal'})` : ''
+  const how = !via ? '' : ` (confirmed ${via === 'claude-code-ask' ? 'in the chat' : via === 'terminal' ? 'in a terminal' : `in ${via.replace(/^relayed:/, '')}, as relayed by the agent`})`
   if (pr.state === 'MERGED') {
     const merged = writeSlice(ctx.stateDir(), { ...slice, state: 'merged', merged: { sha, at: ctx.now().toISOString() } })
     await postSliceRecord(github, { issue: n, slice: merged, text: `**Slice ${s} merged** at ${short(sha)} into ${slice.base.branch} (merged on GitHub; checks confirmed)${how}.` })
@@ -537,9 +537,9 @@ async function merge(ctx, { positionals, flags = {}, argv = [] }) {
   const summary = pr.state === 'MERGED'
     ? `#${slice.pr} was merged on GitHub at ${short(sha)}, approved by @${approvers.join(', @')} with CI green.`
     : `Slice ${s} (#${slice.pr}) at ${short(sha)} into ${pr.baseRefName}, approved by @${approvers.join(', @')}, CI green (${checks.length} check(s)).`
-  const how = await confirm(ctx, { flags, argv, bind: `merge:${github.repo}:${n}:${s}:${slice.pr}:${sha}:${pr.baseRefName}:${pr.state}`, summary, question: pr.state === 'MERGED' ? `Record slice ${s} as merged?` : `Merge slice ${s}?`, no: pr.state === 'MERGED' ? 'Not recorded.' : 'Not merged.' })
+  const how = await confirm(ctx, { flags, argv, bind: `merge:${github.repo}:${n}:${s}:${slice.pr}:${sha}:${pr.baseRefName}:${pr.state}`, summary, question: pr.state === 'MERGED' ? `Record slice ${s} as merged?` : `Merge slice ${s}?`, action: 'merge', expect: sha, actor: flags.relayed !== undefined ? await github.viewer() : null, no: pr.state === 'MERGED' ? 'Not recorded.' : 'Not merged.' })
   if (how.describe) return how.describe
-  return finishMerge(ctx, github, n, s, ready, how.via)
+  return finishMerge(ctx, github, n, s, ready, how.channel ? `relayed:${how.channel}` : how.via)
 }
 
 // ── list ────────────────────────────────────────────────────────────────────

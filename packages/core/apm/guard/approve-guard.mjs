@@ -1,6 +1,6 @@
 // PreToolUse guard: an agent's shell may not approve, merge a slice, review or merge a pull request, or post a record; a
 // person does those in their own terminal. Reads the hook payload on stdin and denies (see decide). Zero deps. It stops honest mistakes, not determined ones.
-import { chatDecision } from './approve-ask.mjs'
+import { chatDecision, editedPaths, relayedAllowed, touchesOwnSettings } from './approve-ask.mjs'
 const SKIP = new Set([ 'env', 'command', 'exec', 'nohup', 'time', 'sudo', 'xargs', 'builtin', 'nice', 'timeout', 'watch', 'stdbuf', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', '}', '--' ])
 const SHELLS = new Set([ 'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish' ]); const base = (t) => t.split('/').pop()
 const VALUE = new Set([ '--issue', '--draft', '--kind', '--step', '--slice', '--findings', '--reason', '--transcript', '--session', '--event', '-R', '--repo' ])
@@ -55,7 +55,7 @@ const GH_WRITE = (t) => !t.some((w, i) => (/^(-X|--method)$/.test(w) && /^GET$/i
 export function verdict(command, depth = 0) {
   if (Array.isArray(command)) command = command.map((w) => (/^[\w./=:@%+,-]+$/.test(w) ? w : `'${String(w).replace(/'/g, "'\\''")}'`)).join(' ')
   if (typeof command !== 'string' || !command.trim() || depth > 4) return null
-  if (/FACTORY_FOREMAN_ASK|--ask-ticket/.test(command)) return 'factory-foreman\'s approval tickets are written and used by the approve hook alone.'
+  if (/FACTORY_FOREMAN_ASK|--ask-ticket|\.factory-foreman\/(config|asks)/.test(command)) return 'factory-foreman\'s approval tickets and the person\'s own settings are not the agent\'s to touch.'
   // Records come from factory-foreman itself: a terminal approval is only as strong as this.
   const nested = []; for (const words of lex(command, nested)) {
     const t = head(words)
@@ -86,7 +86,7 @@ const deny = (why, copilot, code = copilot ? 0 : 2) => ({ code, stderr: code ===
 export function decide(payload) {
   let command = payload?.tool_input?.command ?? payload?.toolInput?.command; const args = payload?.toolArgs
   if (command === undefined && args !== undefined) { try { command = (typeof args === 'string' ? JSON.parse(args) : args)?.command } catch { command = args } }
-  const reason = verdict(command); const chat = chatDecision(payload, command, reason, { lex }) // Claude Code asks the person in the chat
+  if (editedPaths(payload)) return touchesOwnSettings(payload) ? deny('The person\'s own factory-foreman settings aren\'t yours to write; ask them.', COPILOT(payload)) : null; if (relayedAllowed(command, { lex })) return null; const reason = verdict(command); const chat = chatDecision(payload, command, reason, { lex }) // relayed, or Claude Code asks in the chat
   return chat ? (chat.ask ? { code: 0, stdout: JSON.stringify(chat.ask) } : deny(chat.refuse, false)) : reason ? deny(`${reason} Ask the person to run it.`, COPILOT(payload)) : null
 }
 const UNREAD = 'The approve guard couldn\'t read this command, and it may approve or merge. Ask the person to run it.'

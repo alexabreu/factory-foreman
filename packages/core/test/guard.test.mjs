@@ -285,8 +285,8 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     assert.equal(JSON.parse(claude("factory-foreman approve design 'v2'").stdout).hookSpecificOutput.permissionDecision, 'ask')
     assert.equal(JSON.parse(claude('npx factory-foreman approve design v2').stdout).hookSpecificOutput.permissionDecision, 'ask')
     assert.match(claude('factory-foreman approve design v2', { turn_id: 't', model: 'gpt' }).stderr, /is for a person in their own terminal/)
-    assert.match(claude('factory-foreman approve design v2 --ask-ticket x').stderr, /tickets are written and used by the approve hook alone/)
-    assert.match(claude('FACTORY_FOREMAN_ASK=abc factory-foreman approve design v2').stderr, /tickets are written and used by the approve hook alone/)
+    assert.match(claude('factory-foreman approve design v2 --ask-ticket x').stderr, /approval tickets and the person's own settings are not the agent's to touch/)
+    assert.match(claude('FACTORY_FOREMAN_ASK=abc factory-foreman approve design v2').stderr, /approval tickets and the person's own settings are not the agent's to touch/)
     // A command carrying a live ticket is asked about again, never let through on its own.
     writeFileSync(join(asks, `${'b'.repeat(32)}.json`), JSON.stringify({ summary: 'Approve Design v2 on #1' }))
     const again = JSON.parse(claude(`FACTORY_FOREMAN_ASK=${'b'.repeat(32)} factory-foreman approve design v2`).stdout).hookSpecificOutput
@@ -303,5 +303,40 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     process.env.PATH = saved.PATH
     if (saved.CLAUDE_PROJECT_DIR === undefined) delete process.env.CLAUDE_PROJECT_DIR; else process.env.CLAUDE_PROJECT_DIR = saved.CLAUDE_PROJECT_DIR
     if (saved.FACTORY_FOREMAN_ASKS_DIR === undefined) delete process.env.FACTORY_FOREMAN_ASKS_DIR; else process.env.FACTORY_FOREMAN_ASKS_DIR = saved.FACTORY_FOREMAN_ASKS_DIR
+  }
+})
+
+test('a relayed approval goes through the guard only as one plain command, for a channel the person turned on; their settings are off limits', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ff-home-'))
+  const saved = process.env.FACTORY_FOREMAN_USER_DIR
+  process.env.FACTORY_FOREMAN_USER_DIR = home
+  try {
+    const cmd = 'factory-foreman approve slice 1 --issue 1 --relayed claude-app:card-1 --expect approve:8d6ac3c --as alexabreu'
+    assert.match(decide({ tool_input: { command: cmd } }).stderr, /is for a person/)
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'claude-app' ] } }))
+    assert.equal(decide({ tool_input: { command: cmd } }), null)
+    assert.equal(decide({ tool_input: { command: 'factory-foreman slice merge 1 --relayed=claude-app:c --expect=merge:8d6ac3c --as=@alexabreu' } }), null)
+    for (const bad of [
+      `${cmd} && gh pr merge 5`, 'factory-foreman approve slice 1 --relayed claude-app:card-1 --as a',
+      'factory-foreman approve slice 1 --relayed slack:x --expect approve:8d6ac3c --as a', 'factory-foreman approve slice 1 --relayed claude-app:c --expect "$X" --as a',
+      `PATH=/x ${cmd}`, `npx ${cmd}`, 'gh pr merge 5 --relayed claude-app:c --expect merge:8d6ac3c --as a',
+      `${cmd} --relayed slack:y`, 'factory-foreman approve slice 1 -- --relayed claude-app:c --expect approve:8d6ac3c --as a', `${cmd} *`,
+    ]) assert.equal(decide({ tool_input: { command: bad } }).code, 2, bad)
+    // The person's own settings and tickets aren't the agent's to write, by any tool.
+    assert.equal(decide({ tool_name: 'Write', tool_input: { file_path: join(home, 'config.json'), content: '{}' } }).code, 2)
+    assert.equal(decide({ tool_input: { command: 'echo {} > ~/.factory-foreman/config.json' } }).code, 2)
+    assert.equal(decide({ tool_name: 'Write', tool_input: { file_path: '/repo/src/a.ts', content: '' } }), null)
+    // Codex edits are patches: the paths count, not the text. A doc about approving is fine; the settings aren't.
+    const patch = (path) => ({ tool_name: 'apply_patch', cwd: '/repo', turn_id: 't', tool_input: { command: `*** Begin Patch\n*** Update File: ${path}\n@@\n factory-foreman approve slice 1\n+gh pr merge 5 and ~/.factory-foreman/config.json\n*** End Patch\n` } })
+    assert.equal(decide(patch('README.md')), null)
+    assert.equal(decide(patch(join(home, 'config.json'))).code, 2)
+    // Odd spellings of the same place still count.
+    if (process.platform === 'darwin') assert.equal(decide({ tool_name: 'Write', cwd: '/', tool_input: { file_path: join(home, 'CONFIG.json').replace(home, home.toUpperCase()), content: '' } }).code, 2)
+    assert.equal(decide({ tool_name: 'Edit', cwd: home, tool_input: { file_path: './config.json', old_string: 'a', new_string: 'b' } }).code, 2)
+    // The guard follows the CLI's rule: a reserved name doesn't count as a channel.
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'chat' ] } }))
+    assert.equal(decide({ tool_input: { command: 'factory-foreman approve slice 1 --relayed chat:c --expect approve:8d6ac3c --as a' } }).code, 2)
+  } finally {
+    if (saved === undefined) delete process.env.FACTORY_FOREMAN_USER_DIR; else process.env.FACTORY_FOREMAN_USER_DIR = saved
   }
 })

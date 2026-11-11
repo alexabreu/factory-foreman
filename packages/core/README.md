@@ -143,6 +143,35 @@ Codex can't do this yet: its hooks can't ask (an "ask" lets the command run),
 and its prompt rules can be answered by an automated reviewer or a remembered
 "approve for session". In Codex, approving stays in the person's own terminal.
 
+## Approving from elsewhere (relayed)
+
+A person can also approve in a place factory-foreman can't see, such as a
+decision card they tap in the Claude app. They turn this on themselves, in
+their own settings file `~/.factory-foreman/config.json` (outside any repo,
+theirs alone: a link, or a file others can write, doesn't count):
+
+    { "approvals": { "relay": ["claude-app"] } }
+
+An agent never writes that file; the approve hook refuses it if it tries.
+Then the agent that saw the person's tap runs, as one plain command:
+
+    factory-foreman approve slice 1 --relayed claude-app:<card id> --expect approve:<head shown> --as <login shown>
+
+(or `approve <step> v<N> … --expect approve:<the version's hash>`, or
+`slice merge <n> … --expect merge:<head>`). `--expect` is the action and what
+the card showed, `--as` who it said approves; if any of them no longer holds,
+it's refused. It's refused in CI and in runs marked as having no person. The
+approval is posted under the person's GitHub login with `"via": "relayed"`,
+the channel and the card's id, and a slice merges once CI is green. The
+approve hook lets exactly this form through for a channel that's on, and
+refuses every other approve or merge from an agent's shell.
+
+The trust here is plain: the agent attests that the person tapped. Nothing
+checks the tap itself, so a misbehaving agent could claim one. That's the same
+honest-agent bar as everything else that runs under the person's login (see
+Approving from the chat); the record names the channel and card, so an
+approval can be traced back to what the person saw.
+
 ## Wireframes
 
 A Design whose approved Shape has a visual criterion needs a wireframe for each
