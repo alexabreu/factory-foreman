@@ -1,15 +1,11 @@
-// PreToolUse guard: an agent's shell may not approve a checkpoint, merge a slice, or review or
-// merge a pull request; a person does those in their own terminal. Reads the hook payload on
-// stdin and denies (see decide). Zero deps. It stops honest mistakes, not determined ones.
+// PreToolUse guard: an agent's shell may not approve, merge a slice, review or merge a pull request, or post a record; a
+// person does those in their own terminal. Reads the hook payload on stdin and denies (see decide). Zero deps. It stops honest mistakes, not determined ones.
 const SKIP = new Set([ 'env', 'command', 'exec', 'nohup', 'time', 'sudo', 'xargs', 'builtin', 'nice', 'timeout', 'watch', 'stdbuf', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', '}', '--' ])
 const SHELLS = new Set([ 'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish' ]); const base = (t) => t.split('/').pop()
 const VALUE = new Set([ '--issue', '--draft', '--kind', '--step', '--slice', '--findings', '--reason', '--transcript', '--session', '--event', '-R', '--repo' ])
-// Value flags of each wrapper or runner, which count only right after it.
-const OWN = { sudo: [ '-u', '-g', '-C', '-h', '-p' ], timeout: [ '-s', '-k', '--signal', '--kill-after' ], nice: [ '-n' ], watch: [ '-n' ], exec: [ '-a' ], env: [ '-u', '--unset', '-C', '--chdir' ], npx: [ '-p', '--package' ], pnpm: [ '--filter', '-F', '-C', '--dir', '-w', '--workspace' ], yarn: [ 'workspace', '--cwd' ], npm: [ '--prefix', '-w', '--workspace' ], node: [ '-r', '--require', '--import', '--loader', '--env-file' ] }
-const RUNNERS = { npx: [], bunx: [], pnpx: [], pnpm: [ 'exec', 'dlx', 'run' ], yarn: [ 'exec', 'dlx', 'run' ], npm: [ 'exec', 'x', 'run' ], node: [], bun: [ 'x', 'run' ] }
-const MUTATION = /\b(addPullRequestReview|submitPullRequestReview|mergePullRequest|enablePullRequestAutoMerge|approvePullRequest)\b/i
-// Splits a command line into simple commands (lists of words) as a shell would, keeping quoted
-// text whole. Text a shell runs on its own ($(…), `…`, heredocs fed to a shell) goes to `nested`.
+const OWN = { sudo: [ '-u', '-g', '-C', '-h', '-p' ], timeout: [ '-s', '-k', '--signal', '--kill-after' ], nice: [ '-n' ], watch: [ '-n' ], exec: [ '-a' ], env: [ '-u', '--unset', '-C', '--chdir' ], npx: [ '-p', '--package' ], pnpm: [ '--filter', '-F', '-C', '--dir', '-w', '--workspace' ], yarn: [ 'workspace', '--cwd' ], npm: [ '--prefix', '-w', '--workspace' ], node: [ '-r', '--require', '--import', '--loader', '--env-file' ] } // value flags of each wrapper or runner, which count only right after it
+const RUNNERS = { npx: [], bunx: [], pnpx: [], pnpm: [ 'exec', 'dlx', 'run' ], yarn: [ 'exec', 'dlx', 'run' ], npm: [ 'exec', 'x', 'run' ], node: [], bun: [ 'x', 'run' ] }; const MUTATION = /\b(addPullRequestReview|submitPullRequestReview|mergePullRequest|enablePullRequestAutoMerge|approvePullRequest)\b/i
+// Splits a command line into simple commands as a shell would, quoted text whole; text a shell runs on its own ($(…), `…`, heredocs) goes to `nested`.
 export function lex(src, nested = []) {
   const cmds = [ [] ]
   let word = null
@@ -61,9 +57,10 @@ const GH_WRITE = (t) => !t.some((w, i) => (/^(-X|--method)$/.test(w) && /^GET$/i
 export function verdict(command, depth = 0) {
   if (Array.isArray(command)) command = command.map((w) => (/^[\w./=:@%+,-]+$/.test(w) ? w : `'${String(w).replace(/'/g, "'\\''")}'`)).join(' ')
   if (typeof command !== 'string' || !command.trim() || depth > 4) return null
+  // Records come from factory-foreman itself: a terminal approval is only as strong as this.
   const nested = []; for (const words of lex(command, nested)) {
     const t = head(words)
-    const name = base(t[0] ?? '')
+    const name = base(t[0] ?? '').replace(/^((?:@[^/]+\/)?[^@]+)@[^/]*$/, '$1')
     const c = t.findIndex((w) => /^-[a-z]*c[a-z]*$/.test(w))
     if (SHELLS.has(name) && c > 0) nested.push(t[c + 1] ?? '')
     if (name === 'eval') nested.push(t.slice(1).join(' '))
@@ -74,6 +71,9 @@ export function verdict(command, depth = 0) {
     if (name !== 'gh') continue
     const [ group, action, path ] = args(t.slice(1))
     if (group === 'pr' && (action === 'review' || action === 'merge')) return `gh pr ${action} is for a person in their own terminal.`
+    const opaque = nested.some((n) => !/^\s*cat\s+<<-?\s*['"]?\w+['"]?\s*\n/.test(n)); const hidden = (w) => /^(--body-file|--input|-F|--field)(=|$)|^-F./.test(w) || (opaque && w.includes('\uE000')) || /\$[A-Za-z_{]/.test(w) // text it can't see (a file, stdin, a variable, a command's output, not a heredoc) could hold a record
+    const comments = ((group === 'pr' || group === 'issue') && action === 'comment') || (group === 'api' && (/\bissues\/([^\s/]+\/)?comments\b/.test(t.join(' ')) && GH_WRITE(t) || (action === 'graphql' && /addComment/.test(t.join(' '))))); if (comments && (/factory-foreman:record/.test(command) || /factory-foreman:record/.test(t.join('')))) return 'Writing a factory-foreman record by hand is refused; records come from factory-foreman commands.'
+    if (comments && t.some(hidden)) return `A comment through gh ${group} whose text comes from a file, a variable or a command's output is refused, since it could hold a factory-foreman record; pass the text inline.`
     const graphql = action === 'graphql' && t.some((w) => MUTATION.test(w) || /^(-[fF])?query=(@|.*\uE000)|^--input/.test(w))
     if (group === 'api' && (graphql || (/\bpulls\/[^\s/]+\/(reviews|merge)\b/.test(t.join(' ')) && GH_WRITE(t)))) return `Writing pull request reviews or merges through gh api (${path ?? action}) is for a person in their own terminal.`
   }

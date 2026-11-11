@@ -4,6 +4,8 @@ import { writeDecisions } from '../issue/decisions.mjs'
 import { inert, setSection, updateBody, withDecisionsLine } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { parseDraft } from '../steps/structure.mjs'
+import { loadSlice } from '../slices/state.mjs'
+import { sliceNumber } from './slice.mjs'
 import { agentShell } from '../state/local.mjs'
 import { loadIssue, requireStep, title, today } from './common.mjs'
 
@@ -14,6 +16,7 @@ const WRITE = new Set([ 'admin', 'maintain', 'write' ])
 // question showing what is being approved, and posted
 // under the approver's own login.
 export async function approve(ctx, { positionals }) {
+  if (positionals[0] === 'slice') return approveSlice(ctx, positionals[1])
   const step = requireStep(positionals[0])
   const version = positionals[1]
   const label = parseLabel(version ?? '')
@@ -71,4 +74,37 @@ export async function approve(ctx, { positionals }) {
   }
   await updateBody(github, n, (b) => setSection(withDecisionsLine(setSection(b, step, section), count), 'status', statusLine(states)))
   return { out: `Approved ${title(step)} ${version} on #${n}.`, json: record, ...(warning ? { err: warning } : {}) }
+}
+
+// factory-foreman approve slice <k>
+// Approves the slice PR's current head for slice merge, for a person who
+// can't approve on GitHub because they opened the PR. Same terminal rules as
+// a step approval, posted under the approver's login on the slice PR, bound
+// to the head commit: a new commit needs a new approval.
+async function approveSlice(ctx, which) {
+  const k = sliceNumber(which, 'approve', 'approve slice')
+  const blocked = agentShell({ env: ctx.env, isTTY: ctx.isTTY })
+  if (blocked) throw new Refusal(`approve must be run by a person in their own terminal, and ${blocked}.`)
+  const n = ctx.issue()
+  const github = ctx.github()
+  const config = ctx.config()
+  if (config.approvals.requireSecondApprover) throw new Refusal(`This repo requires a second approver, so slice ${k} is approved in a GitHub review of its PR by someone other than its author.`)
+  await github.appReady()
+  const slice = await loadSlice(ctx, github, n, k)
+  if (!slice || slice.state !== 'open') throw new Refusal(`Slice ${k} isn't open.`)
+  const pr = await github.pr(slice.pr)
+  if (pr.state !== 'OPEN') throw new Refusal(`#${slice.pr} is ${String(pr.state).toLowerCase()}.`)
+  const sha = pr.headRefOid
+  const short = (x) => String(x).slice(0, 7)
+  const iteration = slice.iterations?.find((it) => it.head === sha)
+  if (!iteration) throw new Refusal(`#${slice.pr}'s head ${short(sha)} isn't an iteration: run factory-foreman slice iterate ${k} on it first.`)
+  const approver = await github.viewer()
+  if (!WRITE.has(await github.permission(approver))) throw new Refusal(`@${approver} needs write access to ${github.repo} to approve.`)
+  const answer = (await ctx.prompt(`Slice ${k} of #${n}: #${slice.pr} at ${short(sha)} (iteration ${iteration.k ?? slice.iterations.indexOf(iteration) + 1}). Read its diff and evidence first.\nApprove slice ${k} at ${short(sha)} as @${approver}? [y/N] `)).trim()
+  if (!/^(y|yes)$/i.test(answer)) throw new Refusal('Not approved.')
+  // A push while the person was reading moves the head: approve what they saw only.
+  if ((await github.pr(slice.pr)).headRefOid !== sha) throw new Refusal(`#${slice.pr} moved while you were confirming, so ${short(sha)} isn't its head any more. Read the new head and approve that.`)
+  const record = { type: 'slice-approval', repo: github.repo, issue: n, slice: k, pr: slice.pr, head: sha, approver, at: ctx.now().toISOString() }
+  await github.comment(slice.pr, recordComment(`Approved **slice ${k}** at ${short(sha)}.`, record), 'user')
+  return { out: `Approved slice ${k} (#${slice.pr}) at ${short(sha)}. Once CI is green: factory-foreman slice merge ${k}.`, json: record }
 }

@@ -25,6 +25,7 @@ capture and the approve guard work; slices and verify arrive in later phases.
 | `slice tests <n> [--save]` | Briefs the test-verification-engineer, then freezes the AC tests and show scripts it committed |
 | `slice review <n>` / `slice review save <n> --findings <file>` | Code review of the slice's head commit, settled like Shape and Design reviews |
 | `slice iterate [<n>]` | Light checks, the AC gate, the saved review and the show scripts; then pushes, tags and posts the iteration |
+| `approve slice <n>` | A person approves the slice PR's head from their own terminal, when they can't on GitHub because they opened it |
 | `slice merge <n>` | A person merges the slice from their own terminal once its PR is approved at the head and CI is green |
 | `slice list` | Each slice: state, PR, owner, iterations and pinned versions |
 | `status` | Each step's latest and approved version, open blocking questions, and slices (stale ones flagged) |
@@ -170,6 +171,17 @@ approval is a warning; once approved, slices pinned below it show as stale in
    on the PR.
 5. A person runs `slice merge <n>`: the PR must be approved at its head commit
    by someone with write access, CI green there, and the slices below merged.
+   GitHub won't let a PR's author approve it, so the person who opened the
+   slice PR can run `approve slice <n>` in their terminal instead: it posts an
+   approval of the head commit under their own login on the PR, and a new
+   commit needs a new one. With `approvals.requireSecondApprover`, only a
+   GitHub review by someone else counts.
+   A terminal approval is only as strong as the approve guard: the guard
+   refuses an agent posting a record by hand, or a PR comment whose text it
+   can't see (from a file, a variable or a command's output).
+   It stops an honest agent, not a determined one: a script, curl with the
+   person's token, or a GitHub MCP tool isn't seen. Isolating the agent's
+   credentials is the real fix, and it's deferred.
    It merges exactly that commit and retargets the slice above.
 
 The rules a slice is held to (tests, checks, budgets, `sharedFiles`,

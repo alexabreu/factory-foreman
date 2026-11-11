@@ -140,3 +140,18 @@ export function nextMinor(state, major) {
 export const isApproved = (state) => Boolean(state.latest && state.approvedCheckpoint && state.approvedCheckpoint.comment.id === state.latest.comment.id)
 
 export const sameRepo = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase()
+
+// Approvals of a slice's head recorded on its PR by `factory-foreman approve
+// slice`: a person can't approve their own PR on GitHub, so a solo maintainer
+// records it this way. Trusted like a step approval: unedited, posted by the
+// person it names, who has write access, for this repo, issue, slice, PR and
+// head commit. Returns the approvers' logins.
+export async function sliceApprovers(comments, { permission, repo, issue, slice, pr, head }) {
+  const logins = new Set()
+  for (const r of parseRecords(comments)) {
+    if (r.type !== 'slice-approval' || !sameRepo(r.repo, repo) || r.issue !== issue || r.slice !== slice || r.pr !== pr || r.head !== head) continue
+    if (r.comment.type !== 'User' || r.comment.login !== r.approver) continue
+    if (WRITE.has(await permission(r.approver))) logins.add(r.approver)
+  }
+  return [ ...logins ]
+}

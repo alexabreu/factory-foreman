@@ -18,7 +18,7 @@ import { pinnedUrl, publishAssets } from '../assets/publish.mjs'
 import { CONFIG_FILE, loadConfig } from '../config/load.mjs'
 import { evidenceSection, loadProviders } from '../evidence/providers.mjs'
 import { Refusal } from '../errors.mjs'
-import { isApproved } from '../issue/records.mjs'
+import { isApproved, sliceApprovers } from '../issue/records.mjs'
 import { inert, setSection, updateBody } from '../issue/sections.mjs'
 import { SEVERITIES, checkSettlements } from '../review/briefs.mjs'
 import { runChecks } from '../slices/checks.mjs'
@@ -35,8 +35,8 @@ import { approvedBody, loadIssue } from './common.mjs'
 const sha256 = (text) => createHash('sha256').update(text).digest('hex')
 const short = (sha) => String(sha).slice(0, 7)
 
-function sliceNumber(raw, sub) {
-  if (!/^[1-9]\d*$/.test(String(raw ?? ''))) throw new Refusal(`Name the slice: factory-foreman slice ${sub} <n>.`)
+export function sliceNumber(raw, sub, usage = `slice ${sub}`) {
+  if (!/^[1-9]\d*$/.test(String(raw ?? ''))) throw new Refusal(`Name the slice: factory-foreman ${usage} <n>.`)
   return Number(raw)
 }
 
@@ -494,7 +494,11 @@ async function merge(ctx, { positionals }) {
   if (blocking.length) throw new Refusal(`@${blocking.map((r) => r.login).join(', @')} requested changes on #${slice.pr}${where}.`)
   const approvers = []
   for (const r of latest.values()) if (r.state === 'APPROVED' && r.commit === sha && r.type !== 'Bot' && WRITE.has(await github.permission(r.login))) approvers.push(r.login)
-  if (!approvers.length) throw new Refusal(`#${slice.pr} isn't approved at its head ${short(sha)} by someone with write access. An approval of an earlier commit doesn't count${where}.`)
+  // GitHub won't let a PR's author approve it, so a person may approve the head
+  // with factory-foreman approve slice instead, unless a second approver is required.
+  const second = ctx.config().approvals.requireSecondApprover
+  if (!second) for (const login of await sliceApprovers(await github.comments(slice.pr), { permission: (l) => github.permission(l), repo: github.repo, issue: n, slice: s, pr: slice.pr, head: sha })) if (!approvers.includes(login)) approvers.push(login)
+  if (!approvers.length) throw new Refusal(`#${slice.pr} isn't approved at its head ${short(sha)} by someone with write access${second ? ' in a GitHub review (this repo requires a second approver)' : `: approve it on GitHub, or, if you opened it, run factory-foreman approve slice ${s} in your terminal`}. An approval of an earlier commit doesn't count${where}.`)
   const checks = await github.checksAt(sha)
   const red = checks.filter((c) => !GREEN.has(c.state))
   if (!checks.length) throw new Refusal(`No CI has reported on ${short(sha)} yet; merge once it's green${where}.`)

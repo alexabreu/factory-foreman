@@ -37,6 +37,7 @@ const HELP = `factory-foreman ${version}
   checkpoint <shape|design> [--draft <file>]
   amend <shape|design> --reason "<why>" [--draft <file>]
   approve <shape|design> v<N>          (a person, in their own terminal)
+  approve slice <n>                    approve a slice's head when you can't on GitHub (a person)
   slice open <n>                       cut the slice's branch and draft PR from the approved Design
   slice tests <n> [--save]             brief the AC tests, then freeze them
   slice review <n> | review save <n> --findings <file>
