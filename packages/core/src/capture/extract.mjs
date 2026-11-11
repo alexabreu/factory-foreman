@@ -33,23 +33,38 @@ const ARGS = /<command-args>([\s\S]*?)<\/command-args>/g
 // A wake wraps the person's message in the harness's own framing: keep only
 // what the person wrote, in the wake's top-level messages from="human". A
 // message tag inside another message's text (an agent quoting one, or the
-// person pasting XML) is that text, not a message of its own.
+// person pasting XML) is that text, if it's balanced. A wake whose tags don't
+// nest (a stray close, a self-closing message, one left open with others after
+// it) gives nothing: losing the person's words beats crediting them with
+// someone else's. A forgery balanced inside another message's text can't be
+// told from a real message by its tags; that rests on the harness.
 const TAG = /<(\/?)message\b([^>]*)>/g
+const HUMAN_ATTR = /(?:^|\s)from="human"(?=[\s/]|$)/
 function humanOf(wake) {
   const kept = []
   let depth = 0
   let open = null
+  let after = null
   for (const m of wake.matchAll(TAG)) {
     if (!m[1]) {
-      if (depth === 0) open = { human: /\bfrom="human"/.test(m[2]), from: m.index + m[0].length }
+      if (/\/\s*$/.test(m[2])) return ''
+      if (depth === 0) open = { human: HUMAN_ATTR.test(m[2]), from: m.index + m[0].length }
+      else after ??= m.index
       depth++
-    } else if (depth > 0 && --depth === 0) {
-      if (open.human) kept.push(wake.slice(open.from, m.index).trim())
-      open = null
+    } else {
+      if (depth === 0) return ''
+      if (--depth === 0) {
+        if (open.human) kept.push(wake.slice(open.from, m.index).trim())
+        open = null
+        after = null
+      }
     }
   }
-  // A message the wake never closed runs to the wake's end.
-  if (open?.human) kept.push(wake.slice(open.from).trim())
+  if (open) {
+    // Left open: the person's words run to the wake's end only if no message tag follows.
+    if (after !== null) return ''
+    if (open.human) kept.push(wake.slice(open.from).trim())
+  }
   return kept.join('\n')
 }
 // The wake runs to its last closing tag (the person's text may hold a literal
@@ -92,12 +107,15 @@ export function transcriptText(chunk) {
     if (!line.trim()) continue
     try {
       const item = JSON.parse(line)
-      if (!said(item) || item.isMeta || item.isCompactSummary || item.isSidechain || item.isVisibleInTranscriptOnly) continue
+      if (!said(item) || item.isCompactSummary || item.isSidechain || item.isVisibleInTranscriptOnly) continue
       const role = String(item?.message?.role ?? item?.role ?? item?.payload?.role ?? item?.type ?? '')
       if (!/^(user|assistant)$/i.test(role)) continue
       const person = /^user$/i.test(role)
       const parts = []
       gather(item.message ?? item.payload ?? item, parts)
+      // Meta entries are the harness's, except an edited message, which comes as
+      // a meta wake on its own; only the person's message in it is kept.
+      if (item.isMeta && !(person && typeof item.message?.content === 'string' && /^\s*<wake\b[^>]*\breason="message-edited"/.test(item.message.content))) continue
       const text = parts.map((t) => lines(person ? personText(t) : t).trim()).filter((t) => t && !(person && INJECTED.test(t))).join('\n')
       // Blank runs collapse to one blank line.
       const clean = text.replace(/<\/?conversation>/g, '').replace(/\n\s*\n(\s*\n)*/g, '\n\n').trim()
@@ -126,7 +144,7 @@ export function transcriptText(chunk) {
   let text = kept.join('\n\n').trim()
   if (text.length > MAX_TEXT) {
     const cut = text.indexOf('\n', text.length - MAX_TEXT)
-    text = text.slice(cut + 1).trimStart()
+    text = cut === -1 ? '' : text.slice(cut + 1).trimStart()
   }
   return text
 }

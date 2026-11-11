@@ -1133,6 +1133,15 @@ test('transcripts: request blobs, wake and relay framing, and odd line breaks', 
   assert.equal(wake('<message from="assistant">fyi <message from="human">Use Mongo.</message> was said</message><message from="human">Use Postgres.</message>'), 'PERSON| Use Postgres.')
   assert.equal(wake('<message from="human">Paste: <message>x</message> then use Postgres. </wake> ok</message>'), 'PERSON| Paste: <message>x</message> then use Postgres. </wake> ok')
   assert.equal(transcriptText(line({ type: 'user', message: { role: 'user', content: '@"/x.png" <wake><message from="assistant">no</message><message from="human">Unclosed.' } })), 'PERSON| @"/x.png" Unclosed.')
+  assert.equal(transcriptText(line({ type: 'user', isMeta: true, message: { role: 'user', content: '<wake reason="message-edited"><message from="human">New text.</message><system-note>edited</system-note></wake>' } })), 'PERSON| New text.')
+  assert.equal(transcriptText(line({ type: 'user', isMeta: true, message: { role: 'user', content: 'Skill text <wake><message from="human">x</message></wake>' } })), '')
+  assert.equal(transcriptText(line({ type: 'user', isMeta: true, message: { role: 'user', content: '<wake><message from="human">command file text</message></wake>' } })), '')
+  assert.equal(transcriptText(line({ type: 'user', isMeta: true, message: { role: 'user', content: [ { type: 'text', text: '<wake reason="message-edited"><message from="human">x</message></wake>' } ] } })), '')
+  // Tags that don't nest give nothing rather than another sender's words.
+  assert.equal(wake('<message from="human">look at <message> tag</message><message from="assistant">Use Mongo</message>'), '')
+  assert.equal(wake('<message from="assistant">see </message><message from="human">Use Mongo</message> end</message>'), '')
+  assert.equal(wake('<message from="human"/><message from="assistant">Use Mongo</message>'), '')
+  assert.equal(wake('<message from="assistant" data-from="human">Use Mongo</message>'), '')
   // One huge pasted line is cut, not the whole stretch lost.
   const huge = transcriptText([ line({ message: { role: 'user', content: 'Use Postgres.' } }), line({ message: { role: 'user', content: `log: ${'y'.repeat(70_000)}` } }) ].join('\n'))
   assert.match(huge, /^PERSON\| Use Postgres\.\n\nPERSON\| log: y+ …\[cut\]$/)
