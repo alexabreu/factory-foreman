@@ -326,6 +326,16 @@ test('a relayed approval goes through the guard only as one plain command, for a
     assert.equal(decide({ tool_name: 'Write', tool_input: { file_path: join(home, 'config.json'), content: '{}' } }).code, 2)
     assert.equal(decide({ tool_input: { command: 'echo {} > ~/.factory-foreman/config.json' } }).code, 2)
     assert.equal(decide({ tool_name: 'Write', tool_input: { file_path: '/repo/src/a.ts', content: '' } }), null)
+    // Codex edits are patches: the paths count, not the text. A doc about approving is fine; the settings aren't.
+    const patch = (path) => ({ tool_name: 'apply_patch', cwd: '/repo', turn_id: 't', tool_input: { command: `*** Begin Patch\n*** Update File: ${path}\n@@\n factory-foreman approve slice 1\n+gh pr merge 5 and ~/.factory-foreman/config.json\n*** End Patch\n` } })
+    assert.equal(decide(patch('README.md')), null)
+    assert.equal(decide(patch(join(home, 'config.json'))).code, 2)
+    // Odd spellings of the same place still count.
+    if (process.platform === 'darwin') assert.equal(decide({ tool_name: 'Write', cwd: '/', tool_input: { file_path: join(home, 'CONFIG.json').replace(home, home.toUpperCase()), content: '' } }).code, 2)
+    assert.equal(decide({ tool_name: 'Edit', cwd: home, tool_input: { file_path: './config.json', old_string: 'a', new_string: 'b' } }).code, 2)
+    // The guard follows the CLI's rule: a reserved name doesn't count as a channel.
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'chat' ] } }))
+    assert.equal(decide({ tool_input: { command: 'factory-foreman approve slice 1 --relayed chat:c --expect approve:8d6ac3c --as a' } }).code, 2)
   } finally {
     if (saved === undefined) delete process.env.FACTORY_FOREMAN_USER_DIR; else process.env.FACTORY_FOREMAN_USER_DIR = saved
   }

@@ -14,9 +14,9 @@
 // asking, so anything not plainly Claude Code is refused as before. So are
 // modes where Claude Code wouldn't ask.
 import { spawnSync } from 'node:child_process'
-import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
+import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 
 // Modes where Claude Code is known to ask the person. Auto mode is left out until a live
 // check shows its classifier never settles the hook's "ask" on the person's behalf.
@@ -102,15 +102,44 @@ export function chatDecision(payload, command, reason, { lex }) {
 // shown, and who approves, each once. Every other approve or merge from an
 // agent's shell is still refused, and so is an agent touching those settings.
 const userDir = () => process.env.FACTORY_FOREMAN_USER_DIR || join(homedir(), '.factory-foreman')
-const relayChannels = () => { try { const list = JSON.parse(readFileSync(join(userDir(), 'config.json'), 'utf8'))?.approvals?.relay; return Array.isArray(list) ? list : [] } catch { return [] } }
+// Mirrors the CLI's rule (src/approval/ask.mjs relayChannels): the person's own
+// file, not a link or writable by others, and no reserved names. The hook has
+// no dependencies, so the rule is repeated here and a test keeps the two equal.
+const RESERVED = new Set([ 'terminal', 'chat', 'claude-code-ask', 'relayed' ])
+const relayChannels = () => {
+  try {
+    const file = join(userDir(), 'config.json'); const st = lstatSync(file)
+    if (!st.isFile() || (st.mode & 0o022) || (process.getuid && st.uid !== process.getuid())) return []
+    const list = JSON.parse(readFileSync(file, 'utf8'))?.approvals?.relay
+    return Array.isArray(list) ? list.filter((c) => typeof c === 'string' && /^[\w-]{1,40}$/.test(c) && !RESERVED.has(c)) : []
+  } catch { return [] }
+}
 export function relayedAllowed(command, { lex }) {
   if (typeof command !== 'string' || !/^\s*factory-foreman\s/.test(command)) return false
   const args = plain(command, lex)
   if (!args || args.some((w) => w === '--' || /[*?[\]{}~]/.test(w))) return false
   if (!(args[0] === 'approve' || (args[0] === 'slice' && args[1] === 'merge'))) return false
-  const value = (flag) => { const at = args.flatMap((w, i) => (w === flag || w.startsWith(`${flag}=`) ? [ i ] : [])); return at.length !== 1 ? null : args[at[0]].includes('=') ? args[at[0]].slice(flag.length + 1) : args[at[0] + 1] ?? null }
+  const value = (flag) => { const at = args.flatMap((w, i) => (w === flag || w.startsWith(`${flag}=`) ? [ i ] : [])); const v = at.length !== 1 ? null : args[at[0]].includes('=') ? args[at[0]].slice(flag.length + 1) : args[at[0] + 1] ?? null; return v && !v.startsWith('-') ? v : null }
   const relay = /^([\w-]{1,40}):[\w.:-]{1,200}$/.exec(value('--relayed') ?? '')
   return Boolean(relay && /^(approve|merge):[0-9a-f]{7,64}$/i.test(value('--expect') ?? '') && /^@?[\w-]{1,39}$/.test(value('--as') ?? '') && relayChannels().includes(relay[1]))
 }
-// The person's own factory-foreman settings and tickets aren't the agent's to write.
-export const touchesOwnSettings = (payload) => { const f = String(payload?.tool_input?.file_path ?? payload?.tool_input?.notebook_path ?? ''); return Boolean(f) && [ `${userDir()}/`, `${homedir()}/.factory-foreman/`, '~/.factory-foreman/' ].some((d) => f.startsWith(d)) }
+// The person's own factory-foreman settings and tickets aren't the agent's to
+// write. A file edit is checked by its paths only: Claude Code's Write/Edit
+// carry file_path; Codex's apply_patch carries the patch in tool_input.command,
+// with the paths in its *** headers; Copilot's camelCase payload names path.
+const caseless = process.platform === 'darwin' || process.platform === 'win32'
+const real = (p) => { try { return realpathSync(p) } catch { return p } }
+const fold = (p) => (caseless ? p.toLowerCase() : p)
+export function editedPaths(payload) {
+  const name = String(payload?.tool_name ?? payload?.toolName ?? '')
+  const args = payload?.tool_input ?? payload?.toolInput ?? (typeof payload?.toolArgs === 'object' ? payload.toolArgs : null) ?? {}
+  if (name === 'apply_patch') return [ ...String(args.command ?? args.input ?? '').matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm) ].map((m) => (m[1] ?? m[2]).trim())
+  const one = args.file_path ?? args.notebook_path ?? args.path ?? args.filePath
+  return /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(name) || (one !== undefined && args.command === undefined) ? [ one ].filter(Boolean).map(String) : null
+}
+export const touchesOwnSettings = (payload) => {
+  const paths = editedPaths(payload)
+  if (!paths) return false
+  const roots = [ userDir(), join(homedir(), '.factory-foreman') ].flatMap((d) => [ d, real(d) ]).map((d) => fold(`${resolve(d)}/`))
+  return paths.some((f) => { const full = resolve(String(payload?.cwd ?? homedir()), f.replace(/^~(?=\/)/, homedir())); return [ full, real(full) ].some((p) => roots.some((r) => fold(`${p}/`).startsWith(r))) })
+}

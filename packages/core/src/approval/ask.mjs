@@ -40,27 +40,26 @@ const NOBODY = 'This session has no person in it to ask, so it can\'t approve or
 // record says so, with the channel and ref to trace it.
 // The person's own settings, outside any repo; FACTORY_FOREMAN_USER_DIR moves it (tests).
 export const userConfigFile = (env) => join(env.FACTORY_FOREMAN_USER_DIR || join(homedir(), '.factory-foreman'), 'config.json')
+// The settings, or why they're ignored.
 function userConfig(env) {
   const file = userConfigFile(env)
-  try {
-    // A file the person owns and nobody else can write; a link or a shared file doesn't count.
-    const st = lstatSync(file)
-    if (!st.isFile() || (st.mode & 0o022) || (process.getuid && st.uid !== process.getuid())) return {}
-    return JSON.parse(readFileSync(file, 'utf8'))
-  } catch {
-    return {}
-  }
+  let st
+  try { st = lstatSync(file) } catch { return { config: {} } }
+  // A file the person owns and nobody else can write; a link or a shared file doesn't count.
+  if (!st.isFile()) return { config: {}, why: `${file} is a link or not a plain file, so it's ignored` }
+  if ((st.mode & 0o022) || (process.getuid && st.uid !== process.getuid())) return { config: {}, why: `${file} can be written by someone other than you, so it's ignored` }
+  try { return { config: JSON.parse(readFileSync(file, 'utf8')) } } catch { return { config: {}, why: `${file} isn't valid JSON, so it's ignored` } }
 }
 // Channel names that would read as another way of confirming are reserved.
 const RESERVED = new Set([ 'terminal', 'chat', 'claude-code-ask', 'relayed' ])
-export const relayChannels = (env) => { const list = userConfig(env)?.approvals?.relay; return Array.isArray(list) ? list.filter((c) => typeof c === 'string' && /^[\w-]{1,40}$/.test(c) && !RESERVED.has(c)) : [] }
-const NOT_ON = (channel) => `Approvals relayed from ${channel} aren't turned on. Only the person turns them on, in their own settings; ask them. Don't create or change that file yourself.`
+export const relayChannels = (env) => { const list = userConfig(env).config?.approvals?.relay; return Array.isArray(list) ? list.filter((c) => typeof c === 'string' && /^[\w-]{1,40}$/.test(c) && !RESERVED.has(c)) : [] }
+const NOT_ON = (channel, env) => `Approvals relayed from ${channel} aren't turned on${userConfig(env).why ? ` (${userConfig(env).why})` : ''}. Only the person turns them on, in their own settings; ask them. Don't create or change that file yourself.`
 
 // A relayed run, checked: the channel is on, and the action, what was shown and who approves all still match.
 function relayed(ctx, { flags, action, expect, actor }) {
   const m = /^([\w-]{1,40}):([\w.:-]{1,200})$/.exec(typeof flags.relayed === 'string' ? flags.relayed : '')
   if (!m) throw new Refusal('Name the relay as --relayed <channel>:<ref>, for example --relayed claude-app:<the card\'s id>.')
-  if (!relayChannels(ctx.env).includes(m[1])) throw new Refusal(NOT_ON(m[1]))
+  if (!relayChannels(ctx.env).includes(m[1])) throw new Refusal(NOT_ON(m[1], ctx.env))
   const shown = /^(approve|merge):([0-9a-f]{7,64})$/i.exec(typeof flags.expect === 'string' ? flags.expect : '')
   if (!shown) throw new Refusal('Pass --expect <approve|merge>:<what the person was shown> (the version\'s hash or the head commit, at least 7 characters).')
   if (shown[1].toLowerCase() !== action) throw new Refusal(`The person was asked to ${shown[1]}, not to ${action}. Ask them about this.`)
@@ -78,9 +77,9 @@ function relayed(ctx, { flags, action, expect, actor }) {
 export function confirmPath(ctx, flags) {
   if (flags.relayed !== undefined) {
     const channel = String(flags.relayed).split(':')[0]
-    if (!relayChannels(ctx.env).includes(channel)) throw new Refusal(NOT_ON(channel))
+    if (!relayChannels(ctx.env).includes(channel)) throw new Refusal(NOT_ON(channel, ctx.env))
     if (flags['ask-ticket'] !== undefined || ctx.env.FACTORY_FOREMAN_ASK !== undefined) throw new Refusal('A relayed approval doesn\'t also carry a chat ticket.')
-    if (ctx.env.FACTORY_FOREMAN_NO_PERSON === '1' || /^(1|true)$/i.test(ctx.env.CI ?? '')) throw new Refusal('A relayed approval needs a person behind it, and this run is marked as having none.')
+    if (noPersonInLoop(ctx.env) && !/^sdk/.test(ctx.env.CLAUDE_CODE_ENTRYPOINT ?? '')) throw new Refusal('A relayed approval needs a person behind it, and this run is marked as having none.')
     return 'relayed'
   }
   if (flags['ask-ticket'] !== undefined) return 'describe'
