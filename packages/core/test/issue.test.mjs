@@ -42,6 +42,15 @@ test('the Decisions artifact keeps every row any App version held, and takes ove
   assert.equal(world.issues.get(7).artifacts.length, 1)
 })
 
+test('a decision written again (a retry after a write that partly landed) is one row; separators without the outer pipe are not rows', async () => {
+  const world = fakeGitHub()
+  world.addIssue(7, '')
+  const gh = world.as('ana')
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd1', text: 'Use a | pipe', by: '@a', step: 'Shape v1' } ]), 1)
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd2', text: 'Use a | pipe', by: '@a', step: 'Shape v2' } ]), 1)
+  assert.deepEqual(tableRows('| A | B |\n|---|---\n| x | y |'), [ '| x | y |' ])
+})
+
 test("two Decisions artifacts from a race: the first is the one, and the other's rows join it; separator variants aren't rows", async () => {
   const world = fakeGitHub()
   world.addIssue(7, '')

@@ -185,11 +185,14 @@ export const inCodexSandbox = (env = process.env) => env.CODEX_SANDBOX !== undef
 // A session with no person in it: a headless Claude agent (claude -p and the
 // SDK set an "sdk-…" entrypoint), CI, or a run an orchestrator marks with
 // FACTORY_FOREMAN_NO_PERSON=1 (codex exec sets nothing that interactive Codex
-// doesn't). FACTORY_FOREMAN_PERSON=1 says a person is there after all. Notes
-// there are left for a person to confirm.
+// doesn't). FACTORY_FOREMAN_PERSON=1 says a person is there after all (a
+// person running a CI-like shell), except under a headless Claude agent, which
+// could set it itself. Notes there are left for a person to confirm.
 export function noPersonInLoop(env = process.env) {
+  const headless = /^sdk/.test(env.CLAUDE_CODE_ENTRYPOINT ?? '')
+  if (headless) return true
   if (env.FACTORY_FOREMAN_PERSON === '1') return false
-  return env.FACTORY_FOREMAN_NO_PERSON === '1' || /^sdk/.test(env.CLAUDE_CODE_ENTRYPOINT ?? '') || /^(1|true)$/i.test(env.CI ?? '')
+  return env.FACTORY_FOREMAN_NO_PERSON === '1' || /^(1|true)$/i.test(env.CI ?? '')
 }
 
 export function detectHarness(env = process.env) {

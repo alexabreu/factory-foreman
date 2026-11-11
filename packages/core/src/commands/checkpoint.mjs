@@ -156,7 +156,8 @@ async function post(ctx, { step, file: given, amend: amending }) {
   }
 
   // 2. The changelog artifact, one full entry per version.
-  const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, decisions: notes.length, questions: entriesSince(readLog(ctx.stateDir()), info.latest?.at, step).filter((e) => e.confirmed && e.kind === 'question').map((e) => e.text), amend: amending })
+  const asked = entriesSince(readLog(ctx.stateDir()), info.latest?.at, step).filter((e) => e.confirmed && e.kind === 'question')
+  const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, decisions: notes.length, questions: asked.map((e) => e.text), amend: amending })
   // Another checkpoint may append at the same moment, from the same version,
   // and either write could drop the other's entry. So each write holds every
   // entry any App-written version has held, plus ours, and is checked again.
@@ -172,6 +173,8 @@ async function post(ctx, { step, file: given, amend: amending }) {
     if (i === 3) throw new Refusal(`The Changelog on #${n} kept changing, so ${title(step)} ${version}'s entry isn't in it. Checkpoint again.`)
     await github.editArtifact(n, changelog, `# Changelog\n\n${all.join('\n\n')}\n`, 'app')
   }
+  // The questions are in the Changelog now, so a deferred one isn't raised again.
+  for (const e of asked) appendLog(ctx.stateDir(), { op: 'posted', id: e.id, at: now.toISOString() })
 
   // 3. The record that makes the version count.
   const record = {

@@ -94,7 +94,8 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
   person makes no model call. A session has no person in it when it's a
   headless Claude agent (`claude -p` or the SDK), CI, or a run an orchestrator
   marks with `FACTORY_FOREMAN_NO_PERSON=1` (needed for `codex exec`, which looks
-  like interactive Codex); `FACTORY_FOREMAN_PERSON=1` says a person is there.
+  like interactive Codex); `FACTORY_FOREMAN_PERSON=1` says a person is there
+  (ignored under a headless Claude agent).
   There, capture doesn't run, notes written by hand stay unconfirmed, `note
   --keep/--edit/--drop` refuses, and checkpoint posts without the unconfirmed
   notes and names them in its comment. They're kept for the person: once kept,

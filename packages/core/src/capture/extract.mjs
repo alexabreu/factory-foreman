@@ -11,6 +11,8 @@ import { KINDS, appendLog, claimCapture, newId, noPersonInLoop, readLog, readMar
 
 // Enough for a long stretch of conversation, and well under any limit on stdin.
 const MAX_TEXT = 60_000
+// The most of a transcript read at once: the newest part of a very long one.
+const MAX_READ = 16 * 1024 * 1024
 // Events that end or compact a session read whatever is new; Stop fires every
 // turn, so it waits until enough has been said.
 const FINAL_EVENTS = new Set([ 'SessionEnd', 'sessionEnd', 'PreCompact', 'preCompact' ])
@@ -22,10 +24,27 @@ const FINAL_EVENTS = new Set([ 'SessionEnd', 'sessionEnd', 'PreCompact', 'preCom
 // Text a harness puts in the user's role isn't the person: meta, compaction
 // and side-chain entries, and injected blocks (reminders, environment and
 // project instructions, notifications, command wrappers), wherever they sit.
-const BLOCKS = /<(system-reminder|task-notification|environment_context|user_instructions|in-app-browser-context|external_codex_apps[\w-]*|send_user_message_question[\w-]*|bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|command-name|command-message)\b[^>]*>[\s\S]*?<\/\1>/g
+const BLOCKS = /<(system-reminder|task-notification|environment_context|user_instructions|in-app-browser-context|external_codex_apps[\w-]*|send_user_message_question[\w-]*|bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|command-name|command-message|relay|system-note|project_claude_message|skill-format|tools-used-before-summary)\b[^>]*>[\s\S]*?<\/\1>/g
+// Self-closing markers a harness adds.
+const MARKERS = /<(artifact-content-authored-by-others|skill-format)\b[^>]*\/>/g
 const ARGS = /<command-args>([\s\S]*?)<\/command-args>/g
+// A wake wraps the person's message in the harness's own framing: keep only
+// what the person wrote.
+const WAKE = /<wake\b[^>]*>([\s\S]*?)<\/wake>/g
+const HUMAN = /<message\b(?=[^>]*\bfrom="human")[^>]*>([\s\S]*?)<\/message>/g
 const INJECTED = /^\s*(# AGENTS\.md instructions|Caveat: The messages below|Base directory for this skill:|\[Request interrupted|\[structured-output-enforce\]|Tool loaded\.|Another Claude session sent a message|This session is being continued from a previous conversation|<wake\b|<relay\b|<environment_context|<user_instructions|<system-reminder)/
-const personText = (t) => t.replace(BLOCKS, '').replace(ARGS, '$1').trim()
+const humanOf = (wake) => [ ...wake.matchAll(HUMAN) ].map((m) => m[1].trim()).join('\n')
+const personText = (t) => t.replace(WAKE, (_, inner) => humanOf(inner)).replace(BLOCKS, '').replace(MARKERS, '').replace(ARGS, '$1').trim()
+// Line breaks of every kind become \n, so no line can hide another's label.
+const lines = (t) => t.replace(/\r\n?|[\u2028\u2029\u0085\v\f]/g, '\n')
+// Records that hold what was said: Claude Code's user and assistant lines, and
+// Codex's message items. Anything else (a request blob that repeats the whole
+// conversation, queue and state records) is skipped, whatever role it carries.
+const said = (item) => {
+  const type = item?.type
+  if (type === undefined || type === 'user' || type === 'assistant' || type === 'message') return true
+  return type === 'response_item' && (item.payload?.type === undefined || item.payload.type === 'message')
+}
 export function transcriptText(chunk) {
   const turns = []
   const gather = (value, into, depth = 0) => {
@@ -43,25 +62,41 @@ export function transcriptText(chunk) {
     if (!line.trim()) continue
     try {
       const item = JSON.parse(line)
-      if (item.isMeta || item.isCompactSummary || item.isSidechain || item.isVisibleInTranscriptOnly) continue
+      if (!said(item) || item.isMeta || item.isCompactSummary || item.isSidechain || item.isVisibleInTranscriptOnly) continue
       const role = String(item?.message?.role ?? item?.role ?? item?.payload?.role ?? item?.type ?? '')
       if (!/^(user|assistant)$/i.test(role)) continue
       const person = /^user$/i.test(role)
-      const said = []
-      gather(item.message ?? item.payload ?? item, said)
-      const text = said.map((t) => (person ? personText(t) : t.trim())).filter((t) => t && !(person && INJECTED.test(t))).join('\n').trim()
-      if (text) turns.push({ person, text: text.replace(/<\/?conversation>/g, '') })
+      const parts = []
+      gather(item.message ?? item.payload ?? item, parts)
+      const text = parts.map((t) => lines(person ? personText(t) : t).trim()).filter((t) => t && !(person && INJECTED.test(t))).join('\n')
+      // Blank runs collapse to one blank line.
+      const clean = text.replace(/<\/?conversation>/g, '').replace(/\n\s*\n(\s*\n)*/g, '\n\n').trim()
+      if (clean) turns.push({ person, text: clean })
     } catch {
       // A partial last line, or not JSON: skip it.
     }
   }
-  // Over the limit, the agent's turns go first, oldest first; the person's stay.
-  const render = (t) => t.text.split('\n').map((l) => `${t.person ? 'PERSON' : 'AGENT'}| ${l}`).join('\n')
-  let kept = turns
-  const size = () => kept.reduce((n, t) => n + t.text.length + 10, 0)
-  while (size() > MAX_TEXT && kept.some((t) => !t.person)) { const i = kept.findIndex((t) => !t.person); kept = [ ...kept.slice(0, i), ...kept.slice(i + 1) ] }
-  const text = kept.map(render).join('\n\n').trim()
-  return text.length > MAX_TEXT ? text.slice(-MAX_TEXT) : text
+  // Every line carries its label; blank lines stay blank.
+  const render = (t) => t.text.split('\n').map((l) => (l.trim() ? `${t.person ? 'PERSON' : 'AGENT'}| ${l}` : '')).join('\n')
+  const rendered = turns.map((t) => ({ person: t.person, text: render(t) }))
+  // Over the limit, the agent's turns go first, oldest first; then the person's
+  // oldest. A turn too long on its own keeps its last whole lines.
+  let total = rendered.reduce((n, t) => n + t.text.length + 2, 0)
+  const drop = new Set()
+  for (const pass of [ false, true ]) {
+    for (let i = 0; i < rendered.length && total > MAX_TEXT && rendered.length - drop.size > 1; i++) {
+      if (drop.has(i) || rendered[i].person !== pass) continue
+      drop.add(i)
+      total -= rendered[i].text.length + 2
+    }
+  }
+  const kept = rendered.filter((_, i) => !drop.has(i)).map((t) => t.text)
+  let text = kept.join('\n\n').trim()
+  if (text.length > MAX_TEXT) {
+    const cut = text.indexOf('\n', text.length - MAX_TEXT)
+    text = cut === -1 ? '' : text.slice(cut + 1)
+  }
+  return text
 }
 
 // Whether the person said anything in a stretch of transcript.
@@ -101,8 +136,12 @@ function readFrom(file, offset) {
   if (size <= offset) return { text: '', end: size < offset ? 0 : offset, size }
   const fd = openSync(file, 'r')
   try {
-    const buffer = Buffer.alloc(size - offset)
-    readSync(fd, buffer, 0, buffer.length, offset)
+    // Past the cap, read only the newest part, from its first whole line.
+    const start = Math.max(offset, size - MAX_READ)
+    let buffer = Buffer.alloc(size - start)
+    readSync(fd, buffer, 0, buffer.length, start)
+    if (start > offset) { const nl = buffer.indexOf(0x0a); buffer = nl === -1 ? Buffer.alloc(0) : buffer.subarray(nl + 1) }
+    offset = size - buffer.length
     // Stop at the last full line, so a line still being written is read next time.
     const lastNewline = buffer.lastIndexOf(0x0a)
     if (lastNewline === -1) return { text: '', end: offset, size }

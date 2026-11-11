@@ -18,13 +18,17 @@ export const decisionRow = (r) => `| ${cell(r.date)} | ${cell(r.text)} | ${cell(
 
 // Table rows (not the header or its rule) in a text, in order.
 // A table's header is the row right before its separator (|---|, |:--|, |--:|).
-const SEPARATOR = /^\|(\s*:?-+:?\s*\|)+$/
+const SEPARATOR = /^\|(\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?$/
 export function tableRows(text) {
   const lines = String(text ?? '').split('\n').map((l) => l.replace(/\s+$/, ''))
   return lines.filter((l, i) => /^\|/.test(l) && !SEPARATOR.test(l) && !SEPARATOR.test(lines[i + 1] ?? ''))
 }
 
 export const decisionsBody = (rows) => `# Decisions\n\n${HEADER}\n${rows.join('\n')}\n`
+
+// The decision a row records, so a row written again on another day or step
+// (a retry after a write that partly landed) isn't a second decision.
+const textOf = (row) => row.split(/(?<!\\)\|/)[2]?.trim() ?? row
 
 // Adds rows to the Decisions artifact; returns how many it holds.
 export async function writeDecisions(github, n, rows, { body = '' } = {}) {
@@ -35,21 +39,24 @@ export async function writeDecisions(github, n, rows, { body = '' } = {}) {
   let numbers = await named()
   if (!numbers.length) {
     if (!fresh.length && !legacy.length) return 0
-    await github.createArtifact(n, DECISIONS, decisionsBody([ ...new Set([ ...legacy, ...fresh ]) ]), 'app')
-    // Two writers may each have created one: the first is the one, and the other's rows join it.
-    numbers = await named()
+    const created = await github.createArtifact(n, DECISIONS, decisionsBody([ ...new Set([ ...legacy, ...fresh ]) ]), 'app')
+    // Two writers may each have created one: the first is the one, and the
+    // other's rows join it. A listing that doesn't show ours yet still has it.
+    numbers = [ ...new Set([ ...await named(), created ]) ].filter((k) => k != null).sort((a, b) => a - b)
   }
   const number = numbers[0]
+  // Another writer's duplicate artifact only gains rows while it's being created; read it once.
+  const others = []
+  for (const k of numbers.slice(1)) others.push(...(await github.history(n, k)).versions)
   for (let i = 0; ; i++) {
     const versions = (await github.history(n, number)).versions
     const all = []
-    for (const k of numbers) {
-      const vs = k === number ? versions : (await github.history(n, k)).versions
-      for (const v of vs.filter((v) => byBot(v, github.botLogin))) for (const r of tableRows(v.body)) if (!all.includes(r)) all.push(r)
-    }
-    for (const r of [ ...legacy, ...fresh ]) if (!all.includes(r)) all.push(r)
-    const latest = tableRows(versions.at(-1)?.body)
-    if (all.every((r) => latest.includes(r))) return all.length
+    const seen = new Set()
+    const add = (r) => { const t = textOf(r); if (!seen.has(t)) { seen.add(t); all.push(r) } }
+    for (const v of [ ...versions, ...others ].filter((v) => byBot(v, github.botLogin))) tableRows(v.body).forEach(add)
+    for (const r of [ ...legacy, ...fresh ]) add(r)
+    const latest = new Set(tableRows(versions.at(-1)?.body).map(textOf))
+    if (all.every((r) => latest.has(textOf(r)))) return all.length
     if (i === 3) throw new Refusal(`The ${DECISIONS} artifact on #${n} kept changing, so the new decisions aren't in it. Run the command again.`)
     await github.editArtifact(n, number, decisionsBody(all), 'app')
   }
