@@ -534,7 +534,7 @@ test('real reporters: Playwright and Vitest JUnit, and a Playwright run that sto
   assert.deepEqual(verdicts, {
     'x timeout in click': true, 'x timeout in expect': true, 'x timeout in expect existing': true, 'x multiline diff': true, 'x multiline diff new id after': true, 'x aria': true,
     'x screenshot existing': false, 'x screenshot new': true, 'x text array new': true, 'x poll': true, 'x toPass': true, 'x step': true, 'x two soft new': true,
-    'y hook hang': false, 'y hook goto': false, 'y toPass hang': true, 'before › z beforeEach new': true, 'after › z afterEach new only': true,
+    'y hook hang': false, 'y hook goto': false, 'y toPass hang': true, 'before › z beforeEach new': true, 'after › z afterEach new only': false,
   })
   // Hooks: a pending wait on the new id passes; a hang or throw elsewhere next to one doesn't.
   const hooks = Object.fromEntries([ 'q2', 'q5', 'q6' ].flatMap((f) => parseJUnit(fixture(`playwright-hooks-${f}.xml`)).map((c) => [ c.name, classify(c.text, { owned: [], testIds: [ 'item-remove' ], known }, c.type).ok ])))

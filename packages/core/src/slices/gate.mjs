@@ -105,10 +105,10 @@ export const waitedIds = (message) => waitsIn(message).flatMap((w) => chainIds(w
 // errors (a soft expect, then what ended the test), one inside an error. The
 // echo of the message's first line, and attachment and error-context notes,
 // aren't sections of their own.
-// Whether an error is the one a test timeout cut off: it repeats the timeout,
-// or, when the timeout hit an after hook (nothing runs after it), it's an
-// action that ended with the test.
-const pendingAfter = (timeout, next, ms) => next.includes(`Test timeout of ${ms}ms exceeded`) || (/while running "after(?:Each|All)" hook/.test(timeout) && /^\s*\w*Error: [^\n]*: Test ended\.\s*$/m.test(next))
+// Whether an error is the one a test timeout cut off: it repeats the timeout.
+// (An action that only "ended with the test" can't be told from one left
+// running beside a hang, so it isn't taken as the cut-off error.)
+const pendingAfter = (timeout, next, ms) => next.includes(`Test timeout of ${ms}ms exceeded`)
 function sections(message) {
   const raw = message.split(/\n[ \t]*\n(?:[ \t]*\n)+/).map((p) => p.trim()).filter(Boolean).filter((p) => !/^(?:Error Context:|attachment #\d+:|─)/.test(p))
   const parts = []
