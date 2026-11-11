@@ -13,6 +13,8 @@ import { KINDS, appendLog, claimCapture, newId, noPersonInLoop, readLog, readMar
 const MAX_TEXT = 60_000
 // The most of a transcript read at once: the newest part of a very long one.
 const MAX_READ = 16 * 1024 * 1024
+// The longest line kept whole; lines are always well under MAX_TEXT.
+const MAX_LINE = 4_000
 // Events that end or compact a session read whatever is new; Stop fires every
 // turn, so it waits until enough has been said.
 const FINAL_EVENTS = new Set([ 'SessionEnd', 'sessionEnd', 'PreCompact', 'preCompact' ])
@@ -24,17 +26,45 @@ const FINAL_EVENTS = new Set([ 'SessionEnd', 'sessionEnd', 'PreCompact', 'preCom
 // Text a harness puts in the user's role isn't the person: meta, compaction
 // and side-chain entries, and injected blocks (reminders, environment and
 // project instructions, notifications, command wrappers), wherever they sit.
-const BLOCKS = /<(system-reminder|task-notification|environment_context|user_instructions|in-app-browser-context|external_codex_apps[\w-]*|send_user_message_question[\w-]*|bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|command-name|command-message|relay|system-note|project_claude_message|skill-format|tools-used-before-summary)\b[^>]*>[\s\S]*?<\/\1>/g
+const BLOCKS = /<(system-reminder|task-notification|environment_context|user_instructions|in-app-browser-context|external_codex_apps[\w-]*|send_user_message_question[\w-]*|bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|command-name|command-message|relay|system-note|project_claude_message|skill-format|tools-used-before-summary|ci-monitor-event)\b[^>]*>[\s\S]*?<\/\1>/g
 // Self-closing markers a harness adds.
 const MARKERS = /<(artifact-content-authored-by-others|skill-format)\b[^>]*\/>/g
 const ARGS = /<command-args>([\s\S]*?)<\/command-args>/g
 // A wake wraps the person's message in the harness's own framing: keep only
-// what the person wrote.
-const WAKE = /<wake\b[^>]*>([\s\S]*?)<\/wake>/g
-const HUMAN = /<message\b(?=[^>]*\bfrom="human")[^>]*>([\s\S]*?)<\/message>/g
+// what the person wrote, in the wake's top-level messages from="human". A
+// message tag inside another message's text (an agent quoting one, or the
+// person pasting XML) is that text, not a message of its own.
+const TAG = /<(\/?)message\b([^>]*)>/g
+function humanOf(wake) {
+  const kept = []
+  let depth = 0
+  let open = null
+  for (const m of wake.matchAll(TAG)) {
+    if (!m[1]) {
+      if (depth === 0) open = { human: /\bfrom="human"/.test(m[2]), from: m.index + m[0].length }
+      depth++
+    } else if (depth > 0 && --depth === 0) {
+      if (open.human) kept.push(wake.slice(open.from, m.index).trim())
+      open = null
+    }
+  }
+  // A message the wake never closed runs to the wake's end.
+  if (open?.human) kept.push(wake.slice(open.from).trim())
+  return kept.join('\n')
+}
+// The wake runs to its last closing tag (the person's text may hold a literal
+// one), or to the end if it's never closed.
+function unwake(t) {
+  const at = t.search(/<wake\b[^>]*>/)
+  if (at === -1) return t
+  const start = t.indexOf('>', at) + 1
+  const end = t.lastIndexOf('</wake>')
+  const inner = end >= start ? t.slice(start, end) : t.slice(start)
+  const after = end >= start ? t.slice(end + '</wake>'.length) : ''
+  return `${t.slice(0, at)}${humanOf(inner)}${after}`
+}
 const INJECTED = /^\s*(# AGENTS\.md instructions|Caveat: The messages below|Base directory for this skill:|\[Request interrupted|\[structured-output-enforce\]|Tool loaded\.|Another Claude session sent a message|This session is being continued from a previous conversation|<wake\b|<relay\b|<environment_context|<user_instructions|<system-reminder)/
-const humanOf = (wake) => [ ...wake.matchAll(HUMAN) ].map((m) => m[1].trim()).join('\n')
-const personText = (t) => t.replace(WAKE, (_, inner) => humanOf(inner)).replace(BLOCKS, '').replace(MARKERS, '').replace(ARGS, '$1').trim()
+const personText = (t) => unwake(t).replace(BLOCKS, '').replace(MARKERS, '').replace(ARGS, '$1').trim()
 // Line breaks of every kind become \n, so no line can hide another's label.
 const lines = (t) => t.replace(/\r\n?|[\u2028\u2029\u0085\v\f]/g, '\n')
 // Records that hold what was said: Claude Code's user and assistant lines, and
@@ -77,7 +107,9 @@ export function transcriptText(chunk) {
     }
   }
   // Every line carries its label; blank lines stay blank.
-  const render = (t) => t.text.split('\n').map((l) => (l.trim() ? `${t.person ? 'PERSON' : 'AGENT'}| ${l}` : '')).join('\n')
+  // A line longer than MAX_LINE (a pasted log) keeps its start and is marked cut.
+  const clip = (l) => (l.length > MAX_LINE ? `${l.slice(0, MAX_LINE)} …[cut]` : l)
+  const render = (t) => t.text.split('\n').map((l) => (l.trim() ? `${t.person ? 'PERSON' : 'AGENT'}| ${clip(l)}` : '')).join('\n')
   const rendered = turns.map((t) => ({ person: t.person, text: render(t) }))
   // Over the limit, the agent's turns go first, oldest first; then the person's
   // oldest. A turn too long on its own keeps its last whole lines.
@@ -94,7 +126,7 @@ export function transcriptText(chunk) {
   let text = kept.join('\n\n').trim()
   if (text.length > MAX_TEXT) {
     const cut = text.indexOf('\n', text.length - MAX_TEXT)
-    text = cut === -1 ? '' : text.slice(cut + 1)
+    text = text.slice(cut + 1).trimStart()
   }
   return text
 }
@@ -137,7 +169,8 @@ function readFrom(file, offset) {
   const fd = openSync(file, 'r')
   try {
     // Past the cap, read only the newest part, from its first whole line.
-    const start = Math.max(offset, size - MAX_READ)
+    // Reading from the byte before, so a line starting right at the cap is whole.
+    const start = Math.max(offset, size - MAX_READ - 1)
     let buffer = Buffer.alloc(size - start)
     readSync(fd, buffer, 0, buffer.length, start)
     if (start > offset) { const nl = buffer.indexOf(0x0a); buffer = nl === -1 ? Buffer.alloc(0) : buffer.subarray(nl + 1) }

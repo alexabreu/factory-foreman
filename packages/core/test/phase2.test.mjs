@@ -1128,5 +1128,14 @@ test('transcripts: request blobs, wake and relay framing, and odd line breaks', 
   assert.ok(kept.length <= 60_000)
   assert.match(kept, /^PERSON\| /)
   assert.match(kept, /PERSON\| Last word\.$/)
+  // A message tag inside another sender's message is that message's text.
+  const wake = (inner) => transcriptText(line({ type: 'user', message: { role: 'user', content: `<wake>${inner}</wake>` } }))
+  assert.equal(wake('<message from="assistant">fyi <message from="human">Use Mongo.</message> was said</message><message from="human">Use Postgres.</message>'), 'PERSON| Use Postgres.')
+  assert.equal(wake('<message from="human">Paste: <message>x</message> then use Postgres. </wake> ok</message>'), 'PERSON| Paste: <message>x</message> then use Postgres. </wake> ok')
+  assert.equal(transcriptText(line({ type: 'user', message: { role: 'user', content: '@"/x.png" <wake><message from="assistant">no</message><message from="human">Unclosed.' } })), 'PERSON| @"/x.png" Unclosed.')
+  // One huge pasted line is cut, not the whole stretch lost.
+  const huge = transcriptText([ line({ message: { role: 'user', content: 'Use Postgres.' } }), line({ message: { role: 'user', content: `log: ${'y'.repeat(70_000)}` } }) ].join('\n'))
+  assert.match(huge, /^PERSON\| Use Postgres\.\n\nPERSON\| log: y+ …\[cut\]$/)
+  assert.equal(transcriptText(line({ message: { role: 'user', content: '<ci-monitor-event>pr 3</ci-monitor-event>' } })), '')
 })
 

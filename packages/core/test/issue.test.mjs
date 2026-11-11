@@ -46,8 +46,11 @@ test('a decision written again (a retry after a write that partly landed) is one
   const world = fakeGitHub()
   world.addIssue(7, '')
   const gh = world.as('ana')
-  assert.equal(await writeDecisions(gh, 7, [ { date: 'd1', text: 'Use a | pipe', by: '@a', step: 'Shape v1' } ]), 1)
-  assert.equal(await writeDecisions(gh, 7, [ { date: 'd2', text: 'Use a | pipe', by: '@a', step: 'Shape v2' } ]), 1)
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd1', text: 'Use a | pipe', by: '@a', step: 'Shape v1', id: 'n1' } ]), 1)
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd2', text: 'Use a | pipe', by: '@a', step: 'Shape v2', id: 'n1' } ]), 1)
+  // The same words decided again later, as another note, are another row.
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'd3', text: 'Use a | pipe', by: '@a', step: 'Design v1', id: 'n2' } ]), 2)
+  assert.match(tableRows(world.issues.get(7).artifacts[0].versions.at(-1).body)[0], /^\| d1 \| Use a \\\| pipe <!-- note:n1 --> \| @a \| Shape v1 \|$/)
   assert.deepEqual(tableRows('| A | B |\n|---|---\n| x | y |'), [ '| x | y |' ])
 })
 

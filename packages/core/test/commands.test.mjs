@@ -88,7 +88,7 @@ test('two developers, a stale refusal, approval and the changelog', async () => 
   assert.match(changelog, /-Syncing between devices\.\n\+Syncing between devices, and sharing lists\./)
   assert.match(getSection(issue.body, 'changelog'), /Shape v1 by @ana \(first version\)\n- 2026-11-10: Shape v2 by @ben \(\+1 −1 lines\)/)
   const decisions = () => issue.artifacts.find((a) => a.versions.at(-1).name === 'Decisions').versions.at(-1).body
-  assert.match(decisions(), /\| Syncing is out of scope \| @ana \| Shape v1 \|/)
+  assert.match(decisions(), /\| Syncing is out of scope <!-- note:\w+ --> \| @ana \| Shape v1 \|/)
   assert.match(getSection(issue.body, 'decisions'), /decisions? so far: see the Decisions artifact/)
   assert.match(getSection(issue.body, 'status'), /Shape v2 awaiting approval/)
   assert.ok(issue.body.startsWith('<!-- factory-foreman:status -->'))

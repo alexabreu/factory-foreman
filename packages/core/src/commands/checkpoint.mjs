@@ -192,7 +192,7 @@ async function post(ctx, { step, file: given, amend: amending }) {
   // 4. The issue body: changelog line, decisions, and a status read afresh,
   // so a checkpoint or approval that landed meanwhile shows too.
   const states = (await loadIssue(github, n, config.approvals)).steps
-  const rows = notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}` }))
+  const rows = notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}`, id: e.id }))
   // Decisions go to their own artifact; the body only counts them.
   // A failed Decisions write mustn't stop the body update: the notes are kept
   // for the next checkpoint instead, and it says so.
