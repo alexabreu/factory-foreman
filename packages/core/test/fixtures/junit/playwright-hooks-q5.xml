@@ -1,0 +1,158 @@
+<testsuites id="" name="" tests="5" failures="1" skipped="0" errors="4" time="20.047712999999998">
+<testsuite name="q5.e2e.ts" timestamp="2026-11-11T03:19:19.897Z" hostname="" tests="5" failures="1" skipped="0" time="16.686" errors="4">
+<testcase name="ae click › q5 hang promise" classname="q5.e2e.ts" time="3.523">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q5.e2e.ts-ae-click-q5-hang-promise/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q5.e2e.ts:6:3 › ae click › q5 hang promise ───────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    TimeoutError: locator.click: Timeout 500ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      3 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      4 | test.describe('ae click', () => {
+    > 5 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+        |                                                                              ^
+      6 |   test('q5 hang promise', async ({ page }) => { await books(page); await new Promise(() => {}) })
+      7 |   test('q5 soft then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await new Promise(() => {}) })
+      8 | })
+        at /work/q5.e2e.ts:5:78
+
+    Error Context: out/q5.e2e.ts-ae-click-q5-hang-promise/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="ae click › q5 soft then hang" classname="q5.e2e.ts" time="3.52">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q5.e2e.ts-ae-click-q5-soft-then-hang/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  q5.e2e.ts:7:3 › ae click › q5 soft then hang ─────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 300ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 300ms
+      - waiting for getByTestId('item-remove')
+
+
+       5 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+       6 |   test('q5 hang promise', async ({ page }) => { await books(page); await new Promise(() => {}) })
+    >  7 |   test('q5 soft then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await new Promise(() => {}) })
+         |                                                                                                                         ^
+       8 | })
+       9 | test.describe('be hang', () => {
+      10 |   test.beforeEach(async () => { await new Promise(() => {}) })
+        at /work/q5.e2e.ts:7:121
+
+    Test timeout of 3000ms exceeded.
+
+    TimeoutError: locator.click: Timeout 500ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      3 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      4 | test.describe('ae click', () => {
+    > 5 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+        |                                                                              ^
+      6 |   test('q5 hang promise', async ({ page }) => { await books(page); await new Promise(() => {}) })
+      7 |   test('q5 soft then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await new Promise(() => {}) })
+      8 | })
+        at /work/q5.e2e.ts:5:78
+
+    Error Context: out/q5.e2e.ts-ae-click-q5-soft-then-hang/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="be hang › q5 beforeEach hang" classname="q5.e2e.ts" time="3.585">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q5.e2e.ts-be-hang-q5-beforeEach-hang/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded while running &quot;beforeEach&quot; hook." type="Error">
+<![CDATA[  q5.e2e.ts:12:3 › be hang › q5 beforeEach hang ────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded while running "beforeEach" hook.
+
+       8 | })
+       9 | test.describe('be hang', () => {
+    > 10 |   test.beforeEach(async () => { await new Promise(() => {}) })
+         |        ^
+      11 |   test.afterEach(async ({ page }) => { await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      12 |   test('q5 beforeEach hang', async ({ page }) => {})
+      13 | })
+        at /work/q5.e2e.ts:10:8
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+       9 | test.describe('be hang', () => {
+      10 |   test.beforeEach(async () => { await new Promise(() => {}) })
+    > 11 |   test.afterEach(async ({ page }) => { await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+         |                                                                                      ^
+      12 |   test('q5 beforeEach hang', async ({ page }) => {})
+      13 | })
+      14 | test('q5 step hang', async ({ page }) => { await books(page); await test.step('s', async () => { await new Promise(() => {}) }); })
+        at /work/q5.e2e.ts:11:86
+
+    Error Context: out/q5.e2e.ts-be-hang-q5-beforeEach-hang/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="q5 step hang" classname="q5.e2e.ts" time="3.029">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q5.e2e.ts-q5-step-hang/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q5.e2e.ts:14:1 › q5 step hang ────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error Context: out/q5.e2e.ts-q5-step-hang/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="q5 hang then soft-in-finally" classname="q5.e2e.ts" time="3.029">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q5.e2e.ts-q5-hang-then-soft-in-finally/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q5.e2e.ts:15:1 › q5 hang then soft-in-finally ────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error Context: out/q5.e2e.ts-q5-hang-then-soft-in-finally/error-context.md
+]]>
+</error>
+</testcase>
+</testsuite>
+</testsuites>

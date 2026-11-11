@@ -105,6 +105,10 @@ export const waitedIds = (message) => waitsIn(message).flatMap((w) => chainIds(w
 // errors (a soft expect, then what ended the test), one inside an error. The
 // echo of the message's first line, and attachment and error-context notes,
 // aren't sections of their own.
+// Whether an error is the one a test timeout cut off: it repeats the timeout,
+// or, when the timeout hit an after hook (nothing runs after it), it's an
+// action that ended with the test.
+const pendingAfter = (timeout, next, ms) => next.includes(`Test timeout of ${ms}ms exceeded`) || (/while running "after(?:Each|All)" hook/.test(timeout) && /^\s*\w*Error: [^\n]*: Test ended\.\s*$/m.test(next))
 function sections(message) {
   const raw = message.split(/\n[ \t]*\n(?:[ \t]*\n)+/).map((p) => p.trim()).filter(Boolean).filter((p) => !/^(?:Error Context:|attachment #\d+:|─)/.test(p))
   const parts = []
@@ -118,7 +122,11 @@ function sections(message) {
     else parts.push(p)
   }
   // A test or hook timeout heads the error that was pending, when there is one.
-  for (let i = parts.length - 2; i >= 0; i--) if (/^Test timeout of \d+ms exceeded[^\n]*$/.test(parts[i])) parts.splice(i, 2, `${parts[i]}\n\n${parts[i + 1]}`)
+  // The pending error repeats the same "Test timeout of Nms" (a hook's own error doesn't).
+  for (let i = parts.length - 2; i >= 0; i--) {
+    const t = parts[i].match(/^Test timeout of (\d+)ms exceeded[^\n]*$/)
+    if (t && pendingAfter(parts[i], parts[i + 1], t[1])) parts.splice(i, 2, `${parts[i]}\n\n${parts[i + 1]}`)
+  }
   return parts.filter((p, i) => !(!p.includes('\n') && parts.slice(i + 1).some((q) => q.split('\n').some((l) => l.trim().replace(/^\w*Error: /, '') === p.replace(/^\w*Error: /, '')))))
 }
 const FOUND = /locator resolved to (?!0 elements)|^\s*Received(?: string| value)?:\s*(?!<element\(s\) not found>)\S/m
@@ -156,6 +164,20 @@ export function classify(text, { owned, testIds, known = null }, type = '') {
   // found or not, so a typo can't hide behind an assertion.
   if (waitsIn(message).length && /^\s*(?:Call log:|Locator:)/m.test(message)) {
     const verdicts = sections(message).map((section) => {
+      // Text before the section's first error must belong to it: an echo of
+      // one of its lines, or the test timeout that error repeats. Anything
+      // else (a thrown value, a hang in another hook) failed on its own.
+      const lines = section.split('\n')
+      const at = lines.findIndex((l) => /^\s*\w*Error: /.test(l))
+      if (at > 0) {
+        const rest = lines.slice(at).join('\n')
+        const tail = lines.slice(at).map((l) => l.trim().replace(/^\w*Error: /, ''))
+        for (const l of lines.slice(0, at).map((x) => x.trim()).filter(Boolean)) {
+          const t = l.match(/^Test timeout of (\d+)ms exceeded/)
+          if (t ? pendingAfter(l, rest, t[1]) : tail.includes(l.replace(/^\w*Error: /, ''))) continue
+          return { kind: 'other', ok: false, detail: l.slice(0, 160), why: `fails for a reason the slice doesn't fix: ${l.slice(0, 160)}` }
+        }
+      }
       const ws = waitsIn(section)
       const found = FOUND.test(section)
       for (const w of ws) {
