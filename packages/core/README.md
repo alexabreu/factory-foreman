@@ -147,18 +147,24 @@ and its prompt rules can be answered by an automated reviewer or a remembered
 
 A person can also approve in a place factory-foreman can't see, such as a
 decision card they tap in the Claude app. They turn this on themselves, in
-their own `~/.factory-foreman/config.json` (outside any repo):
+their own settings file `~/.factory-foreman/config.json` (outside any repo,
+theirs alone: a link, or a file others can write, doesn't count):
 
     { "approvals": { "relay": ["claude-app"] } }
 
-Then the agent that saw their tap runs, as one plain command,
-`factory-foreman approve slice 1 --relayed claude-app:<card id> --expect <head shown>`
-(or `approve <step> v<N> … --expect <the version's hash>`, or `slice merge`).
-`--expect` is what the card showed; if the slice's head or the version changed
-since, it's refused. The approval is posted under the person's GitHub login,
-with `"via": "claude-app"` and the card's id, and a slice merges once CI is
-green. The approve hook lets exactly this form through when the channel is
-turned on, and refuses every other approve or merge from an agent's shell.
+An agent never writes that file; the approve hook refuses it if it tries.
+Then the agent that saw the person's tap runs, as one plain command:
+
+    factory-foreman approve slice 1 --relayed claude-app:<card id> --expect approve:<head shown> --as <login shown>
+
+(or `approve <step> v<N> … --expect approve:<the version's hash>`, or
+`slice merge <n> … --expect merge:<head>`). `--expect` is the action and what
+the card showed, `--as` who it said approves; if any of them no longer holds,
+it's refused. It's refused in CI and in runs marked as having no person. The
+approval is posted under the person's GitHub login with `"via": "relayed"`,
+the channel and the card's id, and a slice merges once CI is green. The
+approve hook lets exactly this form through for a channel that's on, and
+refuses every other approve or merge from an agent's shell.
 
 The trust here is plain: the agent attests that the person tapped. Nothing
 checks the tap itself, so a misbehaving agent could claim one. That's the same

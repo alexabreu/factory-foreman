@@ -76,7 +76,9 @@ the person's behalf.
    Elsewhere (Codex, a headless run) it refuses: they approve in their own
    terminal with the same command. If the person approved somewhere else they
    turned on for it (a card in the Claude app), and only on their actual tap,
-   run it relayed: `--relayed <channel>:<ref> --expect <what they were shown>`.
+   run it relayed: `--relayed <channel>:<ref> --expect <approve|merge>:<what
+   they were shown> --as <their login>`. Never create or change the person's
+   `~/.factory-foreman` settings to turn a channel on; only they do that.
 
 Design can only be checkpointed once a Shape version is approved.
 

@@ -97,14 +97,20 @@ export function chatDecision(payload, command, reason, { lex }) {
 }
 
 // A relayed approval (the person confirmed in a channel they turned on in
-// their own ~/.factory-foreman/config.json; see the CLI's src/approval/ask.mjs)
-// goes through as one plain command naming that channel and what was shown.
-// Every other approve or merge from an agent's shell is still refused.
-const relayChannels = () => { try { const list = JSON.parse(readFileSync(join(process.env.FACTORY_FOREMAN_HOME || join(homedir(), '.factory-foreman'), 'config.json'), 'utf8'))?.approvals?.relay; return Array.isArray(list) ? list : [] } catch { return [] } }
+// their own settings; see the CLI's src/approval/ask.mjs) goes through as one
+// plain `factory-foreman` command naming that channel, the action and what was
+// shown, and who approves, each once. Every other approve or merge from an
+// agent's shell is still refused, and so is an agent touching those settings.
+const userDir = () => process.env.FACTORY_FOREMAN_USER_DIR || join(homedir(), '.factory-foreman')
+const relayChannels = () => { try { const list = JSON.parse(readFileSync(join(userDir(), 'config.json'), 'utf8'))?.approvals?.relay; return Array.isArray(list) ? list : [] } catch { return [] } }
 export function relayedAllowed(command, { lex }) {
-  const args = typeof command === 'string' ? plain(command, lex) : null
-  if (!args || !(args[0] === 'approve' || (args[0] === 'slice' && args[1] === 'merge'))) return false
-  const value = (flag) => { const i = args.findIndex((w) => w === flag || w.startsWith(`${flag}=`)); return i === -1 ? null : args[i].includes('=') ? args[i].slice(flag.length + 1) : args[i + 1] }
+  if (typeof command !== 'string' || !/^\s*factory-foreman\s/.test(command)) return false
+  const args = plain(command, lex)
+  if (!args || args.some((w) => w === '--' || /[*?[\]{}~]/.test(w))) return false
+  if (!(args[0] === 'approve' || (args[0] === 'slice' && args[1] === 'merge'))) return false
+  const value = (flag) => { const at = args.flatMap((w, i) => (w === flag || w.startsWith(`${flag}=`) ? [ i ] : [])); return at.length !== 1 ? null : args[at[0]].includes('=') ? args[at[0]].slice(flag.length + 1) : args[at[0] + 1] ?? null }
   const relay = /^([\w-]{1,40}):[\w.:-]{1,200}$/.exec(value('--relayed') ?? '')
-  return Boolean(relay && /^[0-9a-f]{7,64}$/i.test(value('--expect') ?? '') && relayChannels().includes(relay[1]))
+  return Boolean(relay && /^(approve|merge):[0-9a-f]{7,64}$/i.test(value('--expect') ?? '') && /^@?[\w-]{1,39}$/.test(value('--as') ?? '') && relayChannels().includes(relay[1]))
 }
+// The person's own factory-foreman settings and tickets aren't the agent's to write.
+export const touchesOwnSettings = (payload) => { const f = String(payload?.tool_input?.file_path ?? payload?.tool_input?.notebook_path ?? ''); return Boolean(f) && [ `${userDir()}/`, `${homedir()}/.factory-foreman/`, '~/.factory-foreman/' ].some((d) => f.startsWith(d)) }
