@@ -8,6 +8,8 @@ import { decide, verdict } from '../apm/guard/approve-guard.mjs'
 
 const DENIED = [
   'factory-foreman approve shape v2',
+  'factory-foreman approve slice 1',
+  'factory-foreman --issue 7 approve slice 2',
   'factory-foreman --issue 7 approve shape v2',
   'factory-foreman approve shape v2 --issue 7',
   'factory-foreman slice merge 2',

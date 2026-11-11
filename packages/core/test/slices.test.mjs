@@ -359,6 +359,53 @@ test('slice merge: a person merges the iterated head once approved there and CI 
   assert.match((await ben.run('slice', 'merge', '1')).err, /isn't open; it is merged/)
 })
 
+test('approve slice: the PR author approves its head in their terminal, and slice merge takes it in place of a GitHub review', async () => {
+  const f = await feature()
+  const { ana, world } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  ok(await ana.run('slice', 'iterate', '1'))
+  const first = ana.g('rev-parse', 'HEAD')
+  const pr1 = [ ...world.issues.values() ].find((i) => i.pr?.head === 'factory-foreman/7-slice-1')
+  world.checks = new Map([ [ first, [ { name: 'CI', state: 'success' } ] ] ])
+  const anaHere = developer(world, 'ana', { isTTY: true, answer: 'y' })
+  // Not from an agent's shell, not without write access, not before it's approved.
+  assert.match((await ana.run('approve', 'slice', '1')).err, /must be run by a person in their own terminal/)
+  assert.match((await developer(world, 'eve', { isTTY: true, answer: 'y' }).run('approve', 'slice', '1')).err, /@eve needs write access/)
+  assert.match((await anaHere.run('approve', 'slice', 'x')).err, /Name the slice/)
+  assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head .*run factory-foreman approve slice 1 in your terminal/)
+  // A record someone else posts in ana's name isn't hers.
+  const record = (approver, head) => `<!-- factory-foreman:record ${JSON.stringify({ type: 'slice-approval', repo: 'owner/sandbox', issue: 7, slice: 1, pr: pr1.number, head, approver, at: 'x' })} -->`
+  await world.as('ben').comment(pr1.number, record('ana', first), 'user')
+  assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head/)
+  const approved = ok(await anaHere.run('approve', 'slice', '1'))
+  assert.match(approved.out, /Approved slice 1 \(#\d+\) at [0-9a-f]{7}/)
+  const posted = pr1.comments.at(-1)
+  assert.equal(posted.login, 'ana')
+  // An edited approval isn't trusted.
+  world.as('ana').editComment(pr1.number, posted.id, posted.body)
+  assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head/)
+  ok(await anaHere.run('approve', 'slice', '1'))
+  // A new commit needs a new approval.
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1 // tidy\n')
+  commit(ana, 'tidy', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  ok(await ana.run('slice', 'iterate', '1'))
+  const second = ana.g('rev-parse', 'HEAD')
+  world.checks = new Map([ [ second, [ { name: 'CI', state: 'success' } ] ] ])
+  assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head/)
+  ok(await anaHere.run('approve', 'slice', '1'))
+  // With a second approver required, only a GitHub review counts.
+  const strict = developer(world, 'ana', { isTTY: true, answer: 'y', config: { approvals: { requireSecondApprover: true } } })
+  assert.match((await strict.run('approve', 'slice', '1')).err, /requires a second approver/)
+  assert.match((await strict.run('slice', 'merge', '1')).err, /in a GitHub review \(this repo requires a second approver\)/)
+  const merged = ok(await anaHere.run('slice', 'merge', '1'))
+  assert.match(merged.out, /Merged slice 1/)
+  assert.deepEqual(pr1.pr.merged, { sha: second, by: 'ana' })
+})
+
 test('status shows slices from their PR records: a local edit changes nothing, a newer approved Design makes a slice stale', async () => {
   const f = await feature()
   const { ana, ben } = f
