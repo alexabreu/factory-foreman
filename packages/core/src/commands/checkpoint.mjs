@@ -2,13 +2,13 @@ import { artifactEntry, bodyLine, unifiedDiff } from '../changelog.mjs'
 import { Refusal } from '../errors.mjs'
 import { byBot, hash, isApproved, nextMinor, nextVersion, parseLabel, recordComment } from '../issue/records.mjs'
 import { writeDecisions } from '../issue/decisions.mjs'
-import { addChangelogLine, setSection, updateBody, withDecisionsLine } from '../issue/sections.mjs'
+import { addChangelogLine, inert, setSection, updateBody, withDecisionsLine } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { postedBody, readDraftFile, requireReview, reviewersFor } from '../review/briefs.mjs'
 import { checkStructure, parseDraft, structuralBlocks } from '../steps/structure.mjs'
 import { affectedSlices } from '../slices/plan.mjs'
 import { sha256 } from './wireframes.mjs'
-import { noPersonInLoop, readLog } from '../state/local.mjs'
+import { appendLog, noPersonInLoop, readLog } from '../state/local.mjs'
 import { entriesSince } from './draft.mjs'
 import { approvedBody, loadIssue, requireStep, sameText, title, today } from './common.mjs'
 
@@ -183,7 +183,7 @@ async function post(ctx, { step, file: given, amend: amending }) {
   }
   const ask = amending?.minor ? `It's a minor amendment, so it keeps ${amending.carries}'s approval.` : `To approve it, run \`factory-foreman approve ${step} ${version}\` in a terminal.`
   const why = amending ? ` Amended because: ${amending.reason.replace(/\s+/g, ' ')}` : ''
-  const waiting = leftForPerson.length ? ` ${leftForPerson.length} extracted note${leftForPerson.length === 1 ? ' from this session awaits' : 's from this session await'} the person's keep, edit or drop.` : ''
+  const waiting = leftForPerson.length ? ` Left for the person to keep, edit or drop: ${leftForPerson.map((e) => `"${inert(e.text).replace(/\s+/g, ' ')}"`).join('; ')}.` : ''
   await github.comment(n, recordComment(`**${title(step)} ${version}** posted by @${author} from ${ctx.harness}${diff ? '' : ' (first version)'}.${why} ${ask}${waiting}`, record), 'app')
 
   // 4. The issue body: changelog line, decisions, and a status read afresh,
@@ -191,7 +191,19 @@ async function post(ctx, { step, file: given, amend: amending }) {
   const states = (await loadIssue(github, n, config.approvals)).steps
   const rows = notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}` }))
   // Decisions go to their own artifact; the body only counts them.
-  const count = await writeDecisions(github, n, rows, { body: state.issue.body })
+  // A failed Decisions write mustn't stop the body update: the notes are kept
+  // for the next checkpoint instead, and it says so.
+  let count = 0
+  const dir = ctx.stateDir()
+  try {
+    count = await writeDecisions(github, n, rows, { body: state.issue.body })
+    for (const e of notes) appendLog(dir, { op: 'posted', id: e.id, at: now.toISOString() })
+  } catch (error) {
+    for (const e of notes) appendLog(dir, { op: 'defer', id: e.id, at: now.toISOString() })
+    warnings.push(`The Decisions artifact wasn't updated (${error.message}); this version's ${rows.length} decision(s) will go with the next checkpoint.`)
+  }
+  // Notes left for the person carry over to a later checkpoint once they're settled.
+  for (const e of leftForPerson) appendLog(dir, { op: 'defer', id: e.id, at: now.toISOString() })
   await updateBody(github, n, (b) => setSection(withDecisionsLine(addChangelogLine(b, bodyLine({ step, version, date, author, diff, amend: amending })), count), 'status', statusLine(states)))
 
   const next = amending?.minor ? `It keeps ${amending.carries}'s approval.` : `Approve it from a terminal: factory-foreman approve ${step} ${version}`

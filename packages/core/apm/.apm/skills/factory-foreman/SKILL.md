@@ -40,10 +40,11 @@ factory-foreman note --drop 3f9a1c2e
 Only confirmed notes reach GitHub.
 
 Notes are extracted only from what the person says; your own narration never
-becomes a note. In a session with no person in it (claude -p, codex exec, CI),
-leave extracted notes alone: `note --keep/--edit/--drop` refuses there, and
-checkpoint posts without them and names them for the person to settle later.
-Never keep or drop a note on the person's behalf.
+becomes a note. In a session with no person in it (claude -p, CI, or a run
+marked FACTORY_FOREMAN_NO_PERSON=1), notes you write stay unconfirmed and
+`note --keep/--edit/--drop` refuses: leave them. Checkpoint posts without them
+and names them, and the person settles them later. Never keep or drop a note on
+the person's behalf.
 
 ## Draft, check, checkpoint
 

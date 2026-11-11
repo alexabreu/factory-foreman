@@ -17,28 +17,36 @@ const HEADER = '| Date | Decision | By | Step |\n| --- | --- | --- | --- |'
 export const decisionRow = (r) => `| ${cell(r.date)} | ${cell(r.text)} | ${cell(r.by)} | ${cell(r.step ?? '')} |`
 
 // Table rows (not the header or its rule) in a text, in order.
-export const tableRows = (text) => String(text ?? '').split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => /^\|/.test(l) && !/^\|\s*Date\s*\|/.test(l) && !/^\|\s*-{3,}/.test(l))
+// A table's header is the row right before its separator (|---|, |:--|, |--:|).
+const SEPARATOR = /^\|(\s*:?-+:?\s*\|)+$/
+export function tableRows(text) {
+  const lines = String(text ?? '').split('\n').map((l) => l.replace(/\s+$/, ''))
+  return lines.filter((l, i) => /^\|/.test(l) && !SEPARATOR.test(l) && !SEPARATOR.test(lines[i + 1] ?? ''))
+}
 
 export const decisionsBody = (rows) => `# Decisions\n\n${HEADER}\n${rows.join('\n')}\n`
-
-// The issue body's line pointing at the artifact.
-export const decisionsLine = (count) => `## Decisions\n\n${count} decision${count === 1 ? '' : 's'} so far: see the ${DECISIONS} artifact on this issue.`
 
 // Adds rows to the Decisions artifact; returns how many it holds.
 export async function writeDecisions(github, n, rows, { body = '' } = {}) {
   const fresh = rows.map(decisionRow)
   // Rows a body table from before this artifact existed still holds.
   const legacy = tableRows(getSection(body, 'decisions'))
-  const artifacts = await github.artifacts(n)
-  let number = artifacts.filter((a) => a.name === DECISIONS).sort((a, b) => a.number - b.number)[0]?.number
-  if (!number) {
+  const named = async () => (await github.artifacts(n)).filter((a) => a.name === DECISIONS).map((a) => a.number).sort((a, b) => a - b)
+  let numbers = await named()
+  if (!numbers.length) {
     if (!fresh.length && !legacy.length) return 0
-    number = await github.createArtifact(n, DECISIONS, decisionsBody([ ...new Set([ ...legacy, ...fresh ]) ]), 'app')
+    await github.createArtifact(n, DECISIONS, decisionsBody([ ...new Set([ ...legacy, ...fresh ]) ]), 'app')
+    // Two writers may each have created one: the first is the one, and the other's rows join it.
+    numbers = await named()
   }
+  const number = numbers[0]
   for (let i = 0; ; i++) {
     const versions = (await github.history(n, number)).versions
     const all = []
-    for (const v of versions.filter((v) => byBot(v, github.botLogin))) for (const r of tableRows(v.body)) if (!all.includes(r)) all.push(r)
+    for (const k of numbers) {
+      const vs = k === number ? versions : (await github.history(n, k)).versions
+      for (const v of vs.filter((v) => byBot(v, github.botLogin))) for (const r of tableRows(v.body)) if (!all.includes(r)) all.push(r)
+    }
     for (const r of [ ...legacy, ...fresh ]) if (!all.includes(r)) all.push(r)
     const latest = tableRows(versions.at(-1)?.body)
     if (all.every((r) => latest.includes(r))) return all.length

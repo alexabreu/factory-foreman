@@ -70,7 +70,7 @@ export function bodyLine({ step, version, date, author, diff, amend = null }) {
   return `- ${date}: ${title(step)} ${version} by @${author} (${change}${kind})`
 }
 
-// One full entry in the Changelog artifact: the diff and how we got here.
+// One full entry in the Changelog artifact: the diff, the amendment, and how many decisions it added.
 // An amendment also says why, whether it was minor (wording only, keeps the
 // approval) or material (needs a new one), and which slices it affects.
 export function artifactEntry({ step, version, previous, date, author, harness, diff, decisions = 0, questions = [], amend = null }) {
@@ -80,7 +80,7 @@ export function artifactEntry({ step, version, previous, date, author, harness, 
   }
   // Decisions are in the Decisions artifact; the Changelog only counts them.
   if (decisions) lines.push(`${decisions} decision${decisions === 1 ? '' : 's'} added (see the Decisions artifact).`, '')
-  if (questions.length) lines.push('Open questions:', '', ...questions.map((q) => `- ${q}`), '')
+  if (questions.length) lines.push('Questions raised:', '', ...questions.map((q) => `- ${q}`), '')
   if (diff) lines.push('```diff', diff.trimEnd(), '```', '')
   return lines.join('\n')
 }

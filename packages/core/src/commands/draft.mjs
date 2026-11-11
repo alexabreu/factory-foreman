@@ -12,8 +12,9 @@ const SKELETON = {
 }
 
 // Log entries since a version was posted, with extracted ones marked.
+// Plus any note a checkpoint left for the person and hasn't posted since.
 export function entriesSince(log, at, step) {
-  return log.filter((e) => after(e.at, at) && (!e.step || e.step === step))
+  return log.filter((e) => (after(e.at, at) || (e.deferred && !e.posted)) && (!e.step || e.step === step))
 }
 
 // factory-foreman draft <shape|design> [--reset]

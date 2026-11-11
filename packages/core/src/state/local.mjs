@@ -111,6 +111,9 @@ export function readLog(dir, { includeDropped = false } = {}) {
       if (item.op === 'keep') target.confirmed = true
       else if (item.op === 'drop') target.dropped = true
       else if (item.op === 'edit' && typeof item.text === 'string' && item.text.trim()) { target.text = item.text.trim(); target.confirmed = true }
+      // Left for the person by a checkpoint, then posted by a later one.
+      else if (item.op === 'defer') target.deferred = true
+      else if (item.op === 'posted') target.posted = true
       continue
     }
     const entry = { ...item }
@@ -179,10 +182,15 @@ const codexRuntime = (env) => [ 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_SA
 // (Claude Code included), as Codex marks both.
 export const inCodexSandbox = (env = process.env) => env.CODEX_SANDBOX !== undefined || env.CODEX_TOOL_CALL_ID !== undefined
 
-// A session with no person in it: a headless agent (claude -p and the SDK set
-// an "sdk-…" entrypoint; codex exec sets CODEX_CI) or CI. Notes extracted
+// A session with no person in it: a headless Claude agent (claude -p and the
+// SDK set an "sdk-…" entrypoint), CI, or a run an orchestrator marks with
+// FACTORY_FOREMAN_NO_PERSON=1 (codex exec sets nothing that interactive Codex
+// doesn't). FACTORY_FOREMAN_PERSON=1 says a person is there after all. Notes
 // there are left for a person to confirm.
-export const noPersonInLoop = (env = process.env) => /^sdk/.test(env.CLAUDE_CODE_ENTRYPOINT ?? '') || env.CODEX_CI !== undefined || /^(1|true)$/i.test(env.CI ?? '')
+export function noPersonInLoop(env = process.env) {
+  if (env.FACTORY_FOREMAN_PERSON === '1') return false
+  return env.FACTORY_FOREMAN_NO_PERSON === '1' || /^sdk/.test(env.CLAUDE_CODE_ENTRYPOINT ?? '') || /^(1|true)$/i.test(env.CI ?? '')
+}
 
 export function detectHarness(env = process.env) {
   if (inCodex(env)) return 'codex'

@@ -91,10 +91,14 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
   `capture.minChars` of new text. It never blocks or fails a session.
   Only what the person says is extracted (the agent's turns are context, and
   text a harness injects isn't the person); a stretch with nothing from the
-  person makes no model call. In a session with no person in it (a headless
-  `claude -p`, `codex exec`, or CI), notes stay unconfirmed: `note
-  --keep/--edit/--drop` refuses there, and checkpoint posts without them and
-  names them for the person.
+  person makes no model call. A session has no person in it when it's a
+  headless Claude agent (`claude -p` or the SDK), CI, or a run an orchestrator
+  marks with `FACTORY_FOREMAN_NO_PERSON=1` (needed for `codex exec`, which looks
+  like interactive Codex); `FACTORY_FOREMAN_PERSON=1` says a person is there.
+  There, capture doesn't run, notes written by hand stay unconfirmed, `note
+  --keep/--edit/--drop` refuses, and checkpoint posts without the unconfirmed
+  notes and names them in its comment. They're kept for the person: once kept,
+  the next checkpoint posts them.
 
 ## Wireframes
 

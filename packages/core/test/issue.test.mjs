@@ -42,6 +42,16 @@ test('the Decisions artifact keeps every row any App version held, and takes ove
   assert.equal(world.issues.get(7).artifacts.length, 1)
 })
 
+test("two Decisions artifacts from a race: the first is the one, and the other's rows join it; separator variants aren't rows", async () => {
+  const world = fakeGitHub()
+  world.addIssue(7, '')
+  const gh = world.as('ana')
+  await gh.createArtifact(7, 'Decisions', '# Decisions\n\n| Date | Decision | By | Step |\n| :-- | :--: | --: | --- |\n| a | One | @x | Shape v1 |', 'app')
+  await gh.createArtifact(7, 'Decisions', '# Decisions\n\n| When | What | Who | Where |\n|---|---|---|---|\n| b | Two | @y | Shape v1 |', 'app')
+  assert.equal(await writeDecisions(gh, 7, [ { date: 'c', text: 'Three', by: '@z', step: 'Design v1' } ]), 3)
+  assert.deepEqual(tableRows(world.issues.get(7).artifacts[0].versions.at(-1).body), [ '| a | One | @x | Shape v1 |', '| b | Two | @y | Shape v1 |', '| c | Three | @z | Design v1 |' ])
+})
+
 test('a record survives a "--" in its text and round-trips', () => {
   const record = { type: 'checkpoint', step: 'shape', version: 'v1', note: 'a -- b -->' }
   const body = recordComment('Visible.', record)

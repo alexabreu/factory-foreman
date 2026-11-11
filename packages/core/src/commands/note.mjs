@@ -35,18 +35,19 @@ export async function note(ctx, { positionals, flags }) {
     harness: ctx.harness,
     session: ctx.env.FACTORY_FOREMAN_SESSION ?? null,
     source: 'note',
-    confirmed: true,
+    // With no person in the session, even a note written by hand is the person's to confirm.
+    confirmed: !noPersonInLoop(ctx.env),
     ...(flags.blocking ? { blocking: true } : {}),
   }
   appendLog(ctx.stateDir(), entry)
-  return { out: `Noted ${kind}${entry.step ? ` for ${entry.step}` : ''} (${entry.id}): ${text}`, json: entry }
+  return { out: `Noted ${kind}${entry.step ? ` for ${entry.step}` : ''} (${entry.id}): ${text}${entry.confirmed ? '' : '. Left unconfirmed: this session has no person in it, so the person keeps, edits or drops it.'}`, json: entry }
 }
 
 // Keeping, editing or dropping an extracted entry appends an op to the log.
 function confirm(ctx, op, id, positionals) {
   if (typeof id !== 'string' || !id.trim()) throw new Refusal(`Name the entry: factory-foreman note --${op} <id>${op === 'edit' ? ' "<text>"' : ''}.`)
   // Confirming what was decided is the person's: a session with no person in it leaves notes as they are.
-  if (noPersonInLoop(ctx.env)) throw new Refusal(`Extracted notes are the person's to keep, edit or drop, and this session has no person in it (${ctx.env.CODEX_CI !== undefined ? 'codex exec' : /^sdk/.test(ctx.env.CLAUDE_CODE_ENTRYPOINT ?? '') ? 'a headless agent' : 'CI'}). Leave them: checkpoint posts without them and names them, and the person settles them with factory-foreman note --keep, --edit or --drop.`)
+  if (noPersonInLoop(ctx.env)) throw new Refusal(`Notes are the person's to keep, edit or drop, and this session has no person in it. Leave them: checkpoint posts without them and names them, and the person settles them later with factory-foreman note --keep, --edit or --drop. (A person running this sets FACTORY_FOREMAN_PERSON=1.)`)
   const dir = ctx.stateDir()
   const entry = readLog(dir).find((e) => e.id === id)
   if (!entry) throw new Refusal(`No note ${id} in #${ctx.issue()}'s log (dropped ones can't be changed). factory-foreman draft lists the unconfirmed ones.`)

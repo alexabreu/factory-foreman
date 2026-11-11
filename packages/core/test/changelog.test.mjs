@@ -46,7 +46,7 @@ test('body line and artifact entry', () => {
   const entry = artifactEntry({ step: 'shape', version: 'v2', previous: 'v1', date: '2026-11-10', author: 'alx', harness: 'codex', diff, decisions: 2, questions: [ 'Export?' ] })
   assert.match(entry, /^## Shape v2, 2026-11-10\n\nBy @alx from codex\. Changes since v1:/)
   // Decisions are counted, not repeated: they're in the Decisions artifact.
-  assert.match(entry, /2 decisions added \(see the Decisions artifact\)\.\n\nOpen questions:\n\n- Export\?/)
+  assert.match(entry, /2 decisions added \(see the Decisions artifact\)\.\n\nQuestions raised:\n\n- Export\?/)
   assert.doesNotMatch(artifactEntry({ step: 'shape', version: 'v1', date: 'd', author: 'a' }), /decision/)
   assert.match(entry, /```diff\n--- v1\n\+\+\+ v2\n@@ -1,1 \+1,1 @@\n-a\n\+b\n```/)
 })
