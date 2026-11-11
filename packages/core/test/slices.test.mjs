@@ -392,8 +392,8 @@ test('the gate classifies base failures: assertion, import of an added file, loc
   assert.equal(classify("Cannot find module '/tmp/x/base/src/ap.mjs' imported from /tmp/x/base/e2e/a.mjs", ctx).ok, false)
   assert.equal(classify('Failed to resolve import "./counter" from "e2e/a.ts". Does the file exist?', { ...ctx, owned: [ 'e2e/counter.ts' ] }).ok, true)
   assert.equal(classify("Cannot find package 'left-pad'", ctx).ok, false)
-  assert.deepEqual(classify("locator.click: Timeout 5000ms exceeded.\nwaiting for getByTestId('count')", ctx), { kind: 'locator', detail: 'count', ok: true, why: "waits for test id count, which the slice's contract adds" })
-  assert.equal(classify("expect(locator).toBeVisible() failed\nLocator: getByTestId('summary')\nError: element(s) not found", ctx).ok, false)
+  assert.deepEqual(classify("locator.click: Timeout 5000ms exceeded.\nCall log:\n  - waiting for getByTestId('count')", ctx), { kind: 'locator', detail: 'count', ok: true, why: "waits for test id count, which the slice's contract adds" })
+  assert.equal(classify("Error: expect(locator).toBeVisible() failed\nLocator: getByTestId('summary')\nReceived: <element(s) not found>", ctx).ok, false)
   // An element that's there but wrong is an assertion, which counts.
   assert.equal(classify("expect(locator).toHaveText(expected) failed\nLocator: getByTestId('summary')\nExpected: \"1 unread\"\nReceived: \"2 unread\"", ctx).kind, 'assertion')
   assert.equal(classify('TypeError: Cannot read properties of undefined', ctx).ok, false)
@@ -508,6 +508,19 @@ test('real reporters: Playwright and Vitest JUnit, and a Playwright run that sto
   assert.deepEqual(chained.map((c) => classify(c.text, { owned: [], testIds: [ 'item-remove' ] }, c.type)), [ { kind: 'locator', detail: 'item-remove', ok: true, why: "waits for test id item-remove, which the slice's contract adds" } ])
   assert.equal(classify(chained[0].text, { owned: [], testIds: [] }, chained[0].type).detail, 'item-remove')
   assert.equal(classify(chained[0].text, { owned: [], testIds: [] }, chained[0].type).ok, false)
+  // Only the chain's final target may be new; ids before it must exist at base; unions and nested filters don't count; every error must be such a wait.
+  const wait = (expr, head = 'Error: locator.click: Test timeout of 30000ms exceeded.') => `${head}\nCall log:\n  - waiting for ${expr}\n`
+  const ids = { owned: [], testIds: [ 'item-remove' ], known: [ 'item', 'summary' ] }
+  assert.equal(classify(wait("getByTestId('item').filter({ hasText: 'Dune' }).getByTestId('item-remove')"), ids).ok, true)
+  assert.match(classify(wait("getByTestId('itemz').getByTestId('item-remove')"), ids).why, /inside itemz, which neither base nor the slice's contract has/)
+  assert.equal(classify(wait("getByTestId('item').filter({ hasNot: getByTestId('item-remove') })"), ids).ok, false)
+  assert.equal(classify(wait("getByTestId('itemz').or(getByTestId('item-remove'))"), ids).ok, false)
+  assert.equal(classify(`${wait("getByTestId('summaryy')", 'Error: expect(locator).toHaveText(expected) failed')}\n${wait("getByTestId('item-remove')")}`, ids).ok, false)
+  assert.equal(classify(`${wait("getByTestId('item-remove')", 'Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId(\'item-remove\')\nReceived: <element(s) not found>')}\nError: page.waitForTimeout: Test ended.\n`, ids).ok, false)
+  assert.equal(classify("Error: expect(locator).toHaveText(expected) failed\nCall log:\n  - Expect \"toHaveText\" with timeout 500ms\n  - waiting for getByTestId('item-remove') getByTestId('summary') with timeout 500ms\n  - locator resolved to <p>\nTimeout 500ms exceeded.", ids).kind, 'assertion')
+  // The same cases from a real Playwright run: only waits that end on the new id, through ids base has, count.
+  const real = parseJUnit(fixture('playwright-locators.xml')).map((c) => { const r = classify(c.text, { owned: [], testIds: [ 'item-remove' ], known: [ 'item', 'summary', 'new-title', 'add' ] }, c.type); return [ c.name, r.kind, r.ok ] })
+  assert.deepEqual(real, [ [ 'real chain', 'locator', true ], [ 'a typo parent', 'locator', false ], [ 'b hasNot', 'locator', false ], [ 'c or', 'locator', false ], [ 'soft typo then new', 'locator', false ], [ 'custom message', 'assertion', true ], [ 'found wrong text', 'assertion', true ], [ 'soft new then hang', 'other', false ], [ 'expect new visible', 'locator', true ] ])
   // Nested suites and tests straight under <testsuites> (node's reporter) all count.
   const nested = parseJUnit('<testsuites><testsuite name="e" file="e2e/a.mjs"/><testsuite name="a" file="e2e/b.mjs"><testsuite name="d"><testcase name="AC-1 x"/></testsuite><testcase name="AC-2 y"><failure message="AssertionError: no" type="AssertionError"/></testcase></testsuite><testcase name="AC-3 z" file="e2e/c.mjs"/></testsuites>')
   assert.deepEqual(nested.map((c) => [ c.name, c.file, c.outcome ]), [ [ 'AC-1 x', 'e2e/b.mjs', 'passed' ], [ 'AC-2 y', 'e2e/b.mjs', 'failed' ], [ 'AC-3 z', 'e2e/c.mjs', 'passed' ] ])

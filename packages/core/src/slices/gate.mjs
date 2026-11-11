@@ -69,14 +69,39 @@ export function failureMessage(text) {
 }
 
 const IMPORT = /Cannot find module ['"]([^'"]+)['"](?: imported from ['"]?([^'"\s]+))?|Failed to (?:resolve|load url) (?:import )?["']?([^"'\s]+)["']?(?: (?:from|in) ["']([^"']+)["'])?|Could not resolve ["']([^"']+)["'](?: from ["']([^"']+)["'])?|Cannot find package ['"]([^'"]+)['"]/
-// The locator a call log says it waited for, and every test id in it: a
-// chained locator (a row, then its button) names several.
-const WAITED = /(?:waiting for|Locator:)\s*(.+)/g
-const IDS = /getByTestId\(\s*['"]([^'"]+)['"]\s*\)|\[data-testid=\\?["']([^"'\\]+)\\?["']\]/g
-const waitedIds = (message) => [ ...message.matchAll(WAITED) ].flatMap((w) => [ ...w[1].matchAll(IDS) ].map((m) => m[1] ?? m[2]))
-// With no action timeout set, a missing element ends in the test's own timeout.
-const MISSING = /TimeoutError|Timeout \d+ms exceeded|Test timeout of \d+ms exceeded|element\(s\) not found/
-const FOUND = /locator resolved to/
+// What a call log says a locator waited for: its "- waiting for …" and
+// "Locator: …" lines only (a custom expect message can echo anything
+// elsewhere), cut at " with timeout".
+const WAIT_LINE = /^\s*(?:-\s*waiting for|Locator:)\s+(.+?)(?:\s+with timeout \d+ms)?\s*$/
+const waitsIn = (block) => block.split('\n').map((l) => l.match(WAIT_LINE)?.[1]).filter(Boolean)
+// The test ids a locator names at its top level, in order, or null when it's a
+// union (.or, .and), whose target can't be told. Ids inside a filter's
+// has/hasNot only narrow it.
+const TOP_ID = /^(?:getByTestId\(\s*['"]([^'"]+)['"]\s*\)|locator\(\s*['"]\[data-testid=\\?["']([^"'\\]+)\\?["']\]['"]\s*\))/
+export function chainIds(expr) {
+  const ids = []
+  let depth = 0
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i]
+    if (depth === 0) {
+      if (/^\.(?:or|and)\(/.test(expr.slice(i))) return null
+      const m = expr.slice(i).match(TOP_ID)
+      if (m && (i === 0 || expr[i - 1] === '.')) { ids.push(m[1] ?? m[2]); i += m[0].length - 1; continue }
+    }
+    if (ch === '(' || ch === '{' || ch === '[') depth++
+    else if (ch === ')' || ch === '}' || ch === ']') depth = Math.max(0, depth - 1)
+    else if (ch === "'" || ch === '"' || ch === '`') { const end = expr.indexOf(ch, i + 1); if (end !== -1) i = end }
+  }
+  return ids
+}
+// Every test id a failure's call logs name, for checking which exist at base.
+export const waitedIds = (message) => waitsIn(message).flatMap((w) => chainIds(w) ?? [])
+// Error blocks: each "Error: …" or "TimeoutError: …" up to the next. A
+// message with none (a runner's bare output) is one block.
+const START = /^\s*\w*Error: /
+const errorBlocks = (message) => { const blocks = message.split(/\n(?=\s*\w*Error: )/).filter((b) => START.test(b)); return blocks.length ? blocks : [ message ] }
+// An element that was there: the call log resolved it, or the expect received a value from it.
+const FOUND = /locator resolved to|^\s*Received(?: string| value)?:\s*(?!<element\(s\) not found>)\S/m
 const ASSERTION_TYPE = /^(?:\w*AssertionError|expect\.\w+)$/
 const ASSERTION_LINE = /^(?:\w*AssertionError\b|Error: expect\(|expect\(|Error: Timed out \d+ms waiting for expect\()/
 
@@ -84,7 +109,8 @@ const noExt = (p) => p.replace(/\.[cm]?[jt]sx?$/, '')
 
 // Why a test failed at base, and whether that's a failure the slice fixes.
 // `owned` are the files the slice adds; `testIds` the contract's ids base lacks.
-export function classify(text, { owned, testIds }, type = '') {
+// `known` are other test ids base already has (null: not checked).
+export function classify(text, { owned, testIds, known = null }, type = '') {
   const message = failureMessage(text)
   const imported = message.match(IMPORT)
   if (imported) {
@@ -103,14 +129,29 @@ export function classify(text, { owned, testIds }, type = '') {
   }
   // A locator that never found its element; one that found it and saw the
   // wrong thing is an assertion.
-  // In a chain, the element that never appeared is the one the contract adds.
-  const waited = waitedIds(message)
-  if (waited.length && MISSING.test(message) && !FOUND.test(message)) {
-    const added = waited.filter((id) => testIds.includes(id))
-    const ok = added.length > 0
-    const testId = ok ? added.at(-1) : waited.at(-1)
-    return { kind: 'locator', detail: testId, ok, why: ok ? `waits for test id ${testId}, which the slice's contract adds` : `waits for test id ${testId}, which the slice's contract doesn't add (or base already has)` }
-  }
+  // A locator that never found its element must end on a test id the
+  // contract adds, reached through ids base has. When a failure holds several
+  // errors (a soft expect, then a timeout), each must be one the slice fixes:
+  // such a wait, or an assertion on an element that was found.
+  const verdicts = errorBlocks(message).map((block) => {
+    const ws = waitsIn(block)
+    if (ws.length && !FOUND.test(block)) {
+      for (const w of ws) {
+        const chain = chainIds(w)
+        if (!chain?.length) return { kind: 'locator', ok: false, detail: w.slice(0, 120), why: `waits for ${w.slice(0, 120)}, which doesn't end on one test id` }
+        const target = chain.at(-1)
+        if (!testIds.includes(target)) return { kind: 'locator', ok: false, detail: target, why: `waits for test id ${target}, which the slice's contract doesn't add (or base already has)` }
+        const unknown = chain.slice(0, -1).find((id) => !testIds.includes(id) && known && !known.includes(id))
+        if (unknown) return { kind: 'locator', ok: false, detail: unknown, why: `waits for test id ${target} inside ${unknown}, which neither base nor the slice's contract has` }
+      }
+      const id = chainIds(ws.at(-1)).at(-1)
+      return { kind: 'locator', ok: true, detail: id, why: `waits for test id ${id}, which the slice's contract adds` }
+    }
+    const line = block.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+    if (ASSERTION_LINE.test(line) || (ws.length && FOUND.test(block))) return { kind: 'assertion', ok: true, detail: line.slice(0, 160), why: 'an assertion that doesn\'t hold yet' }
+    return { kind: 'other', ok: false, detail: line.slice(0, 160), why: `fails for a reason the slice doesn't fix: ${line.slice(0, 160)}` }
+  })
+  if (verdicts.some((v) => v.kind === 'locator')) return verdicts.find((v) => !v.ok) ?? verdicts.filter((v) => v.kind === 'locator').at(-1)
   const first = message.split('\n').map((l) => l.trim()).find((l) => /^\w*(Error|AssertionError)\b|^expect\(/.test(l)) ?? message.split('\n').find((l) => l.trim())?.trim() ?? ''
   if (ASSERTION_TYPE.test(type) || ASSERTION_LINE.test(first)) return { kind: 'assertion', detail: first.slice(0, 160), ok: true, why: 'an assertion that doesn\'t hold yet' }
   return { kind: 'other', detail: first.slice(0, 160), ok: false, why: `fails for a reason the slice doesn't fix: ${first.slice(0, 160)}` }
@@ -210,6 +251,12 @@ export async function acGate(ctx, { base, head, tests, testsCommit, owned, testI
         for (const ac of acs) if (!passing.some((c) => new RegExp(`\\b${ac}\\b`).test(`${c.name} ${c.file ?? ''}`))) out.problems.push(`At head, no passing test covers ${ac}.`)
         continue
       }
+      // Test ids a locator passes through on the way to a new one must exist at base.
+      const seen = new Map()
+      const knownAt = async (list) => {
+        for (const id of list) if (!seen.has(id)) seen.set(id, (await newTestIds(ctx, { base, testIds: [ id ], top })).length === 0)
+        return list.filter((id) => seen.get(id))
+      }
       // At base each file runs alone, so one file that can't load (some runners
       // then report nothing at all) doesn't hide the others.
       for (const t of tests) {
@@ -223,7 +270,7 @@ export async function acGate(ctx, { base, head, tests, testsCommit, owned, testI
             out.base.push({ name: c.name, kind: 'skipped', ok: false })
             out.problems.push(`At base, "${c.name}" is skipped; an AC test runs.`)
           } else {
-            const why = classify(c.text, { owned, testIds: ids }, c.type)
+            const why = classify(c.text, { owned, testIds: ids, known: await knownAt(waitedIds(failureMessage(c.text)).filter((id) => !ids.includes(id))) }, c.type)
             out.base.push({ name: c.name, file: t, ...why })
             if (!why.ok) out.problems.push(`At base, "${c.name}" ${why.why}.`)
           }
