@@ -1,0 +1,168 @@
+<testsuites id="" name="" tests="5" failures="0" skipped="0" errors="5" time="16.993178">
+<testsuite name="q2.e2e.ts" timestamp="2026-11-11T03:16:53.379Z" hostname="" tests="5" failures="0" skipped="0" time="13.701" errors="5">
+<testcase name="hang then afterEach locator › q2 hang body" classname="q2.e2e.ts" time="3.513">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q2.e2e.ts-hang-then-afterEach-locator-q2-hang-body/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q2.e2e.ts:6:3 › hang then afterEach locator › q2 hang body ───────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      3 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      4 | test.describe('hang then afterEach locator', () => {
+    > 5 |   test.afterEach(async ({ page }) => { await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+        |                                                                                      ^
+      6 |   test('q2 hang body', async ({ page }) => { await books(page); await new Promise(() => {}) })
+      7 |   test('q2 string body', async ({ page }) => { await books(page); throw 'boom' })
+      8 | })
+        at /work/q2.e2e.ts:5:86
+
+    Error Context: out/q2.e2e.ts-hang-then-afterEach-locator-q2-hang-body/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="hang then afterEach locator › q2 string body" classname="q2.e2e.ts" time="0.647">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q2.e2e.ts-hang-then-afterEach-locator-q2-string-body/error-context.md]]
+]]>
+</system-out>
+<error message="&apos;boom&apos;" type="Error">
+<![CDATA[  q2.e2e.ts:7:3 › hang then afterEach locator › q2 string body ─────────────────────────────────────
+
+    'boom'
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      3 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      4 | test.describe('hang then afterEach locator', () => {
+    > 5 |   test.afterEach(async ({ page }) => { await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+        |                                                                                      ^
+      6 |   test('q2 hang body', async ({ page }) => { await books(page); await new Promise(() => {}) })
+      7 |   test('q2 string body', async ({ page }) => { await books(page); throw 'boom' })
+      8 | })
+        at /work/q2.e2e.ts:5:86
+
+    Error Context: out/q2.e2e.ts-hang-then-afterEach-locator-q2-string-body/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="hang then afterEach click › q2 hang body click" classname="q2.e2e.ts" time="3.514">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q2.e2e.ts-hang-then-afterEach-click-q2-hang-body-click/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q2.e2e.ts:11:3 › hang then afterEach click › q2 hang body click ──────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    TimeoutError: locator.click: Timeout 500ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+       8 | })
+       9 | test.describe('hang then afterEach click', () => {
+    > 10 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+         |                                                                              ^
+      11 |   test('q2 hang body click', async ({ page }) => { await books(page); await page.evaluate(() => new Promise(() => {})) })
+      12 | })
+      13 | test('q2 waitForFunction hang', async ({ page }) => { await books(page); await page.waitForFunction(() => false) })
+        at /work/q2.e2e.ts:10:78
+
+    Error: page.evaluate: Test timeout of 3000ms exceeded.
+
+       9 | test.describe('hang then afterEach click', () => {
+      10 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+    > 11 |   test('q2 hang body click', async ({ page }) => { await books(page); await page.evaluate(() => new Promise(() => {})) })
+         |                                                                                  ^
+      12 | })
+      13 | test('q2 waitForFunction hang', async ({ page }) => { await books(page); await page.waitForFunction(() => false) })
+      14 | test('q2 waitForResponse hang', async ({ page }) => { await books(page); await page.waitForResponse('**/never') })
+        at /work/q2.e2e.ts:11:82
+
+    Error Context: out/q2.e2e.ts-hang-then-afterEach-click-q2-hang-body-click/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="q2 waitForFunction hang" classname="q2.e2e.ts" time="3.015">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q2.e2e.ts-q2-waitForFunction-hang/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q2.e2e.ts:13:1 › q2 waitForFunction hang ─────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: page.waitForFunction: Test timeout of 3000ms exceeded.
+
+      11 |   test('q2 hang body click', async ({ page }) => { await books(page); await page.evaluate(() => new Promise(() => {})) })
+      12 | })
+    > 13 | test('q2 waitForFunction hang', async ({ page }) => { await books(page); await page.waitForFunction(() => false) })
+         |                                                                                     ^
+      14 | test('q2 waitForResponse hang', async ({ page }) => { await books(page); await page.waitForResponse('**/never') })
+      15 |
+        at /work/q2.e2e.ts:13:85
+
+    Error Context: out/q2.e2e.ts-q2-waitForFunction-hang/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="q2 waitForResponse hang" classname="q2.e2e.ts" time="3.012">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q2.e2e.ts-q2-waitForResponse-hang/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  q2.e2e.ts:14:1 › q2 waitForResponse hang ─────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: page.waitForResponse: Test timeout of 3000ms exceeded.
+    =========================== logs ===========================
+    waiting for response "**/never"
+    ============================================================
+
+      12 | })
+      13 | test('q2 waitForFunction hang', async ({ page }) => { await books(page); await page.waitForFunction(() => false) })
+    > 14 | test('q2 waitForResponse hang', async ({ page }) => { await books(page); await page.waitForResponse('**/never') })
+         |                                                                                     ^
+      15 |
+        at /work/q2.e2e.ts:14:85
+
+    Error Context: out/q2.e2e.ts-q2-waitForResponse-hang/error-context.md
+]]>
+</error>
+</testcase>
+</testsuite>
+</testsuites>

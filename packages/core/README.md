@@ -238,6 +238,16 @@ that isn't ok stops the iteration before anything is pushed.
 
 ## Known limitations
 
+**The AC gate errs on the side of refusing at base.** It reads Playwright's
+JUnit text, and some legitimate base failures look like ones the slice can't
+fix, so they're refused (write the test another way):
+- a wait on a new test id that only ends when an `afterEach` hook times out
+  (Playwright says the action "ended with the test", which a click left running
+  beside a hang also says);
+- a new test id reached only through a regex (`getByTestId(/…/)`), a compound
+  CSS selector, or a `filter({ has: … })`;
+- a body timeout and an after-hook timeout in the same failure.
+
 **Wireframes don't render inside Codex's sandbox.** agent-browser needs the
 sandbox's network on to open its local socket, and even then Chrome can't start
 inside Codex's sandbox without `--no-sandbox`. Under Codex, `wireframes design`

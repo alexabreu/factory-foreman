@@ -1,0 +1,739 @@
+<testsuites id="" name="" tests="21" failures="12" skipped="0" errors="9" time="51.649697">
+<testsuite name="r.e2e.ts" timestamp="2026-11-11T02:56:16.771Z" hostname="" tests="21" failures="12" skipped="0" time="40.394" errors="9">
+<testcase name="role chain" classname="r.e2e.ts" time="3.02">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-role-chain/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:5:1 › role chain ────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByRole('listitem').filter({ hasText: 'Dune' }).getByTestId('item-remove')
+
+
+      3 | test.setTimeout(3000)
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+    > 5 | test('role chain', async ({ page }) => { await books(page); await page.getByRole('listitem').filter({ hasText: 'Dune' }).getByTestId('item-remove').click() })
+        |                                                                                                                                                     ^
+      6 | test('css parent', async ({ page }) => { await books(page); await page.locator('ul li').getByTestId('item-remove').click() })
+      7 | test('nth first', async ({ page }) => { await books(page); await page.getByTestId('item').nth(0).getByTestId('item-remove').first().click() })
+      8 | test('frame', async ({ page }) => { await books(page); await page.frameLocator('#f').getByTestId('item-remove').click() })
+        at /work/r.e2e.ts:5:149
+
+    Error Context: out/r.e2e.ts-role-chain/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="css parent" classname="r.e2e.ts" time="3.013">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-css-parent/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:6:1 › css parent ────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for locator('ul li').getByTestId('item-remove')
+
+
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      5 | test('role chain', async ({ page }) => { await books(page); await page.getByRole('listitem').filter({ hasText: 'Dune' }).getByTestId('item-remove').click() })
+    > 6 | test('css parent', async ({ page }) => { await books(page); await page.locator('ul li').getByTestId('item-remove').click() })
+        |                                                                                                                    ^
+      7 | test('nth first', async ({ page }) => { await books(page); await page.getByTestId('item').nth(0).getByTestId('item-remove').first().click() })
+      8 | test('frame', async ({ page }) => { await books(page); await page.frameLocator('#f').getByTestId('item-remove').click() })
+      9 | test('count new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toHaveCount(1, { timeout: 500 }) })
+        at /work/r.e2e.ts:6:116
+
+    Error Context: out/r.e2e.ts-css-parent/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="nth first" classname="r.e2e.ts" time="3.018">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-nth-first/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:7:1 › nth first ─────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item').first().getByTestId('item-remove').first()
+
+
+       5 | test('role chain', async ({ page }) => { await books(page); await page.getByRole('listitem').filter({ hasText: 'Dune' }).getByTestId('item-remove').click() })
+       6 | test('css parent', async ({ page }) => { await books(page); await page.locator('ul li').getByTestId('item-remove').click() })
+    >  7 | test('nth first', async ({ page }) => { await books(page); await page.getByTestId('item').nth(0).getByTestId('item-remove').first().click() })
+         |                                                                                                                                     ^
+       8 | test('frame', async ({ page }) => { await books(page); await page.frameLocator('#f').getByTestId('item-remove').click() })
+       9 | test('count new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toHaveCount(1, { timeout: 500 }) })
+      10 | test('visible new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+        at /work/r.e2e.ts:7:133
+
+    Error Context: out/r.e2e.ts-nth-first/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="frame" classname="r.e2e.ts" time="3.015">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-frame/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:8:1 › frame ─────────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for locator('#f').contentFrame().getByTestId('item-remove')
+
+
+       6 | test('css parent', async ({ page }) => { await books(page); await page.locator('ul li').getByTestId('item-remove').click() })
+       7 | test('nth first', async ({ page }) => { await books(page); await page.getByTestId('item').nth(0).getByTestId('item-remove').first().click() })
+    >  8 | test('frame', async ({ page }) => { await books(page); await page.frameLocator('#f').getByTestId('item-remove').click() })
+         |                                                                                                                 ^
+       9 | test('count new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toHaveCount(1, { timeout: 500 }) })
+      10 | test('visible new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      11 | test('unquoted css', async ({ page }) => { await books(page); await page.locator('[data-testid=item-remove]').click() })
+        at /work/r.e2e.ts:8:113
+
+    Error Context: out/r.e2e.ts-frame/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="count new" classname="r.e2e.ts" time="0.677">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-count-new/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveCount(expected) failed" type="expect.toHaveCount">
+<![CDATA[  r.e2e.ts:9:1 › count new ─────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByTestId('item-remove')
+    Expected: 1
+    Received: 0
+    Timeout:  500ms
+
+    Call log:
+      - Expect "toHaveCount" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+        6 × locator resolved to 0 elements
+          - unexpected value "0"
+
+
+       7 | test('nth first', async ({ page }) => { await books(page); await page.getByTestId('item').nth(0).getByTestId('item-remove').first().click() })
+       8 | test('frame', async ({ page }) => { await books(page); await page.frameLocator('#f').getByTestId('item-remove').click() })
+    >  9 | test('count new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toHaveCount(1, { timeout: 500 }) })
+         |                                                                                                          ^
+      10 | test('visible new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      11 | test('unquoted css', async ({ page }) => { await books(page); await page.locator('[data-testid=item-remove]').click() })
+      12 | test('quoted css', async ({ page }) => { await books(page); await page.locator('[data-testid="item-remove"]').click() })
+        at /work/r.e2e.ts:9:106
+
+    Error Context: out/r.e2e.ts-count-new/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="visible new" classname="r.e2e.ts" time="0.66">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-visible-new/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  r.e2e.ts:10:1 › visible new ──────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+       8 | test('frame', async ({ page }) => { await books(page); await page.frameLocator('#f').getByTestId('item-remove').click() })
+       9 | test('count new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toHaveCount(1, { timeout: 500 }) })
+    > 10 | test('visible new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+         |                                                                                                            ^
+      11 | test('unquoted css', async ({ page }) => { await books(page); await page.locator('[data-testid=item-remove]').click() })
+      12 | test('quoted css', async ({ page }) => { await books(page); await page.locator('[data-testid="item-remove"]').click() })
+      13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+        at /work/r.e2e.ts:10:108
+
+    Error Context: out/r.e2e.ts-visible-new/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="unquoted css" classname="r.e2e.ts" time="3.016">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-unquoted-css/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:11:1 › unquoted css ─────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid=item-remove]')
+
+
+       9 | test('count new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toHaveCount(1, { timeout: 500 }) })
+      10 | test('visible new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+    > 11 | test('unquoted css', async ({ page }) => { await books(page); await page.locator('[data-testid=item-remove]').click() })
+         |                                                                                                               ^
+      12 | test('quoted css', async ({ page }) => { await books(page); await page.locator('[data-testid="item-remove"]').click() })
+      13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+      14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+        at /work/r.e2e.ts:11:111
+
+    Error Context: out/r.e2e.ts-unquoted-css/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="quoted css" classname="r.e2e.ts" time="3.018">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-quoted-css/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:12:1 › quoted css ───────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="item-remove"]')
+
+
+      10 | test('visible new', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      11 | test('unquoted css', async ({ page }) => { await books(page); await page.locator('[data-testid=item-remove]').click() })
+    > 12 | test('quoted css', async ({ page }) => { await books(page); await page.locator('[data-testid="item-remove"]').click() })
+         |                                                                                                               ^
+      13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+      14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+      15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+        at /work/r.e2e.ts:12:111
+
+    Error Context: out/r.e2e.ts-quoted-css/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="text array existing" classname="r.e2e.ts" time="0.682">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-text-array-existing/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveText(expected) failed" type="expect.toHaveText">
+<![CDATA[  r.e2e.ts:13:1 › text array existing ──────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByTestId('item-title')
+    Timeout: 500ms
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "Emma",
+    +   "Dune",
+      ]
+
+    Call log:
+      - Expect "toHaveText" getByTestId('item-title') with timeout 500ms
+      - waiting for getByTestId('item-title')
+        6 × locator resolved to 1 element
+
+
+      11 | test('unquoted css', async ({ page }) => { await books(page); await page.locator('[data-testid=item-remove]').click() })
+      12 | test('quoted css', async ({ page }) => { await books(page); await page.locator('[data-testid="item-remove"]').click() })
+    > 13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+         |                                                                                                                   ^
+      14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+      15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+        at /work/r.e2e.ts:13:115
+
+    Error Context: out/r.e2e.ts-text-array-existing/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="count existing" classname="r.e2e.ts" time="0.686">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-count-existing/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveCount(expected) failed" type="expect.toHaveCount">
+<![CDATA[  r.e2e.ts:14:1 › count existing ───────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByTestId('item')
+    Expected: 0
+    Received: 1
+    Timeout:  500ms
+
+    Call log:
+      - Expect "toHaveCount" getByTestId('item') with timeout 500ms
+      - waiting for getByTestId('item')
+        6 × locator resolved to 1 element
+          - unexpected value "1"
+
+
+      12 | test('quoted css', async ({ page }) => { await books(page); await page.locator('[data-testid="item-remove"]').click() })
+      13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+    > 14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+         |                                                                                                        ^
+      15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+        at /work/r.e2e.ts:14:104
+
+    Error Context: out/r.e2e.ts-count-existing/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="soft found then hang" classname="r.e2e.ts" time="3.01">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-soft-found-then-hang/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveText(expected) failed" type="expect.toHaveText">
+<![CDATA[  r.e2e.ts:15:1 › soft found then hang ─────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByTestId('summary')
+    Expected: "nope"
+    Received: "1 of 1 unread"
+    Timeout:  500ms
+
+    Call log:
+      - Expect "soft toHaveText" getByTestId('summary') with timeout 500ms
+      - waiting for getByTestId('summary')
+        6 × locator resolved to <p aria-live="polite" data-testid="summary">1 of 1 unread</p>
+          - unexpected value "1 of 1 unread"
+
+
+      13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+      14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+    > 15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+         |                                                                                                                      ^
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+      18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+        at /work/r.e2e.ts:15:118
+
+    Test timeout of 3000ms exceeded.
+
+    Error: page.waitForTimeout: Test ended.
+
+      13 | test('text array existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-title')).toHaveText(['Emma'], { timeout: 500 }) })
+      14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+    > 15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+         |                                                                                                                                                                       ^
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+      18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+        at /work/r.e2e.ts:15:167
+
+    Error Context: out/r.e2e.ts-soft-found-then-hang/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="soft new then promise hang" classname="r.e2e.ts" time="3.008">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-soft-new-then-promise-hang/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  r.e2e.ts:16:1 › soft new then promise hang ───────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      14 | test('count existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item')).toHaveCount(0, { timeout: 500 }) })
+      15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+    > 16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+         |                                                                                                                                ^
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+      18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+      19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+        at /work/r.e2e.ts:16:128
+
+    Test timeout of 3000ms exceeded.
+
+    Error Context: out/r.e2e.ts-soft-new-then-promise-hang/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="soft new then throw string" classname="r.e2e.ts" time="0.683">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-soft-new-then-throw-string/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  r.e2e.ts:17:1 › soft new then throw string ───────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      15 | test('soft found then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }); await page.waitForTimeout(10000) })
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+    > 17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+         |                                                                                                                                ^
+      18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+      19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+      20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+        at /work/r.e2e.ts:17:128
+
+    'boom'
+
+    Error Context: out/r.e2e.ts-soft-new-then-throw-string/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="soft new then goto bad" classname="r.e2e.ts" time="0.667">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-soft-new-then-goto-bad/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  r.e2e.ts:18:1 › soft new then goto bad ───────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+    > 18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+         |                                                                                                                            ^
+      19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+      20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+      21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+        at /work/r.e2e.ts:18:124
+
+    Error: page.goto: net::ERR_UNSAFE_PORT at http://localhost:1/
+    Call log:
+      - navigating to "http://localhost:1/", waiting until "load"
+
+
+      16 | test('soft new then promise hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await new Promise(() => {}) })
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+    > 18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+         |                                                                                                                                                                      ^
+      19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+      20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+      21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+        at /work/r.e2e.ts:18:166
+
+    Error Context: out/r.e2e.ts-soft-new-then-goto-bad/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="has filter" classname="r.e2e.ts" time="3.017">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-has-filter/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:19:1 › has filter ───────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item').filter({ has: getByTestId('item-remove') })
+
+
+      17 | test('soft new then throw string', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); throw 'boom' })
+      18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+    > 19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+         |                                                                                                                                             ^
+      20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+      21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+      22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+        at /work/r.e2e.ts:19:141
+
+    Error Context: out/r.e2e.ts-has-filter/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="escaped quote" classname="r.e2e.ts" time="3.015">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-escaped-quote/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:20:1 › escaped quote ────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item').filter({ hasText: 'it\'s' }).getByTestId('item-remove')
+
+
+      18 | test('soft new then goto bad', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.goto('http://localhost:1/') })
+      19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+    > 20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+         |                                                                                                                                                      ^
+      21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+      22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+      23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+        at /work/r.e2e.ts:20:150
+
+    Error Context: out/r.e2e.ts-escaped-quote/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="regex id" classname="r.e2e.ts" time="3.015">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-regex-id/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  r.e2e.ts:21:1 › regex id ─────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId(/item-remove/)
+
+
+      19 | test('has filter', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ has: page.getByTestId('item-remove') }).click() })
+      20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+    > 21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+         |                                                                                                 ^
+      22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+      23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+      24 | test('typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveCount(1, { timeout: 500 }); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+        at /work/r.e2e.ts:21:97
+
+    Error Context: out/r.e2e.ts-regex-id/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="checked existing" classname="r.e2e.ts" time="0.678">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-checked-existing/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeChecked() failed" type="expect.toBeChecked">
+<![CDATA[  r.e2e.ts:22:1 › checked existing ─────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeChecked() failed
+
+    Locator:  getByTestId('item-toggle')
+    Expected: checked
+    Received: unchecked
+    Timeout:  500ms
+
+    Call log:
+      - Expect "toBeChecked" getByTestId('item-toggle') with timeout 500ms
+      - waiting for getByTestId('item-toggle')
+        6 × locator resolved to <input type="checkbox" data-item-id="1" data-testid="item-toggle"/>
+          - unexpected value "unchecked"
+
+
+      20 | test('escaped quote', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: "it's" }).getByTestId('item-remove').click() })
+      21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+    > 22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+         |                                                                                                                 ^
+      23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+      24 | test('typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveCount(1, { timeout: 500 }); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      25 | test('typo count', async ({ page }) => { await books(page); await expect(page.getByTestId('itemz')).toHaveCount(1, { timeout: 500 }) })
+        at /work/r.e2e.ts:22:113
+
+    Error Context: out/r.e2e.ts-checked-existing/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="hidden new not" classname="r.e2e.ts" time="0.668">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-hidden-new-not/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).not.toBeHidden() failed" type="expect.not.toBeHidden">
+<![CDATA[  r.e2e.ts:23:1 › hidden new not ───────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).not.toBeHidden() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: not hidden
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "not toBeHidden" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      21 | test('regex id', async ({ page }) => { await books(page); await page.getByTestId(/item-remove/).click() })
+      22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+    > 23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+         |                                                                                                                   ^
+      24 | test('typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveCount(1, { timeout: 500 }); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      25 | test('typo count', async ({ page }) => { await books(page); await expect(page.getByTestId('itemz')).toHaveCount(1, { timeout: 500 }) })
+      26 |
+        at /work/r.e2e.ts:23:115
+
+    Error Context: out/r.e2e.ts-hidden-new-not/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="typo then new" classname="r.e2e.ts" time="1.156">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-typo-then-new/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveCount(expected) failed" type="expect.toHaveCount">
+<![CDATA[  r.e2e.ts:24:1 › typo then new ────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByTestId('summaryy')
+    Expected: 1
+    Received: 0
+    Timeout:  500ms
+
+    Call log:
+      - Expect "soft toHaveCount" getByTestId('summaryy') with timeout 500ms
+      - waiting for getByTestId('summaryy')
+        6 × locator resolved to 0 elements
+          - unexpected value "0"
+
+
+      22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+      23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+    > 24 | test('typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveCount(1, { timeout: 500 }); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+         |                                                                                                                ^
+      25 | test('typo count', async ({ page }) => { await books(page); await expect(page.getByTestId('itemz')).toHaveCount(1, { timeout: 500 }) })
+      26 |
+        at /work/r.e2e.ts:24:112
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      22 | test('checked existing', async ({ page }) => { await books(page); await expect(page.getByTestId('item-toggle')).toBeChecked({ timeout: 500 }) })
+      23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+    > 24 | test('typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveCount(1, { timeout: 500 }); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+         |                                                                                                                                                                                                ^
+      25 | test('typo count', async ({ page }) => { await books(page); await expect(page.getByTestId('itemz')).toHaveCount(1, { timeout: 500 }) })
+      26 |
+        at /work/r.e2e.ts:24:192
+
+    Error Context: out/r.e2e.ts-typo-then-new/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="typo count" classname="r.e2e.ts" time="0.672">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/r.e2e.ts-typo-count/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveCount(expected) failed" type="expect.toHaveCount">
+<![CDATA[  r.e2e.ts:25:1 › typo count ───────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByTestId('itemz')
+    Expected: 1
+    Received: 0
+    Timeout:  500ms
+
+    Call log:
+      - Expect "toHaveCount" getByTestId('itemz') with timeout 500ms
+      - waiting for getByTestId('itemz')
+        6 × locator resolved to 0 elements
+          - unexpected value "0"
+
+
+      23 | test('hidden new not', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).not.toBeHidden({ timeout: 500 }) })
+      24 | test('typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveCount(1, { timeout: 500 }); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+    > 25 | test('typo count', async ({ page }) => { await books(page); await expect(page.getByTestId('itemz')).toHaveCount(1, { timeout: 500 }) })
+         |                                                                                                     ^
+      26 |
+        at /work/r.e2e.ts:25:101
+
+    Error Context: out/r.e2e.ts-typo-count/error-context.md
+]]>
+</failure>
+</testcase>
+</testsuite>
+</testsuites>

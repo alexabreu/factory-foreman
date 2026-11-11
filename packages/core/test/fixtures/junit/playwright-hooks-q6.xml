@@ -1,0 +1,125 @@
+<testsuites id="" name="" tests="3" failures="0" skipped="0" errors="3" time="11.877154999999998">
+<testsuite name="q6.e2e.ts" timestamp="2026-11-11T03:19:53.570Z" hostname="" tests="3" failures="0" skipped="0" time="9.625" errors="3">
+<testcase name="be click › q6 be pending click" classname="q6.e2e.ts" time="3.027">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q6.e2e.ts-be-click-q6-be-pending-click/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded while running &quot;beforeEach&quot; hook." type="Error">
+<![CDATA[  q6.e2e.ts:6:3 › be click › q6 be pending click ───────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded while running "beforeEach" hook.
+
+      3 | test.use({ actionTimeout: 0 })
+      4 | test.describe('be click', () => {
+    > 5 |   test.beforeEach(async ({ page }) => { await page.goto('/'); await page.getByTestId('item-remove').click() })
+        |        ^
+      6 |   test('q6 be pending click', async ({ page }) => {})
+      7 | })
+      8 | test.describe('be expect', () => {
+        at /work/q6.e2e.ts:5:8
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      3 | test.use({ actionTimeout: 0 })
+      4 | test.describe('be click', () => {
+    > 5 |   test.beforeEach(async ({ page }) => { await page.goto('/'); await page.getByTestId('item-remove').click() })
+        |                                                                                                     ^
+      6 |   test('q6 be pending click', async ({ page }) => {})
+      7 | })
+      8 | test.describe('be expect', () => {
+        at /work/q6.e2e.ts:5:101
+
+    Error Context: out/q6.e2e.ts-be-click-q6-be-pending-click/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="be expect › q6 be pending expect" classname="q6.e2e.ts" time="3.017">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q6.e2e.ts-be-expect-q6-be-pending-expect/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded while running &quot;beforeEach&quot; hook." type="Error">
+<![CDATA[  q6.e2e.ts:10:3 › be expect › q6 be pending expect ────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded while running "beforeEach" hook.
+
+       7 | })
+       8 | test.describe('be expect', () => {
+    >  9 |   test.beforeEach(async ({ page }) => { await page.goto('/'); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 60000 }) })
+         |        ^
+      10 |   test('q6 be pending expect', async ({ page }) => {})
+      11 | })
+      12 | test.describe('be hang ae click', () => {
+        at /work/q6.e2e.ts:9:8
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 60000ms
+      - waiting for getByTestId('item-remove')
+      - Test timeout of 3000ms exceeded.
+
+
+       7 | })
+       8 | test.describe('be expect', () => {
+    >  9 |   test.beforeEach(async ({ page }) => { await page.goto('/'); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 60000 }) })
+         |                                                                                                             ^
+      10 |   test('q6 be pending expect', async ({ page }) => {})
+      11 | })
+      12 | test.describe('be hang ae click', () => {
+        at /work/q6.e2e.ts:9:109
+
+    Error Context: out/q6.e2e.ts-be-expect-q6-be-pending-expect/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="be hang ae click › q6 be hang ae click" classname="q6.e2e.ts" time="3.581">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/q6.e2e.ts-be-hang-ae-click-q6-be-hang-ae-click/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded while running &quot;beforeEach&quot; hook." type="Error">
+<![CDATA[  q6.e2e.ts:15:3 › be hang ae click › q6 be hang ae click ──────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded while running "beforeEach" hook.
+
+      11 | })
+      12 | test.describe('be hang ae click', () => {
+    > 13 |   test.beforeEach(async () => { await new Promise(() => {}) })
+         |        ^
+      14 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+      15 |   test('q6 be hang ae click', async ({ page }) => {})
+      16 | })
+        at /work/q6.e2e.ts:13:8
+
+    TimeoutError: locator.click: Timeout 500ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      12 | test.describe('be hang ae click', () => {
+      13 |   test.beforeEach(async () => { await new Promise(() => {}) })
+    > 14 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click({ timeout: 500 }) })
+         |                                                                              ^
+      15 |   test('q6 be hang ae click', async ({ page }) => {})
+      16 | })
+      17 |
+        at /work/q6.e2e.ts:14:78
+
+    Error Context: out/q6.e2e.ts-be-hang-ae-click-q6-be-hang-ae-click/error-context.md
+]]>
+</error>
+</testcase>
+</testsuite>
+</testsuites>

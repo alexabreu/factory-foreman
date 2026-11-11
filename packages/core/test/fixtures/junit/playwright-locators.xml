@@ -1,0 +1,321 @@
+<testsuites id="" name="" tests="9" failures="5" skipped="0" errors="4" time="25.803266000000004">
+<testsuite name="h.e2e.ts" timestamp="2026-11-11T02:51:50.048Z" hostname="" tests="9" failures="5" skipped="0" time="20.174" errors="4">
+<testcase name="real chain" classname="h.e2e.ts" time="3.019">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-real-chain/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  h.e2e.ts:5:1 › real chain ────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item').filter({ hasText: 'Dune' }).getByTestId('item-remove')
+
+
+      3 | test.setTimeout(3000)
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+    > 5 | test('real chain', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: 'Dune' }).getByTestId('item-remove').click() })
+        |                                                                                                                                                   ^
+      6 | test('a typo parent', async ({ page }) => { await books(page); await page.getByTestId('itemz').getByTestId('item-remove').click() })
+      7 | test('b hasNot', async ({ page }) => { await page.goto('/'); await page.getByTestId('item').filter({ hasNot: page.getByTestId('item-remove') }).click() })
+      8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+        at /work/h.e2e.ts:5:147
+
+    Error Context: out/h.e2e.ts-real-chain/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="a typo parent" classname="h.e2e.ts" time="3.015">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-a-typo-parent/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  h.e2e.ts:6:1 › a typo parent ─────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('itemz').getByTestId('item-remove')
+
+
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      5 | test('real chain', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: 'Dune' }).getByTestId('item-remove').click() })
+    > 6 | test('a typo parent', async ({ page }) => { await books(page); await page.getByTestId('itemz').getByTestId('item-remove').click() })
+        |                                                                                                                           ^
+      7 | test('b hasNot', async ({ page }) => { await page.goto('/'); await page.getByTestId('item').filter({ hasNot: page.getByTestId('item-remove') }).click() })
+      8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+      9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+        at /work/h.e2e.ts:6:123
+
+    Error Context: out/h.e2e.ts-a-typo-parent/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="b hasNot" classname="h.e2e.ts" time="3.018">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-b-hasNot/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  h.e2e.ts:7:1 › b hasNot ──────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item').filter({ hasNot: getByTestId('item-remove') })
+
+
+       5 | test('real chain', async ({ page }) => { await books(page); await page.getByTestId('item').filter({ hasText: 'Dune' }).getByTestId('item-remove').click() })
+       6 | test('a typo parent', async ({ page }) => { await books(page); await page.getByTestId('itemz').getByTestId('item-remove').click() })
+    >  7 | test('b hasNot', async ({ page }) => { await page.goto('/'); await page.getByTestId('item').filter({ hasNot: page.getByTestId('item-remove') }).click() })
+         |                                                                                                                                                 ^
+       8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+       9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+        at /work/h.e2e.ts:7:145
+
+    Error Context: out/h.e2e.ts-b-hasNot/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="c or" classname="h.e2e.ts" time="3.015">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-c-or/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded." type="Error">
+<![CDATA[  h.e2e.ts:8:1 › c or ──────────────────────────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('itemz').or(getByTestId('item-remove'))
+
+
+       6 | test('a typo parent', async ({ page }) => { await books(page); await page.getByTestId('itemz').getByTestId('item-remove').click() })
+       7 | test('b hasNot', async ({ page }) => { await page.goto('/'); await page.getByTestId('item').filter({ hasNot: page.getByTestId('item-remove') }).click() })
+    >  8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+         |                                                                                                                           ^
+       9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+        at /work/h.e2e.ts:8:123
+
+    Error Context: out/h.e2e.ts-c-or/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="soft typo then new" classname="h.e2e.ts" time="3.009">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-soft-typo-then-new/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveText(expected) failed" type="expect.toHaveText">
+<![CDATA[  h.e2e.ts:9:1 › soft typo then new ────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByTestId('summaryy')
+    Expected: "x"
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toHaveText" getByTestId('summaryy') with timeout 500ms
+      - waiting for getByTestId('summaryy')
+
+
+       7 | test('b hasNot', async ({ page }) => { await page.goto('/'); await page.getByTestId('item').filter({ hasNot: page.getByTestId('item-remove') }).click() })
+       8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+    >  9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+         |                                                                                                                     ^
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+      12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+        at /work/h.e2e.ts:9:117
+
+    Test timeout of 3000ms exceeded.
+
+    Error: locator.click: Test ended.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+       7 | test('b hasNot', async ({ page }) => { await page.goto('/'); await page.getByTestId('item').filter({ hasNot: page.getByTestId('item-remove') }).click() })
+       8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+    >  9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+         |                                                                                                                                                                                              ^
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+      12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+        at /work/h.e2e.ts:9:190
+
+    Error Context: out/h.e2e.ts-soft-typo-then-new/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="custom message" classname="h.e2e.ts" time="0.69">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-custom-message/error-context.md]]
+]]>
+</system-out>
+<failure message="waiting for getByTestId(&apos;item-remove&apos;)" type="expect.toHaveText">
+<![CDATA[  h.e2e.ts:10:1 › custom message ───────────────────────────────────────────────────────────────────
+
+    Error: waiting for getByTestId('item-remove')
+
+    expect(locator).toHaveText(expected) failed
+
+    Locator:  getByTestId('summary')
+    Expected: "nope"
+    Received: "1 of 1 unread"
+    Timeout:  500ms
+
+    Call log:
+      - waiting for getByTestId('item-remove') getByTestId('summary') with timeout 500ms
+      - waiting for getByTestId('summary')
+        6 × locator resolved to <p aria-live="polite" data-testid="summary">1 of 1 unread</p>
+          - unexpected value "1 of 1 unread"
+
+
+       8 | test('c or', async ({ page }) => { await books(page); await page.getByTestId('itemz').or(page.getByTestId('item-remove')).click() })
+       9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+    > 10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+         |                                                                                                                                                     ^
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+      12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+      13 | test('expect new visible', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+        at /work/h.e2e.ts:10:149
+
+    Error Context: out/h.e2e.ts-custom-message/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="found wrong text" classname="h.e2e.ts" time="0.72">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-found-wrong-text/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveText(expected) failed" type="expect.toHaveText">
+<![CDATA[  h.e2e.ts:11:1 › found wrong text ─────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByTestId('summary')
+    Expected: "nope"
+    Received: "1 of 1 unread"
+    Timeout:  500ms
+
+    Call log:
+      - Expect "toHaveText" getByTestId('summary') with timeout 500ms
+      - waiting for getByTestId('summary')
+        6 × locator resolved to <p aria-live="polite" data-testid="summary">1 of 1 unread</p>
+          - unexpected value "1 of 1 unread"
+
+
+       9 | test('soft typo then new', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('summaryy')).toHaveText('x', { timeout: 500 }); await page.getByTestId('item-remove').click() })
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+    > 11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+         |                                                                                                             ^
+      12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+      13 | test('expect new visible', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      14 |
+        at /work/h.e2e.ts:11:109
+
+    Error Context: out/h.e2e.ts-found-wrong-text/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="soft new then hang" classname="h.e2e.ts" time="3.01">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-soft-new-then-hang/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  h.e2e.ts:12:1 › soft new then hang ───────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+    > 12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+         |                                                                                                                        ^
+      13 | test('expect new visible', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      14 |
+        at /work/h.e2e.ts:12:120
+
+    Test timeout of 3000ms exceeded.
+
+    Error: page.waitForTimeout: Test ended.
+
+      10 | test('custom message', async ({ page }) => { await books(page); await expect(page.getByTestId('summary'), "waiting for getByTestId('item-remove')").toHaveText('nope', { timeout: 500 }) })
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+    > 12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+         |                                                                                                                                                                  ^
+      13 | test('expect new visible', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+      14 |
+        at /work/h.e2e.ts:12:162
+
+    Error Context: out/h.e2e.ts-soft-new-then-hang/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="expect new visible" classname="h.e2e.ts" time="0.678">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/h.e2e.ts-expect-new-visible/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  h.e2e.ts:13:1 › expect new visible ───────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByTestId('item-remove') with timeout 500ms
+      - waiting for getByTestId('item-remove')
+
+
+      11 | test('found wrong text', async ({ page }) => { await books(page); await expect(page.getByTestId('summary')).toHaveText('nope', { timeout: 500 }) })
+      12 | test('soft new then hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }); await page.waitForTimeout(10000) })
+    > 13 | test('expect new visible', async ({ page }) => { await books(page); await expect(page.getByTestId('item-remove')).toBeVisible({ timeout: 500 }) })
+         |                                                                                                                   ^
+      14 |
+        at /work/h.e2e.ts:13:115
+
+    Error Context: out/h.e2e.ts-expect-new-visible/error-context.md
+]]>
+</failure>
+</testcase>
+</testsuite>
+</testsuites>

@@ -1,0 +1,80 @@
+<testsuites id="" name="" tests="2" failures="0" skipped="0" errors="2" time="11.655009">
+<testsuite name="z.e2e.ts" timestamp="2026-11-11T03:09:46.138Z" hostname="" tests="2" failures="0" skipped="0" time="9.277" errors="2">
+<testcase name="before › z beforeEach new" classname="z.e2e.ts" time="3.026">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/z.e2e.ts-before-z-beforeEach-new/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 3000ms exceeded while running &quot;beforeEach&quot; hook." type="Error">
+<![CDATA[  z.e2e.ts:7:3 › before › z beforeEach new ─────────────────────────────────────────────────────────
+
+    Test timeout of 3000ms exceeded while running "beforeEach" hook.
+
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      5 | test.describe('before', () => {
+    > 6 |   test.beforeEach(async ({ page }) => { await books(page); await page.getByTestId('item-remove').click() })
+        |        ^
+      7 |   test('z beforeEach new', async ({ page }) => { await expect(page.getByTestId('summary')).toHaveText('x') })
+      8 | })
+      9 | test.describe('after', () => {
+        at /work/z.e2e.ts:6:8
+
+    Error: locator.click: Test timeout of 3000ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      5 | test.describe('before', () => {
+    > 6 |   test.beforeEach(async ({ page }) => { await books(page); await page.getByTestId('item-remove').click() })
+        |                                                                                                  ^
+      7 |   test('z beforeEach new', async ({ page }) => { await expect(page.getByTestId('summary')).toHaveText('x') })
+      8 | })
+      9 | test.describe('after', () => {
+        at /work/z.e2e.ts:6:98
+
+    Error Context: out/z.e2e.ts-before-z-beforeEach-new/error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="after › z afterEach new only" classname="z.e2e.ts" time="6.251">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/z.e2e.ts-after-z-afterEach-new-only/error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 6000ms exceeded while running &quot;afterEach&quot; hook." type="Error">
+<![CDATA[  z.e2e.ts:11:3 › after › z afterEach new only ─────────────────────────────────────────────────────
+
+    Test timeout of 6000ms exceeded while running "afterEach" hook.
+
+       8 | })
+       9 | test.describe('after', () => {
+    > 10 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click() })
+         |        ^
+      11 |   test('z afterEach new only', async ({ page }) => { await books(page) })
+      12 | })
+      13 |
+        at /work/z.e2e.ts:10:8
+
+    Error: locator.click: Test ended.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+       8 | })
+       9 | test.describe('after', () => {
+    > 10 |   test.afterEach(async ({ page }) => { await page.getByTestId('item-remove').click() })
+         |                                                                              ^
+      11 |   test('z afterEach new only', async ({ page }) => { await books(page) })
+      12 | })
+      13 |
+        at /work/z.e2e.ts:10:78
+
+    Error Context: out/z.e2e.ts-after-z-afterEach-new-only/error-context.md
+]]>
+</error>
+</testcase>
+</testsuite>
+</testsuites>
