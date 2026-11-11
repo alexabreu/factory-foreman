@@ -58,7 +58,6 @@ export function verdict(command, depth = 0) {
   if (Array.isArray(command)) command = command.map((w) => (/^[\w./=:@%+,-]+$/.test(w) ? w : `'${String(w).replace(/'/g, "'\\''")}'`)).join(' ')
   if (typeof command !== 'string' || !command.trim() || depth > 4) return null
   // Records come from factory-foreman itself: a terminal approval is only as strong as this.
-  if (/factory-foreman:record/.test(command)) return 'Writing a factory-foreman record by hand is refused; records come from factory-foreman commands.'
   const nested = []; for (const words of lex(command, nested)) {
     const t = head(words)
     const name = base(t[0] ?? '').replace(/^((?:@[^/]+\/)?[^@]+)@[^/]*$/, '$1')
@@ -72,8 +71,9 @@ export function verdict(command, depth = 0) {
     if (name !== 'gh') continue
     const [ group, action, path ] = args(t.slice(1))
     if (group === 'pr' && (action === 'review' || action === 'merge')) return `gh pr ${action} is for a person in their own terminal.`
-    const hidden = (w) => /^(--body-file|--input|-F|--field)(=|$)/.test(w) || /\uE000|\$[A-Za-z_{]/.test(w) // a comment's text the guard can't see (a file, stdin, a variable, a command's output) could hold a record
-    if ((((group === 'pr' || group === 'issue') && action === 'comment') || (group === 'api' && /\bissues\/([^\s/]+\/)?comments\b/.test(t.join(' ')) && GH_WRITE(t))) && t.some(hidden)) return `A comment through gh ${group} whose text comes from a file, a variable or a command's output is refused, since it could hold a factory-foreman record; pass the text inline.`
+    const opaque = nested.some((n) => !/^\s*cat\s+<<-?\s*['"]?\w+['"]?\s*\n/.test(n)); const hidden = (w) => /^(--body-file|--input|-F|--field)(=|$)|^-F./.test(w) || (opaque && w.includes('\uE000')) || /\$[A-Za-z_{]/.test(w) // text it can't see (a file, stdin, a variable, a command's output, not a heredoc) could hold a record
+    const comments = ((group === 'pr' || group === 'issue') && action === 'comment') || (group === 'api' && (/\bissues\/([^\s/]+\/)?comments\b/.test(t.join(' ')) && GH_WRITE(t) || (action === 'graphql' && /addComment/.test(t.join(' '))))); if (comments && (/factory-foreman:record/.test(command) || /factory-foreman:record/.test(t.join('')))) return 'Writing a factory-foreman record by hand is refused; records come from factory-foreman commands.'
+    if (comments && t.some(hidden)) return `A comment through gh ${group} whose text comes from a file, a variable or a command's output is refused, since it could hold a factory-foreman record; pass the text inline.`
     const graphql = action === 'graphql' && t.some((w) => MUTATION.test(w) || /^(-[fF])?query=(@|.*\uE000)|^--input/.test(w))
     if (group === 'api' && (graphql || (/\bpulls\/[^\s/]+\/(reviews|merge)\b/.test(t.join(' ')) && GH_WRITE(t)))) return `Writing pull request reviews or merges through gh api (${path ?? action}) is for a person in their own terminal.`
   }

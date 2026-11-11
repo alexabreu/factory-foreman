@@ -10,6 +10,9 @@ const DENIED = [
   'factory-foreman approve shape v2',
   'factory-foreman approve slice 1',
   'npx factory-foreman@latest approve slice 1',
+  "gh pr comment 2 --body '<!-- factory-''foreman:record {} -->'",
+  'gh pr comment 2 -Frec.md',
+  "gh api graphql -f query='mutation{addComment(input:{subjectId:\"x\",body:\"y\"}){clientMutationId}}' -F body=@rec.md",
   'gh pr comment 2 --body "<!-- factory-foreman:record {} -->"',
   'gh pr comment 2 --body-file rec.md',
   'gh issue comment 2 -F rec.md',
@@ -113,6 +116,8 @@ const DENIED = [
 ]
 
 const ALLOWED = [
+  'grep -rn "factory-foreman:record" packages/core/src',
+  "gh pr comment 2 --body \"$(cat <<'EOF'\nLooks good.\nEOF\n)\"",
   'gh pr comment 2 --body "looks good"',
   'gh pr comment 2 --body "costs $5"',
   'gh api repos/o/r/issues/2/comments',

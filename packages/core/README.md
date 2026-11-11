@@ -179,6 +179,9 @@ approval is a warning; once approved, slices pinned below it show as stale in
    A terminal approval is only as strong as the approve guard: the guard
    refuses an agent posting a record by hand, or a PR comment whose text it
    can't see (from a file, a variable or a command's output).
+   It stops an honest agent, not a determined one: a script, curl with the
+   person's token, or a GitHub MCP tool isn't seen. Isolating the agent's
+   credentials is the real fix, and it's deferred.
    It merges exactly that commit and retargets the slice above.
 
 The rules a slice is held to (tests, checks, budgets, `sharedFiles`,
