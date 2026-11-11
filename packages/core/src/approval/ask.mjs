@@ -63,6 +63,10 @@ function mint(ctx, { argv, bind, summary, flags }) {
   const now = ctx.now().getTime()
   // Tickets nobody used expire; tidy them as we go, and nothing else.
   for (const name of readdirSync(dir).filter((f) => TICKET.test(f))) { try { if (now - statSync(join(dir, name)).mtimeMs > TTL) rmSync(join(dir, name), { force: true }) } catch { /* gone already */ } }
+  // A newer ask for the same thing replaces an older one (one left after a Deny, say).
+  for (const name of readdirSync(dir).filter((f) => /^[a-f0-9]{32}\.json$/.test(f))) {
+    try { if (JSON.parse(readFileSync(join(dir, name), 'utf8')).bind === bind) rmSync(join(dir, name), { force: true }) } catch { /* not ours to read */ }
+  }
   const nonce = randomBytes(16).toString('hex')
   writeFileSync(join(dir, `${nonce}.json`), JSON.stringify({ argv: ownArgs(argv), bind, summary, toolUse, session: ctx.env.FACTORY_FOREMAN_ASK_SESSION || null, expires: now + TTL }), { flag: 'wx', mode: 0o600 })
   return { out: JSON.stringify({ summary, nonce }), json: { summary, nonce } }

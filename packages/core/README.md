@@ -127,9 +127,10 @@ for a merge, into which branch), good for ten minutes. The command uses it up,
 and refuses if any of that changed since the person was asked. A settings
 allow rule doesn't silence the prompt (tested with `claude -p`, which then
 refuses). Headless and SDK runs, and the `bypassPermissions` and `dontAsk`
-modes, which don't ask a person, refuse approvals outright. In `auto` mode the
-prompt still comes from the hook; if the classifier objects to the rewritten
-command, approve again or switch to default mode.
+modes, which don't ask a person, refuse approvals outright. So does `auto`
+mode for now, until it's checked that its classifier never answers the prompt
+on the person's behalf; use default, acceptEdits or plan mode. Asking again
+replaces the earlier ticket for the same thing.
 
 What this stops: an agent approving or merging without the person seeing and
 allowing it, approving in a mode that doesn't ask, replaying an approval, or

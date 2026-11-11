@@ -270,6 +270,7 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     // Modes that wouldn't ask, chained commands, Codex, and hand-made tickets are refused.
     assert.match(claude('factory-foreman approve design v2', { permission_mode: 'bypassPermissions' }).stderr, /In bypassPermissions mode Claude Code wouldn't ask you/)
     assert.match(claude('factory-foreman approve design v2', { permission_mode: 'dontAsk' }).stderr, /dontAsk/)
+    assert.match(claude('factory-foreman approve design v2', { permission_mode: 'auto' }).stderr, /In auto mode Claude Code wouldn't ask you/)
     assert.match(claude('factory-foreman approve design v2 && echo hi').stderr, /one plain command/)
     assert.match(claude('factory-foreman approve design v2 # ok').stderr, /one plain command/)
     // The agent's text never picks what runs: no env prefixes, runner options or variables.

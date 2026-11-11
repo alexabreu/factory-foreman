@@ -5,7 +5,7 @@
 // and head runs are real.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -466,7 +466,12 @@ test('chat approval: a change between the prompt and the run is refused, and tic
   now += 11 * 60_000
   await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: n2 }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'a' }), /expired/)
   now -= 11 * 60_000
+  // A newer ask for the same thing replaces the older ticket; others stay.
+  const old = await mint('a')
+  const other = await mint('c')
   const n3 = await mint('a')
+  await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: old }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'a' }), /ticket is gone/)
+  assert.ok(existsSync(join(asks, `${other}.json`)))
   assert.deepEqual(await confirm(ctx({ FACTORY_FOREMAN_ASK: n3, FACTORY_FOREMAN_ASK_SESSION: 'x' }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'a' }), { via: 'claude-code-ask', session: null })
   await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: 'nope' }), { flags: {}, argv: [], bind: 'a' }), /malformed/)
 })

@@ -18,7 +18,9 @@ import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 
-const ASKS = [ 'default', 'acceptEdits', 'plan', 'auto' ]
+// Modes where Claude Code is known to ask the person. Auto mode is left out until a live
+// check shows its classifier never settles the hook's "ask" on the person's behalf.
+const ASKS = [ 'default', 'acceptEdits', 'plan' ]
 // Where the CLI keeps tickets; the CLI owns this path (src/approval/ask.mjs).
 const asksDir = () => process.env.FACTORY_FOREMAN_ASKS_DIR || join(homedir(), '.factory-foreman', 'asks')
 const NONCE = /^[a-f0-9]{32}$/
@@ -45,7 +47,7 @@ const plain = (command, lex) => {
   return cmds.length === 1 && !nested.length ? cliArgs(cmds[0]) : null
 }
 const PLAIN = 'To be asked about it in the chat, run the approval or merge as one plain command: `factory-foreman approve …` (or slice merge), with nothing before it and no chains, pipes, redirects, variables or comments.'
-const modeRefusal = (mode) => `In ${mode} mode Claude Code wouldn't ask you, so approvals and merges are refused here. Switch to default or auto mode, or run it in your own terminal.`
+const modeRefusal = (mode) => `In ${mode} mode Claude Code wouldn't ask you, so approvals and merges are refused here. Switch to default mode, or run it in your own terminal.`
 
 // The CLI the hook runs: the person's choice (FACTORY_FOREMAN_CLI) or the one on
 // Claude Code's own PATH. Never one in the repo, which the agent could have
