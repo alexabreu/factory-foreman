@@ -1,0 +1,175 @@
+<testsuites id="" name="" tests="3" failures="2" skipped="0" errors="1" time="18.915080999999997">
+<testsuite name="y.e2e.ts" timestamp="2026-11-11T03:09:16.421Z" hostname="" tests="3" failures="2" skipped="0" time="16.492" errors="1">
+<testcase name="y hook hang" classname="y.e2e.ts" time="9.006">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/y.e2e.ts-y-hook-hang/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  y.e2e.ts:6:1 › y hook hang ───────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 300ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 300ms
+      - waiting for getByTestId('item-remove')
+
+
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+    > 6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+        |                                                                                                                 ^
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+      9 |
+        at /work/y.e2e.ts:6:113
+
+    Test timeout of 3000ms exceeded.
+
+    Test timeout of 6000ms exceeded while running "afterEach" hook.
+
+      3 | test.setTimeout(3000)
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+    > 5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+        |      ^
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+        at /work/y.e2e.ts:5:6
+
+    Error: page.waitForTimeout: Test ended.
+
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+      5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+    > 6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+        |                                                                                                                                                           ^
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+      9 |
+        at /work/y.e2e.ts:6:155
+
+    Error: locator.click: Test ended.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      3 | test.setTimeout(3000)
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+    > 5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+        |                                                                                                                        ^
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+        at /work/y.e2e.ts:5:120
+
+    Error Context: out/y.e2e.ts-y-hook-hang/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="y hook goto" classname="y.e2e.ts" time="6.476">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/y.e2e.ts-y-hook-goto/error-context.md]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  y.e2e.ts:7:1 › y hook goto ───────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByTestId('item-remove')
+    Expected: visible
+    Timeout: 300ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "soft toBeVisible" getByTestId('item-remove') with timeout 300ms
+      - waiting for getByTestId('item-remove')
+
+
+      5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+    > 7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+        |                                                                                                                 ^
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+      9 |
+        at /work/y.e2e.ts:7:113
+
+    Error: page.goto: net::ERR_UNSAFE_PORT at http://localhost:1/
+    Call log:
+      - navigating to "http://localhost:1/", waiting until "load"
+
+
+      5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+    > 7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+        |                                                                                                                                                           ^
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+      9 |
+        at /work/y.e2e.ts:7:155
+
+    Test timeout of 6000ms exceeded while running "afterEach" hook.
+
+      3 | test.setTimeout(3000)
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+    > 5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+        |      ^
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+        at /work/y.e2e.ts:5:6
+
+    Error: locator.click: Test ended.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+      3 | test.setTimeout(3000)
+      4 | const books = async (page) => { await page.goto('/'); await page.getByTestId('new-title').fill('Dune'); await page.getByTestId('add').click() }
+    > 5 | test.afterEach(async ({ page }) => { if (test.info().title.startsWith('y hook')) await page.getByTestId('item-remove').click() })
+        |                                                                                                                        ^
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+      8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+        at /work/y.e2e.ts:5:120
+
+    Error Context: out/y.e2e.ts-y-hook-goto/error-context.md
+]]>
+</failure>
+</testcase>
+<testcase name="y toPass hang" classname="y.e2e.ts" time="1.01">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|out/y.e2e.ts-y-toPass-hang/error-context.md]]
+]]>
+</system-out>
+<error message="locator.click: Timeout 200ms exceeded." type="Error">
+<![CDATA[  y.e2e.ts:8:1 › y toPass hang ─────────────────────────────────────────────────────────────────────
+
+    Error: locator.click: Timeout 200ms exceeded.
+    Call log:
+      - waiting for getByTestId('item-remove')
+
+
+    Call Log:
+    - Timeout 800ms exceeded while waiting on the predicate
+
+      6 | test('y hook hang', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.waitForTimeout(10000) })
+      7 | test('y hook goto', async ({ page }) => { await books(page); await expect.soft(page.getByTestId('item-remove')).toBeVisible({ timeout: 300 }); await page.goto('http://localhost:1/') })
+    > 8 | test('y toPass hang', async ({ page }) => { await books(page); await expect(async () => { await page.getByTestId('item-remove').click({ timeout: 200 }) }).toPass({ timeout: 800 }) })
+        |                                                                                                                                                            ^
+      9 |
+        at /work/y.e2e.ts:8:156
+
+    Error Context: out/y.e2e.ts-y-toPass-hang/error-context.md
+]]>
+</error>
+</testcase>
+</testsuite>
+</testsuites>
