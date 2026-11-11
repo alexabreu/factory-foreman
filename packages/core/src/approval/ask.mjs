@@ -64,7 +64,7 @@ function mint(ctx, { argv, bind, summary, flags }) {
   // Tickets nobody used expire; tidy them as we go, and nothing else.
   for (const name of readdirSync(dir).filter((f) => TICKET.test(f))) { try { if (now - statSync(join(dir, name)).mtimeMs > TTL) rmSync(join(dir, name), { force: true }) } catch { /* gone already */ } }
   // A newer ask for the same thing replaces an older one (one left after a Deny, say).
-  for (const name of readdirSync(dir).filter((f) => /^[a-f0-9]{32}\.json$/.test(f))) {
+  for (const name of readdirSync(dir).filter((f) => f.endsWith('.json') && NONCE.test(f.slice(0, -5)))) {
     try { if (JSON.parse(readFileSync(join(dir, name), 'utf8')).bind === bind) rmSync(join(dir, name), { force: true }) } catch { /* not ours to read */ }
   }
   const nonce = randomBytes(16).toString('hex')
