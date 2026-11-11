@@ -512,15 +512,22 @@ test('real reporters: Playwright and Vitest JUnit, and a Playwright run that sto
   const wait = (expr, head = 'Error: locator.click: Test timeout of 30000ms exceeded.') => `${head}\nCall log:\n  - waiting for ${expr}\n`
   const ids = { owned: [], testIds: [ 'item-remove' ], known: [ 'item', 'summary' ] }
   assert.equal(classify(wait("getByTestId('item').filter({ hasText: 'Dune' }).getByTestId('item-remove')"), ids).ok, true)
-  assert.match(classify(wait("getByTestId('itemz').getByTestId('item-remove')"), ids).why, /inside itemz, which neither base nor the slice's contract has/)
+  assert.match(classify(wait("getByTestId('itemz').getByTestId('item-remove')"), ids).why, /waits on test id itemz, which neither base nor the slice's contract has/)
   assert.equal(classify(wait("getByTestId('item').filter({ hasNot: getByTestId('item-remove') })"), ids).ok, false)
   assert.equal(classify(wait("getByTestId('itemz').or(getByTestId('item-remove'))"), ids).ok, false)
   assert.equal(classify(`${wait("getByTestId('summaryy')", 'Error: expect(locator).toHaveText(expected) failed')}\n${wait("getByTestId('item-remove')")}`, ids).ok, false)
-  assert.equal(classify(`${wait("getByTestId('item-remove')", 'Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId(\'item-remove\')\nReceived: <element(s) not found>')}\nError: page.waitForTimeout: Test ended.\n`, ids).ok, false)
+  assert.equal(classify(`${wait("getByTestId('item-remove')", 'Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId(\'item-remove\')\nReceived: <element(s) not found>')}\n\n\nError: page.waitForTimeout: Test ended.\n`, ids).ok, false)
   assert.equal(classify("Error: expect(locator).toHaveText(expected) failed\nCall log:\n  - Expect \"toHaveText\" with timeout 500ms\n  - waiting for getByTestId('item-remove') getByTestId('summary') with timeout 500ms\n  - locator resolved to <p>\nTimeout 500ms exceeded.", ids).kind, 'assertion')
   // The same cases from a real Playwright run: only waits that end on the new id, through ids base has, count.
   const real = parseJUnit(fixture('playwright-locators.xml')).map((c) => { const r = classify(c.text, { owned: [], testIds: [ 'item-remove' ], known: [ 'item', 'summary', 'new-title', 'add' ] }, c.type); return [ c.name, r.kind, r.ok ] })
   assert.deepEqual(real, [ [ 'real chain', 'locator', true ], [ 'a typo parent', 'locator', false ], [ 'b hasNot', 'locator', false ], [ 'c or', 'locator', false ], [ 'soft typo then new', 'locator', false ], [ 'custom message', 'assertion', true ], [ 'found wrong text', 'assertion', true ], [ 'soft new then hang', 'other', false ], [ 'expect new visible', 'locator', true ] ])
+  const real2 = Object.fromEntries(parseJUnit(fixture('playwright-locators-2.xml')).map((c) => [ c.name, classify(c.text, { owned: [], testIds: [ 'item-remove' ], known: [ 'item', 'summary', 'new-title', 'add', 'filter', 'item-title', 'item-toggle' ] }, c.type).ok ]))
+  assert.deepEqual(real2, {
+    'role chain': true, 'css parent': true, 'nth first': true, frame: true, 'count new': true, 'visible new': true, 'unquoted css': true, 'quoted css': true,
+    'text array existing': true, 'count existing': true, 'checked existing': true, 'hidden new not': true, 'escaped quote': true,
+    'soft found then hang': false, 'soft new then promise hang': false, 'soft new then throw string': false, 'soft new then goto bad': false,
+    'has filter': false, 'regex id': false, 'typo then new': false, 'typo count': false,
+  })
   // Nested suites and tests straight under <testsuites> (node's reporter) all count.
   const nested = parseJUnit('<testsuites><testsuite name="e" file="e2e/a.mjs"/><testsuite name="a" file="e2e/b.mjs"><testsuite name="d"><testcase name="AC-1 x"/></testsuite><testcase name="AC-2 y"><failure message="AssertionError: no" type="AssertionError"/></testcase></testsuite><testcase name="AC-3 z" file="e2e/c.mjs"/></testsuites>')
   assert.deepEqual(nested.map((c) => [ c.name, c.file, c.outcome ]), [ [ 'AC-1 x', 'e2e/b.mjs', 'passed' ], [ 'AC-2 y', 'e2e/b.mjs', 'failed' ], [ 'AC-3 z', 'e2e/c.mjs', 'passed' ] ])

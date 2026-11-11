@@ -77,7 +77,7 @@ const waitsIn = (block) => block.split('\n').map((l) => l.match(WAIT_LINE)?.[1])
 // The test ids a locator names at its top level, in order, or null when it's a
 // union (.or, .and), whose target can't be told. Ids inside a filter's
 // has/hasNot only narrow it.
-const TOP_ID = /^(?:getByTestId\(\s*['"]([^'"]+)['"]\s*\)|locator\(\s*['"]\[data-testid=\\?["']([^"'\\]+)\\?["']\]['"]\s*\))/
+const TOP_ID = /^(?:getByTestId\(\s*['"]([^'"]+)['"]\s*\)|locator\(\s*['"]\[data-testid=(?:\\?["']([^"'\\]+)\\?["']|([\w-]+))\]['"]\s*\))/
 export function chainIds(expr) {
   const ids = []
   let depth = 0
@@ -86,22 +86,30 @@ export function chainIds(expr) {
     if (depth === 0) {
       if (/^\.(?:or|and)\(/.test(expr.slice(i))) return null
       const m = expr.slice(i).match(TOP_ID)
-      if (m && (i === 0 || expr[i - 1] === '.')) { ids.push(m[1] ?? m[2]); i += m[0].length - 1; continue }
+      if (m && (i === 0 || expr[i - 1] === '.')) { ids.push(m[1] ?? m[2] ?? m[3]); i += m[0].length - 1; continue }
     }
     if (ch === '(' || ch === '{' || ch === '[') depth++
     else if (ch === ')' || ch === '}' || ch === ']') depth = Math.max(0, depth - 1)
-    else if (ch === "'" || ch === '"' || ch === '`') { const end = expr.indexOf(ch, i + 1); if (end !== -1) i = end }
+    else if (ch === "'" || ch === '"' || ch === '`') {
+      // Skip the string, escapes included (Playwright prints 'it\'s').
+      let j = i + 1
+      while (j < expr.length && expr[j] !== ch) j += expr[j] === '\\' ? 2 : 1
+      i = j
+    }
   }
   return ids
 }
 // Every test id a failure's call logs name, for checking which exist at base.
 export const waitedIds = (message) => waitsIn(message).flatMap((w) => chainIds(w) ?? [])
-// Error blocks: each "Error: …" or "TimeoutError: …" up to the next. A
-// message with none (a runner's bare output) is one block.
-const START = /^\s*\w*Error: /
-const errorBlocks = (message) => { const blocks = message.split(/\n(?=\s*\w*Error: )/).filter((b) => START.test(b)); return blocks.length ? blocks : [ message ] }
-// An element that was there: the call log resolved it, or the expect received a value from it.
-const FOUND = /locator resolved to|^\s*Received(?: string| value)?:\s*(?!<element\(s\) not found>)\S/m
+// A failure's top-level sections: Playwright puts two blank lines between
+// errors (a soft expect, then what ended the test), one inside an error. The
+// echo of the message's first line, and attachment and error-context notes,
+// aren't sections of their own.
+function sections(message) {
+  const parts = message.split(/\n[ \t]*\n(?:[ \t]*\n)+/).map((p) => p.trim()).filter(Boolean).filter((p) => !/^(?:Error Context:|attachment #\d+:|─)/.test(p))
+  return parts.filter((p, i) => !(!p.includes('\n') && parts.slice(i + 1).some((q) => q.split('\n').some((l) => l.trim().replace(/^\w*Error: /, '') === p.replace(/^\w*Error: /, '')))))
+}
+const FOUND = /locator resolved to (?!0 elements)|^\s*Received(?: string| value)?:\s*(?!<element\(s\) not found>)\S/m
 const ASSERTION_TYPE = /^(?:\w*AssertionError|expect\.\w+)$/
 const ASSERTION_LINE = /^(?:\w*AssertionError\b|Error: expect\(|expect\(|Error: Timed out \d+ms waiting for expect\()/
 
@@ -129,29 +137,35 @@ export function classify(text, { owned, testIds, known = null }, type = '') {
   }
   // A locator that never found its element; one that found it and saw the
   // wrong thing is an assertion.
-  // A locator that never found its element must end on a test id the
-  // contract adds, reached through ids base has. When a failure holds several
-  // errors (a soft expect, then a timeout), each must be one the slice fixes:
-  // such a wait, or an assertion on an element that was found.
-  const verdicts = errorBlocks(message).map((block) => {
-    const ws = waitsIn(block)
-    if (ws.length && !FOUND.test(block)) {
+  // Where a failure names locators (a Playwright run), every section must be
+  // one the slice fixes: a wait for an element that isn't there yet, ending on
+  // a test id the contract adds, or an assertion on an element that is. Every
+  // test id a locator passes through must be the contract's or exist at base,
+  // found or not, so a typo can't hide behind an assertion.
+  if (waitsIn(message).length) {
+    const verdicts = sections(message).map((section) => {
+      const ws = waitsIn(section)
+      const found = FOUND.test(section)
       for (const w of ws) {
         const chain = chainIds(w)
-        if (!chain?.length) return { kind: 'locator', ok: false, detail: w.slice(0, 120), why: `waits for ${w.slice(0, 120)}, which doesn't end on one test id` }
+        if (chain === null) return { kind: 'locator', ok: false, detail: w.slice(0, 120), why: `waits for ${w.slice(0, 120)}, a union (or/and) whose target can't be told` }
+        const unknown = chain.find((id) => !testIds.includes(id) && known && !known.includes(id))
+        if (unknown) return { kind: 'locator', ok: false, detail: unknown, why: `waits on test id ${unknown}, which neither base nor the slice's contract has` }
+        if (found) continue
+        if (!chain.length) return { kind: 'locator', ok: false, detail: w.slice(0, 120), why: `waits for ${w.slice(0, 120)}, which doesn't end on a test id (by role, text or CSS isn't checked against the contract)` }
         const target = chain.at(-1)
-        if (!testIds.includes(target)) return { kind: 'locator', ok: false, detail: target, why: `waits for test id ${target}, which the slice's contract doesn't add (or base already has)` }
-        const unknown = chain.slice(0, -1).find((id) => !testIds.includes(id) && known && !known.includes(id))
-        if (unknown) return { kind: 'locator', ok: false, detail: unknown, why: `waits for test id ${target} inside ${unknown}, which neither base nor the slice's contract has` }
+        if (!testIds.includes(target)) return { kind: 'locator', ok: false, detail: target, why: `waits for test id ${target}, which the slice's contract doesn't add (or base already has)${/has(?:Not)?:/.test(w) ? '; an id inside a has filter only narrows it' : ''}` }
       }
-      const id = chainIds(ws.at(-1)).at(-1)
-      return { kind: 'locator', ok: true, detail: id, why: `waits for test id ${id}, which the slice's contract adds` }
-    }
-    const line = block.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
-    if (ASSERTION_LINE.test(line) || (ws.length && FOUND.test(block))) return { kind: 'assertion', ok: true, detail: line.slice(0, 160), why: 'an assertion that doesn\'t hold yet' }
-    return { kind: 'other', ok: false, detail: line.slice(0, 160), why: `fails for a reason the slice doesn't fix: ${line.slice(0, 160)}` }
-  })
-  if (verdicts.some((v) => v.kind === 'locator')) return verdicts.find((v) => !v.ok) ?? verdicts.filter((v) => v.kind === 'locator').at(-1)
+      if (ws.length && !found) {
+        const id = chainIds(ws.at(-1)).at(-1)
+        return { kind: 'locator', ok: true, detail: id, why: `waits for test id ${id}, which the slice's contract adds` }
+      }
+      const line = section.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+      if (ASSERTION_LINE.test(line) || (ws.length && found)) return { kind: 'assertion', ok: true, detail: line.slice(0, 160), why: 'an assertion that doesn\'t hold yet' }
+      return { kind: 'other', ok: false, detail: line.slice(0, 160), why: `fails for a reason the slice doesn't fix: ${line.slice(0, 160)}` }
+    })
+    return verdicts.find((v) => !v.ok) ?? verdicts.filter((v) => v.kind === 'locator').at(-1) ?? verdicts[0]
+  }
   const first = message.split('\n').map((l) => l.trim()).find((l) => /^\w*(Error|AssertionError)\b|^expect\(/.test(l)) ?? message.split('\n').find((l) => l.trim())?.trim() ?? ''
   if (ASSERTION_TYPE.test(type) || ASSERTION_LINE.test(first)) return { kind: 'assertion', detail: first.slice(0, 160), ok: true, why: 'an assertion that doesn\'t hold yet' }
   return { kind: 'other', detail: first.slice(0, 160), ok: false, why: `fails for a reason the slice doesn't fix: ${first.slice(0, 160)}` }
