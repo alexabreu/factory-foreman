@@ -69,7 +69,8 @@ the person's behalf.
 7. Tell the person the version is posted and ask whether to approve it.
    Approve only when they say so in the chat: then run
    `factory-foreman approve shape v<N>` as one plain command: nothing before
-   it (no `PATH=…`), and nothing chained, piped, redirected or in variables. In Claude Code the harness then asks them, showing
+   it (no `PATH=…`), and nothing chained, piped, redirected (no `2>&1`) or in
+   variables. In Claude Code the harness then asks them, showing
    what they're approving; their Allow is the approval. Never answer for them,
    rephrase the command to avoid the prompt, or retry after they deny it.
    Elsewhere (Codex, a headless run) it refuses: they approve in their own

@@ -265,7 +265,7 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     const out = JSON.parse(asked.stdout).hookSpecificOutput
     assert.equal(out.permissionDecision, 'ask')
     assert.match(out.permissionDecisionReason, /^Approve Design v2 on #1\n\nAllow confirms it as you/)
-    assert.deepEqual(out.updatedInput, { command: `FACTORY_FOREMAN_ASK=${'a'.repeat(32)} factory-foreman approve design v2 --issue 1`, description: 'd' })
+    assert.deepEqual(out.updatedInput, { command: `FACTORY_FOREMAN_ASK=${'a'.repeat(32)} ${join(bin, 'factory-foreman')} approve design v2 --issue 1`, description: 'd' })
     assert.equal(JSON.parse(claude('factory-foreman slice merge 1').stdout).hookSpecificOutput.permissionDecision, 'ask')
     // Modes that wouldn't ask, chained commands, Codex, and hand-made tickets are refused.
     assert.match(claude('factory-foreman approve design v2', { permission_mode: 'bypassPermissions' }).stderr, /In bypassPermissions mode Claude Code wouldn't ask you/)
@@ -277,6 +277,11 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     assert.match(claude('npx -p left-pad factory-foreman approve design v2').stderr, /one plain command/)
     assert.match(claude('NODE_OPTIONS=--require=/x factory-foreman approve design v2').stderr, /one plain command/)
     assert.match(claude('factory-foreman approve design "$V"').stderr, /one plain command/)
+    assert.match(claude('factory-foreman approve design v2 &').stderr, /one plain command/)
+    assert.match(claude('(factory-foreman approve design v2)').stderr, /one plain command/)
+    assert.match(claude('factory-foreman approve design v2 2>&1').stderr, /one plain command/)
+    assert.match(claude('factory-foreman approve design v2 <<< y').stderr, /one plain command/)
+    assert.equal(JSON.parse(claude("factory-foreman approve design 'v2'").stdout).hookSpecificOutput.permissionDecision, 'ask')
     assert.equal(JSON.parse(claude('npx factory-foreman approve design v2').stdout).hookSpecificOutput.permissionDecision, 'ask')
     assert.match(claude('factory-foreman approve design v2', { turn_id: 't', model: 'gpt' }).stderr, /is for a person in their own terminal/)
     assert.match(claude('factory-foreman approve design v2 --ask-ticket x').stderr, /tickets are written and used by the approve hook alone/)

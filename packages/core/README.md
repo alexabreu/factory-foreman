@@ -116,8 +116,10 @@ once CI is green.
 The command must be plain: `factory-foreman approve …` (or `npx` /
 `pnpm exec factory-foreman …`), with nothing before it and no chains, pipes,
 redirects or variables. The hook never runs the agent's text: it runs the
-factory-foreman it finds itself (`FACTORY_FOREMAN_CLI` if set, else the repo's
-`node_modules/.bin`, else Claude Code's PATH) with the command's arguments.
+factory-foreman it finds itself (`FACTORY_FOREMAN_CLI` if set in Claude Code's
+environment, else Claude Code's PATH; never a copy inside the repo) with the
+command's arguments, and the command that runs after Allow is that same
+program, by path.
 
 Behind the prompt is a one-shot ticket in `~/.factory-foreman/asks`, for
 exactly that command and what it would act on (including who approves and,

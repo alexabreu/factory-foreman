@@ -27,7 +27,7 @@ import { acsIn, issueBranch, iterationTag, sliceBranch, slicePlan } from '../sli
 import { checkShowScript, replayShowScripts } from '../slices/show.mjs'
 import { loadSlice, postSliceRecord, writeSlice } from '../slices/state.mjs'
 import { inCodexSandbox } from '../state/local.mjs'
-import { confirm, requireTerminal } from '../approval/ask.mjs'
+import { confirm, confirmPath, requireTerminal } from '../approval/ask.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { matchesAny } from '../util/glob.mjs'
 import { changedFiles, currentBranch, git, gitTest, head, lineCounts, requireWritableGit, topLevel } from '../util/git.mjs'
@@ -463,7 +463,7 @@ async function restack(ctx, github, n, s, slice) {
 }
 
 // Everything slice merge requires, checked; refuses with the first thing missing.
-// `readOnly` (when only describing) writes nothing; `approved` counts an approval
+// `readOnly` changes nothing on GitHub (before the person has confirmed); `approved` counts an approval
 // just posted, which GitHub's listing may not show yet.
 export async function mergeChecks(ctx, github, n, s, { readOnly = false, approved = null } = {}) {
   const slice = await loadSlice(ctx, github, n, s)
@@ -531,7 +531,8 @@ async function merge(ctx, { positionals, flags = {}, argv = [] }) {
   const n = ctx.issue()
   const github = ctx.github()
   await github.appReady()
-  const ready = await mergeChecks(ctx, github, n, s, { readOnly: flags['ask-ticket'] !== undefined })
+  // Nothing is written on GitHub until the person has confirmed.
+  const ready = await mergeChecks(ctx, github, n, s, { readOnly: confirmPath(ctx, flags) !== 'terminal' })
   const { slice, pr, sha, approvers, checks } = ready
   const summary = pr.state === 'MERGED'
     ? `#${slice.pr} was merged on GitHub at ${short(sha)}, approved by @${approvers.join(', @')} with CI green.`
