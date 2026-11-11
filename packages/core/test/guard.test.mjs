@@ -9,6 +9,14 @@ import { decide, verdict } from '../apm/guard/approve-guard.mjs'
 const DENIED = [
   'factory-foreman approve shape v2',
   'factory-foreman approve slice 1',
+  'npx factory-foreman@latest approve slice 1',
+  'gh pr comment 2 --body "<!-- factory-foreman:record {} -->"',
+  'gh pr comment 2 --body-file rec.md',
+  'gh issue comment 2 -F rec.md',
+  'gh pr comment 2 --body "$(cat rec.md)"',
+  'B=x; gh pr comment 2 --body "$B"',
+  'gh api repos/o/r/issues/2/comments -F body=@rec.md',
+  'gh api -X POST repos/o/r/issues/2/comments --input rec.json',
   'factory-foreman --issue 7 approve slice 2',
   'factory-foreman --issue 7 approve shape v2',
   'factory-foreman approve shape v2 --issue 7',
@@ -105,6 +113,10 @@ const DENIED = [
 ]
 
 const ALLOWED = [
+  'gh pr comment 2 --body "looks good"',
+  'gh pr comment 2 --body "costs $5"',
+  'gh api repos/o/r/issues/2/comments',
+  'gh api repos/o/r/issues/2/comments -f body=hi',
   'factory-foreman checkpoint shape',
   'factory-foreman draft shape --reset',
   'factory-foreman note "approve later" --kind question',

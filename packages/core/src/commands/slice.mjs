@@ -35,8 +35,8 @@ import { approvedBody, loadIssue } from './common.mjs'
 const sha256 = (text) => createHash('sha256').update(text).digest('hex')
 const short = (sha) => String(sha).slice(0, 7)
 
-function sliceNumber(raw, sub) {
-  if (!/^[1-9]\d*$/.test(String(raw ?? ''))) throw new Refusal(`Name the slice: factory-foreman slice ${sub} <n>.`)
+export function sliceNumber(raw, sub, usage = `slice ${sub}`) {
+  if (!/^[1-9]\d*$/.test(String(raw ?? ''))) throw new Refusal(`Name the slice: factory-foreman ${usage} <n>.`)
   return Number(raw)
 }
 

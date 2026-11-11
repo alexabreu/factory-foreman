@@ -34,8 +34,8 @@ first and are frozen; the code then has to make them pass.
 6. Tell the person the iteration is up. They review the PR and, once it's
    approved and CI is green, merge it themselves: `factory-foreman slice merge <n>`.
    If they opened the PR (GitHub won't let them approve it), they approve its
-   head with `factory-foreman approve slice <n>` first. Don't run either.
-   Don't run it; it refuses in an agent's shell.
+   head with `factory-foreman approve slice <n>` first. Don't run either; both refuse in an agent's shell, and so does
+   posting a factory-foreman record or a comment from a file with gh.
 
 In Codex's sandbox `.git` is read-only, so committing and pushing need the
 person to add it as a writable root; `slice iterate` refuses there and names

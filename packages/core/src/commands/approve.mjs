@@ -5,6 +5,7 @@ import { inert, setSection, updateBody, withDecisionsLine } from '../issue/secti
 import { statusLine } from '../issue/status.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { loadSlice } from '../slices/state.mjs'
+import { sliceNumber } from './slice.mjs'
 import { agentShell } from '../state/local.mjs'
 import { loadIssue, requireStep, title, today } from './common.mjs'
 
@@ -81,8 +82,7 @@ export async function approve(ctx, { positionals }) {
 // a step approval, posted under the approver's login on the slice PR, bound
 // to the head commit: a new commit needs a new approval.
 async function approveSlice(ctx, which) {
-  const k = Number(which)
-  if (!/^\d+$/.test(String(which ?? '')) || k < 1) throw new Refusal('Name the slice: factory-foreman approve slice <n>.')
+  const k = sliceNumber(which, 'approve', 'approve slice')
   const blocked = agentShell({ env: ctx.env, isTTY: ctx.isTTY })
   if (blocked) throw new Refusal(`approve must be run by a person in their own terminal, and ${blocked}.`)
   const n = ctx.issue()
