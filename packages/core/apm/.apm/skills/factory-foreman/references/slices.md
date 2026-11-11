@@ -31,11 +31,12 @@ first and are frozen; the code then has to make them pass.
    - a file outside the slice: move the change to the slice that owns it;
    - over the line budget: tell the person the slice needs splitting.
    When it passes, it pushes, tags the iteration and posts it on the PR.
-6. Tell the person the iteration is up. They review the PR and, once it's
-   approved and CI is green, merge it themselves: `factory-foreman slice merge <n>`.
-   If they opened the PR (GitHub won't let them approve it), they approve its
-   head with `factory-foreman approve slice <n>` first. Don't run either; both refuse in an agent's shell, and so does
-   posting a factory-foreman record or a comment from a file with gh.
+6. Tell the person the iteration is up and ask whether to approve it. When they
+   say so, run `factory-foreman approve slice <n>` as one plain command: Claude
+   Code asks them, showing the PR's head and CI, and their Allow approves it
+   under their login and merges it once CI is green. If CI isn't green yet, say
+   so; when it is and they ask, run `factory-foreman slice merge <n>` the same
+   way. Never post a factory-foreman record or a comment from a file with gh.
 
 In Codex's sandbox `.git` is read-only, so committing and pushing need the
 person to add it as a writable root; `slice iterate` refuses there and names

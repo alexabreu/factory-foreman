@@ -20,13 +20,13 @@ capture and the approve guard work; slices and verify arrive in later phases.
 | `review save <shape\|design> --findings <file>` | Saves the settled findings for the draft as it is now |
 | `checkpoint <shape\|design> [--draft <file>]` | Checks the draft and its saved review, and posts it as the next version |
 | `amend <shape\|design> --reason "<why>"` | Changes an approved version: minor (vN.M, keeps the approval) or material (vN+1, needs one) |
-| `approve <shape\|design> v<N>` | A person approves that version from their own terminal: it shows the criteria (or slices) and asks y/N |
+| `approve <shape\|design> v<N>` | A person approves that version: in a Claude Code chat the harness asks them (see Approving from the chat), or in their own terminal it shows the criteria (or slices) and asks y/N |
 | `slice open <n>` | Cuts slice n's branch and draft PR, stacked on the slice below, pinned to the approved Shape and Design |
 | `slice tests <n> [--save]` | Briefs the test-verification-engineer, then freezes the AC tests and show scripts it committed |
 | `slice review <n>` / `slice review save <n> --findings <file>` | Code review of the slice's head commit, settled like Shape and Design reviews |
 | `slice iterate [<n>]` | Light checks, the AC gate, the saved review and the show scripts; then pushes, tags and posts the iteration |
-| `approve slice <n>` | A person approves the slice PR's head from their own terminal, when they can't on GitHub because they opened it |
-| `slice merge <n>` | A person merges the slice from their own terminal once its PR is approved at the head and CI is green |
+| `approve slice <n>` | A person approves the slice PR's head (they can't on GitHub if they opened it) and it merges once CI is green |
+| `slice merge <n>` | A person merges the slice once its PR is approved at the head and CI is green |
 | `slice list` | Each slice: state, PR, owner, iterations and pinned versions |
 | `status` | Each step's latest and approved version, open blocking questions, and slices (stale ones flagged) |
 
@@ -101,6 +101,47 @@ APM deploys one hook file to Claude Code, Codex and VS Code / Copilot:
   --keep/--edit/--drop` refuses, and checkpoint posts without the unconfirmed
   notes and names them in its comment. They're kept for the person: once kept,
   the next checkpoint posts them.
+
+## Approving from the chat
+
+In Claude Code, the person approves without leaving the chat. They tell the
+agent to approve; it runs `factory-foreman approve …` (or `approve slice`,
+`slice merge`) as one plain command. The approve hook has factory-foreman check
+everything and say what would happen, then has Claude Code ask the person in
+its own permission prompt: the version and its slices, or the PR's head
+commit, iteration and CI. Their Allow is the approval: it's posted under their
+GitHub login, marked `"via": "claude-code-ask"`. Approving a slice merges it
+once CI is green.
+
+The command must be plain: `factory-foreman approve …` (or `npx` /
+`pnpm exec factory-foreman …`), with nothing before it and no chains, pipes,
+redirects or variables. The hook never runs the agent's text: it runs the
+factory-foreman it finds itself (`FACTORY_FOREMAN_CLI` if set in Claude Code's
+environment, else Claude Code's PATH; never a copy inside the repo) with the
+command's arguments, and the command that runs after Allow is that same
+program, by path.
+
+Behind the prompt is a one-shot ticket in `~/.factory-foreman/asks`, for
+exactly that command and what it would act on (including who approves and,
+for a merge, into which branch), good for ten minutes. The command uses it up,
+and refuses if any of that changed since the person was asked. A settings
+allow rule doesn't silence the prompt (tested with `claude -p`, which then
+refuses). Headless and SDK runs, and the `bypassPermissions` and `dontAsk`
+modes, which don't ask a person, refuse approvals outright. So does `auto`
+mode for now, until it's checked that its classifier never answers the prompt
+on the person's behalf; use default, acceptEdits or plan mode. Asking again
+replaces the earlier ticket for the same thing.
+
+What this stops: an agent approving or merging without the person seeing and
+allowing it, approving in a mode that doesn't ask, replaying an approval, or
+approving something other than what was shown. What it doesn't: a determined
+agent runs as the person, with their GitHub login, and could approve through a
+route the hook doesn't see (a script, curl with their token). Isolating the
+agent's identity would close that; it isn't done.
+
+Codex can't do this yet: its hooks can't ask (an "ask" lets the command run),
+and its prompt rules can be answered by an automated reviewer or a remembered
+"approve for session". In Codex, approving stays in the person's own terminal.
 
 ## Wireframes
 

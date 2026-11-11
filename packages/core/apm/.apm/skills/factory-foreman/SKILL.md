@@ -66,10 +66,15 @@ the person's behalf.
    refused, fix each problem it lists and run it again. If it's refused as
    stale, someone else posted first: run `factory-foreman draft shape --reset`,
    fold your changes into the latest version, and checkpoint again.
-7. Tell the person the version is posted and that they approve it themselves,
-   in their own terminal: `factory-foreman approve shape v<N>`, which shows
-   what they're approving and asks y/N. Don't run approve yourself; it
-   refuses in an agent's shell anyway.
+7. Tell the person the version is posted and ask whether to approve it.
+   Approve only when they say so in the chat: then run
+   `factory-foreman approve shape v<N>` as one plain command: nothing before
+   it (no `PATH=…`), and nothing chained, piped, redirected (no `2>&1`) or in
+   variables. In Claude Code the harness then asks them, showing
+   what they're approving; their Allow is the approval. Never answer for them,
+   rephrase the command to avoid the prompt, or retry after they deny it.
+   Elsewhere (Codex, a headless run) it refuses: they approve in their own
+   terminal with the same command.
 
 Design can only be checkpointed once a Shape version is approved.
 
@@ -116,8 +121,9 @@ again.
 Once Shape and Design are approved, build the Design's slices in order, one
 branch and draft PR each: `factory-foreman slice open <n>`, freeze its AC tests
 with `slice tests <n>`, build it, have it reviewed, and `slice iterate`. Follow
-`references/slices.md`. The person merges each slice with `slice merge <n>` in
-their own terminal; you never do.
+`references/slices.md`. The person approves each slice, which merges it once
+CI is green, the same way as a version: on their word, you run
+`factory-foreman approve slice <n>` and Claude Code asks them.
 
 ## Amend an approved version
 
@@ -142,5 +148,6 @@ open blocking questions.
 A refusal exits with code 2 and says what is missing. Fix that and rerun. Don't
 work around a refusal by editing the issue body, its comments, or the notes,
 reviews and markers under `.factory-foreman/`. The only state file you edit is
-the draft there; never commit anything in that folder. A hook stops your shell from running approve, slice merge,
-or a pull request review or merge; those are for the person.
+the draft there; never commit anything in that folder. A hook stops your shell from running approve or slice merge
+unless the person is asked in the chat, and stops pull request reviews and
+merges entirely; those are for the person.

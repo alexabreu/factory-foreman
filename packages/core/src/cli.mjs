@@ -123,7 +123,7 @@ export async function main(argv, makeContext = context) {
   const args = parseArgs(rest, { booleans: [ 'json', 'blocking', 'reset', 'extract', 'headless', 'save' ] })
   try {
     const ctx = makeContext({ flags: args.flags })
-    const result = await run(ctx, args)
+    const result = await run(ctx, { ...args, argv: rest })
     return { code: 0, out: args.flags.json ? JSON.stringify(result.json, null, 2) : result.out, ...(result.err ? { err: result.err } : {}) }
   } catch (error) {
     if (error instanceof Refusal) {

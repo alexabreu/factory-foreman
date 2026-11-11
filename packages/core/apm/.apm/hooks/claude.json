@@ -3,17 +3,44 @@
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/approve-guard.mjs\"" } ]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/guard/approve-guard.mjs\"",
+            "timeout": 90
+          }
+        ]
       }
     ],
     "PreCompact": [
-      { "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\"" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\""
+          }
+        ]
+      }
     ],
     "SessionEnd": [
-      { "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\"" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\""
+          }
+        ]
+      }
     ],
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\"" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/guard/capture-hook.mjs\""
+          }
+        ]
+      }
     ]
   }
 }

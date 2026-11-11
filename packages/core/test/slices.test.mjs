@@ -5,7 +5,7 @@
 // and head runs are real.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -333,7 +333,7 @@ test('slice merge: a person merges the iterated head once approved there and CI 
   const pr1 = prOf('factory-foreman/7-slice-1')
   // Not in an agent's shell; not without approval at the head; not with red or missing CI.
   const agent = developer(world, 'ben', { isTTY: false, answer: 'y' })
-  assert.match((await agent.run('slice', 'merge', '1')).err, /must be run by a person in their own terminal/)
+  assert.match((await agent.run('slice', 'merge', '1')).err, /must be confirmed by a person/)
   assert.match((await ben.run('slice', 'merge', '1')).err, /isn't approved at its head/)
   pr1.pr.reviews.push({ login: 'ben', type: 'User', state: 'APPROVED', commit: first, at: '2026-11-10T13:00:00Z' })
   put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1 // tidy\n')
@@ -369,24 +369,28 @@ test('approve slice: the PR author approves its head in their terminal, and slic
   ok(await ana.run('slice', 'iterate', '1'))
   const first = ana.g('rev-parse', 'HEAD')
   const pr1 = [ ...world.issues.values() ].find((i) => i.pr?.head === 'factory-foreman/7-slice-1')
-  world.checks = new Map([ [ first, [ { name: 'CI', state: 'success' } ] ] ])
+  world.checks = new Map([ [ first, [ { name: 'CI', state: 'pending' } ] ] ])
   const anaHere = developer(world, 'ana', { isTTY: true, answer: 'y' })
   // Not from an agent's shell, not without write access, not before it's approved.
-  assert.match((await ana.run('approve', 'slice', '1')).err, /must be run by a person in their own terminal/)
+  assert.match((await ana.run('approve', 'slice', '1')).err, /must be confirmed by a person/)
   assert.match((await developer(world, 'eve', { isTTY: true, answer: 'y' }).run('approve', 'slice', '1')).err, /@eve needs write access/)
   assert.match((await anaHere.run('approve', 'slice', 'x')).err, /Name the slice/)
-  assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head .*run factory-foreman approve slice 1 in your terminal/)
+  assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head .*run factory-foreman approve slice 1\./)
   // A record someone else posts in ana's name isn't hers.
   const record = (approver, head) => `<!-- factory-foreman:record ${JSON.stringify({ type: 'slice-approval', repo: 'owner/sandbox', issue: 7, slice: 1, pr: pr1.number, head, approver, at: 'x' })} -->`
   await world.as('ben').comment(pr1.number, record('ana', first), 'user')
   assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head/)
   const approved = ok(await anaHere.run('approve', 'slice', '1'))
-  assert.match(approved.out, /Approved slice 1 \(#\d+\) at [0-9a-f]{7}/)
+  // With CI still running, approving doesn't merge yet.
+  assert.match(approved.out, /Approved slice 1 \(#\d+\) at [0-9a-f]{7}\. Not merged yet: CI isn't green/)
   const posted = pr1.comments.at(-1)
   assert.equal(posted.login, 'ana')
+  assert.equal(JSON.parse(posted.body.match(/record (\{.*\}) -->/)[1]).via, 'terminal')
   // An edited approval isn't trusted.
+  world.checks = new Map([ [ first, [ { name: 'CI', state: 'success' } ] ] ])
   world.as('ana').editComment(pr1.number, posted.id, posted.body)
   assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head/)
+  world.checks = new Map([ [ first, [ { name: 'CI', state: 'pending' } ] ] ])
   ok(await anaHere.run('approve', 'slice', '1'))
   // A new commit needs a new approval.
   put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1 // tidy\n')
@@ -396,7 +400,9 @@ test('approve slice: the PR author approves its head in their terminal, and slic
   const second = ana.g('rev-parse', 'HEAD')
   world.checks = new Map([ [ second, [ { name: 'CI', state: 'success' } ] ] ])
   assert.match((await anaHere.run('slice', 'merge', '1')).err, /isn't approved at its head/)
+  world.checks = new Map([ [ second, [ { name: 'CI', state: 'pending' } ] ] ])
   ok(await anaHere.run('approve', 'slice', '1'))
+  world.checks = new Map([ [ second, [ { name: 'CI', state: 'success' } ] ] ])
   // With a second approver required, only a GitHub review counts.
   const strict = developer(world, 'ana', { isTTY: true, answer: 'y', config: { approvals: { requireSecondApprover: true } } })
   assert.match((await strict.run('approve', 'slice', '1')).err, /requires a second approver/)
@@ -404,6 +410,70 @@ test('approve slice: the PR author approves its head in their terminal, and slic
   const merged = ok(await anaHere.run('slice', 'merge', '1'))
   assert.match(merged.out, /Merged slice 1/)
   assert.deepEqual(pr1.pr.merged, { sha: second, by: 'ana' })
+})
+
+test('chat approval: the hook\'s describe run writes a one-shot ticket; the allowed run uses it, approves and merges', async () => {
+  const f = await feature()
+  const { ana, world } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  ok(await ana.run('slice', 'iterate', '1'))
+  const head = ana.g('rev-parse', 'HEAD')
+  const pr1 = [ ...world.issues.values() ].find((i) => i.pr?.head === 'factory-foreman/7-slice-1')
+  world.checks = new Map([ [ head, [ { name: 'CI', state: 'success' } ] ] ])
+  const asks = mkdtempSync(join(tmpdir(), 'ff-asks-'))
+  // An agent's shell, as Claude Code runs it: no terminal, CLAUDECODE set.
+  const agentEnv = { CLAUDECODE: '1', FACTORY_FOREMAN_ASKS_DIR: asks, FACTORY_FOREMAN_ASK_SESSION: 's-1' }
+  const inChat = (env) => { const d = developer(world, 'ana', { isTTY: false }); const base = d.ctx; d.ctx = () => ({ ...base(), env }); d.run = (...argv) => main(argv, d.ctx); return d }
+  const hook = inChat(agentEnv)
+  // The describe run checks everything, writes a ticket, and says what would happen.
+  const described = ok(await hook.run('approve', 'slice', '1', '--ask-ticket', 'toolu_1'))
+  const { summary, nonce } = JSON.parse(described.out)
+  assert.match(summary, /Slice 1 of #7: #\d+ at [0-9a-f]{7}, iteration 1, CI green .*merges it into factory-foreman\/7/)
+  assert.match(nonce, /^[a-f0-9]{32}$/)
+  assert.equal(pr1.comments.filter((c) => c.login === 'ana').length, 0)
+  // A headless run has nobody to ask.
+  assert.match((await inChat({ ...agentEnv, CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }).run('approve', 'slice', '1', '--ask-ticket', 'toolu_9')).err, /no person in it to ask/)
+  // Without a ticket, or with a made-up one, or for another command, it refuses.
+  assert.match((await inChat({ CLAUDECODE: '1', FACTORY_FOREMAN_ASKS_DIR: asks }).run('approve', 'slice', '1')).err, /must be confirmed by a person/)
+  assert.match((await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: 'f'.repeat(32) }).run('approve', 'slice', '1')).err, /ticket is gone/)
+  assert.match((await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: nonce }).run('approve', 'slice', '1', '--json')).err, /ticket is for a different command/)
+  // That ticket is used up now; a fresh one is allowed once and merges.
+  const again = JSON.parse(ok(await hook.run('approve', 'slice', '1', '--ask-ticket', 'toolu_2')).out)
+  const allowed = ok(await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: again.nonce }).run('approve', 'slice', '1'))
+  assert.match(allowed.out, /Approved slice 1 .* Merged slice 1/)
+  assert.deepEqual(pr1.pr.merged, { sha: head, by: 'ana' })
+  const approval = pr1.comments.find((c) => c.login === 'ana')
+  assert.deepEqual(JSON.parse(approval.body.match(/record (\{.*\}) -->/)[1]).via, 'claude-code-ask')
+  assert.match(pr1.comments.at(-1).body, /Slice 1 merged.* \(confirmed in the chat\)/)
+  // Replaying the used ticket is refused (the slice is merged too, which is refused first).
+  assert.match((await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: again.nonce }).run('approve', 'slice', '1')).err, /isn't open|ticket is gone/)
+})
+
+test('chat approval: a change between the prompt and the run is refused, and tickets expire', async () => {
+  const world = fakeGitHub({ permissions: { ana: 'write' } })
+  world.addIssue(7, '')
+  const asks = mkdtempSync(join(tmpdir(), 'ff-asks-'))
+  const { confirm } = await import('../src/approval/ask.mjs')
+  let now = Date.parse('2026-11-11T12:00:00Z')
+  const ctx = (env) => ({ env: { FACTORY_FOREMAN_ASKS_DIR: asks, ...env }, now: () => new Date(now) })
+  const mint = async (bind) => JSON.parse((await confirm(ctx({}), { flags: { 'ask-ticket': 't1' }, argv: [ 'approve', 'design', 'v1', '--ask-ticket', 't1' ], bind, summary: 's' })).describe.out).nonce
+  const n1 = await mint('a')
+  await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: n1 }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'b' }), /changed before it ran/)
+  const n2 = await mint('a')
+  now += 11 * 60_000
+  await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: n2 }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'a' }), /expired/)
+  now -= 11 * 60_000
+  // A newer ask for the same thing replaces the older ticket; others stay.
+  const old = await mint('a')
+  const other = await mint('c')
+  const n3 = await mint('a')
+  await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: old }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'a' }), /ticket is gone/)
+  assert.ok(existsSync(join(asks, `${other}.json`)))
+  assert.deepEqual(await confirm(ctx({ FACTORY_FOREMAN_ASK: n3, FACTORY_FOREMAN_ASK_SESSION: 'x' }), { flags: {}, argv: [ 'approve', 'design', 'v1' ], bind: 'a' }), { via: 'claude-code-ask', session: null })
+  await assert.rejects(confirm(ctx({ FACTORY_FOREMAN_ASK: 'nope' }), { flags: {}, argv: [], bind: 'a' }), /malformed/)
 })
 
 test('status shows slices from their PR records: a local edit changes nothing, a newer approved Design makes a slice stale', async () => {
