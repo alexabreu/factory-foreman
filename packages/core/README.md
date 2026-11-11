@@ -113,12 +113,21 @@ commit, iteration and CI. Their Allow is the approval: it's posted under their
 GitHub login, marked `"via": "claude-code-ask"`. Approving a slice merges it
 once CI is green.
 
+The command must be plain: `factory-foreman approve …` (or `npx` /
+`pnpm exec factory-foreman …`), with nothing before it and no chains, pipes,
+redirects or variables. The hook never runs the agent's text: it runs the
+factory-foreman it finds itself (`FACTORY_FOREMAN_CLI` if set, else the repo's
+`node_modules/.bin`, else Claude Code's PATH) with the command's arguments.
+
 Behind the prompt is a one-shot ticket in `~/.factory-foreman/asks`, for
-exactly that command and what it would act on, good for ten minutes. The
-command uses it up, and refuses if what it would approve changed since the
-person was asked. Allow rules don't silence the prompt, and a headless run
-can't answer it. In `bypassPermissions` and `dontAsk` modes, which don't ask,
-approvals are refused.
+exactly that command and what it would act on (including who approves and,
+for a merge, into which branch), good for ten minutes. The command uses it up,
+and refuses if any of that changed since the person was asked. A settings
+allow rule doesn't silence the prompt (tested with `claude -p`, which then
+refuses). Headless and SDK runs, and the `bypassPermissions` and `dontAsk`
+modes, which don't ask a person, refuse approvals outright. In `auto` mode the
+prompt still comes from the hook; if the classifier objects to the rewritten
+command, approve again or switch to default mode.
 
 What this stops: an agent approving or merging without the person seeing and
 allowing it, approving in a mode that doesn't ask, replaying an approval, or

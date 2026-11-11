@@ -254,9 +254,10 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
   const asks = mkdtempSync(join(tmpdir(), 'ff-asks-'))
   // A stand-in CLI: the describe run prints what it would do and a ticket nonce.
   writeFileSync(join(bin, 'factory-foreman'), '#!/bin/sh\ncase "$*" in *--ask-ticket*) printf \'{"summary":"Approve Design v2 on #1","nonce":"%s"}\' "$(printf a%.0s $(seq 32))";; *) echo ran;; esac\n', { mode: 0o755 })
-  const saved = { PATH: process.env.PATH, FACTORY_FOREMAN_ASKS_DIR: process.env.FACTORY_FOREMAN_ASKS_DIR }
+  const saved = { PATH: process.env.PATH, FACTORY_FOREMAN_ASKS_DIR: process.env.FACTORY_FOREMAN_ASKS_DIR, CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR }
   process.env.PATH = `${bin}:${process.env.PATH}`
   process.env.FACTORY_FOREMAN_ASKS_DIR = asks
+  process.env.CLAUDE_PROJECT_DIR = bin
   try {
     const claude = (command, extra = {}) => decide({ session_id: 's', transcript_path: '/t.jsonl', cwd: bin, permission_mode: 'default', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_1', tool_input: { command, description: 'd' }, ...extra })
     const asked = claude('factory-foreman approve design v2 --issue 1')
@@ -271,19 +272,30 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     assert.match(claude('factory-foreman approve design v2', { permission_mode: 'dontAsk' }).stderr, /dontAsk/)
     assert.match(claude('factory-foreman approve design v2 && echo hi').stderr, /one plain command/)
     assert.match(claude('factory-foreman approve design v2 # ok').stderr, /one plain command/)
+    // The agent's text never picks what runs: no env prefixes, runner options or variables.
+    assert.match(claude(`PATH=${bin}:/bin factory-foreman approve design v2`).stderr, /one plain command/)
+    assert.match(claude('npx -p left-pad factory-foreman approve design v2').stderr, /one plain command/)
+    assert.match(claude('NODE_OPTIONS=--require=/x factory-foreman approve design v2').stderr, /one plain command/)
+    assert.match(claude('factory-foreman approve design "$V"').stderr, /one plain command/)
+    assert.equal(JSON.parse(claude('npx factory-foreman approve design v2').stdout).hookSpecificOutput.permissionDecision, 'ask')
     assert.match(claude('factory-foreman approve design v2', { turn_id: 't', model: 'gpt' }).stderr, /is for a person in their own terminal/)
     assert.match(claude('factory-foreman approve design v2 --ask-ticket x').stderr, /tickets are written and used by the approve hook alone/)
     assert.match(claude('FACTORY_FOREMAN_ASK=abc factory-foreman approve design v2').stderr, /tickets are written and used by the approve hook alone/)
     // A command carrying a live ticket is asked about again, never let through on its own.
-    writeFileSync(join(asks, `${'b'.repeat(32)}.json`), '{}')
+    writeFileSync(join(asks, `${'b'.repeat(32)}.json`), JSON.stringify({ summary: 'Approve Design v2 on #1' }))
     const again = JSON.parse(claude(`FACTORY_FOREMAN_ASK=${'b'.repeat(32)} factory-foreman approve design v2`).stdout).hookSpecificOutput
     assert.equal(again.permissionDecision, 'ask')
+    assert.match(again.permissionDecisionReason, /^Approve Design v2 on #1\n/)
     assert.equal(again.updatedInput, undefined)
+    assert.match(claude(`FACTORY_FOREMAN_ASK=${'b'.repeat(32)} factory-foreman approve design v2; gh pr merge 5`).stderr, /one plain command/)
     assert.match(claude(`FACTORY_FOREMAN_ASK=${'b'.repeat(32)} factory-foreman approve design v2`, { permission_mode: 'bypassPermissions' }).stderr, /wouldn't ask you/)
-    // Ordinary commands are untouched.
+    // Ordinary commands are untouched; without Claude Code's own marker it's not taken for Claude Code.
     assert.equal(claude('ls'), null)
+    delete process.env.CLAUDE_PROJECT_DIR
+    assert.match(claude('factory-foreman approve design v2').stderr, /is for a person in their own terminal/)
   } finally {
     process.env.PATH = saved.PATH
+    if (saved.CLAUDE_PROJECT_DIR === undefined) delete process.env.CLAUDE_PROJECT_DIR; else process.env.CLAUDE_PROJECT_DIR = saved.CLAUDE_PROJECT_DIR
     if (saved.FACTORY_FOREMAN_ASKS_DIR === undefined) delete process.env.FACTORY_FOREMAN_ASKS_DIR; else process.env.FACTORY_FOREMAN_ASKS_DIR = saved.FACTORY_FOREMAN_ASKS_DIR
   }
 })

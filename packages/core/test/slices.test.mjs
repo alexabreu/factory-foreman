@@ -434,6 +434,8 @@ test('chat approval: the hook\'s describe run writes a one-shot ticket; the allo
   assert.match(summary, /Slice 1 of #7: #\d+ at [0-9a-f]{7}, iteration 1, CI green .*merges it into factory-foreman\/7/)
   assert.match(nonce, /^[a-f0-9]{32}$/)
   assert.equal(pr1.comments.filter((c) => c.login === 'ana').length, 0)
+  // A headless run has nobody to ask.
+  assert.match((await inChat({ ...agentEnv, CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }).run('approve', 'slice', '1', '--ask-ticket', 'toolu_9')).err, /no person in it to ask/)
   // Without a ticket, or with a made-up one, or for another command, it refuses.
   assert.match((await inChat({ CLAUDECODE: '1', FACTORY_FOREMAN_ASKS_DIR: asks }).run('approve', 'slice', '1')).err, /must be confirmed by a person/)
   assert.match((await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: 'f'.repeat(32) }).run('approve', 'slice', '1')).err, /ticket is gone/)

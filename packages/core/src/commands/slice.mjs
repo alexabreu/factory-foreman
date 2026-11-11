@@ -449,7 +449,7 @@ async function pushIteration(ctx, { n, s, slice, tip, github, config, reviewers,
   return { out: [ ...warnings.map((w) => `Note: ${w}`), `Iteration ${k} of slice ${s} pushed at ${short(tip)} and tagged ${tag}.${files.length ? ` Evidence: ${files.length} file(s) on ${published.branch} at ${short(published.commit)}.` : ''}`, `When the PR is approved and CI is green, the person merges it: factory-foreman slice merge ${s}` ].join('\n'), json: { iteration, gate, checks, shows, evidence: evidence.map((e) => ({ name: e.name, ok: e.ok, summary: e.summary, files: e.files.map((f) => ({ label: f.label, kind: f.kind, url: published?.url(f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-')) })) })) } }
 }
 
-// ── merge (a person, in their own terminal) ─────────────────────────────────
+// ── merge (a person: in their chat when the harness asks them, or in their terminal) ─────────────────────────────────
 const WRITE = new Set([ 'admin', 'maintain', 'write' ])
 export const GREEN = new Set([ 'success', 'neutral', 'skipped' ])
 
@@ -463,10 +463,13 @@ async function restack(ctx, github, n, s, slice) {
 }
 
 // Everything slice merge requires, checked; refuses with the first thing missing.
-export async function mergeChecks(ctx, github, n, s) {
+// `readOnly` (when only describing) writes nothing; `approved` counts an approval
+// just posted, which GitHub's listing may not show yet.
+export async function mergeChecks(ctx, github, n, s, { readOnly = false, approved = null } = {}) {
   const slice = await loadSlice(ctx, github, n, s)
   if (!slice) throw new Refusal(`Slice ${s} isn't open.`)
   if (slice.state === 'merged') {
+    if (readOnly) throw new Refusal(`Slice ${s} isn't open; it is merged.`)
     // A rerun after a stop between the merge and the restack finishes the restack.
     const restacked = await restack(ctx, github, n, s, slice)
     if (restacked.length) await updateChecklist(ctx, github, n)
@@ -493,6 +496,7 @@ export async function mergeChecks(ctx, github, n, s) {
   // GitHub won't let a PR's author approve it, so a person may approve the head
   // with factory-foreman approve slice instead, unless a second approver is required.
   const second = ctx.config().approvals.requireSecondApprover
+  if (!second && approved?.head === sha && !approvers.includes(approved.login)) approvers.push(approved.login)
   if (!second) for (const login of await sliceApprovers(await github.comments(slice.pr), { permission: (l) => github.permission(l), repo: github.repo, issue: n, slice: s, pr: slice.pr, head: sha })) if (!approvers.includes(login)) approvers.push(login)
   if (!approvers.length) throw new Refusal(`#${slice.pr} isn't approved at its head ${short(sha)} by someone with write access${second ? ' in a GitHub review (this repo requires a second approver)' : `: approve it on GitHub, or, if you opened it, run factory-foreman approve slice ${s}`}. An approval of an earlier commit doesn't count${where}.`)
   const checks = await github.checksAt(sha)
@@ -527,12 +531,12 @@ async function merge(ctx, { positionals, flags = {}, argv = [] }) {
   const n = ctx.issue()
   const github = ctx.github()
   await github.appReady()
-  const ready = await mergeChecks(ctx, github, n, s)
+  const ready = await mergeChecks(ctx, github, n, s, { readOnly: flags['ask-ticket'] !== undefined })
   const { slice, pr, sha, approvers, checks } = ready
   const summary = pr.state === 'MERGED'
     ? `#${slice.pr} was merged on GitHub at ${short(sha)}, approved by @${approvers.join(', @')} with CI green.`
     : `Slice ${s} (#${slice.pr}) at ${short(sha)} into ${pr.baseRefName}, approved by @${approvers.join(', @')}, CI green (${checks.length} check(s)).`
-  const how = await confirm(ctx, { flags, argv, bind: `merge:${github.repo}:${n}:${s}:${slice.pr}:${sha}`, summary, question: pr.state === 'MERGED' ? `Record slice ${s} as merged?` : `Merge slice ${s}?`, no: pr.state === 'MERGED' ? 'Not recorded.' : 'Not merged.' })
+  const how = await confirm(ctx, { flags, argv, bind: `merge:${github.repo}:${n}:${s}:${slice.pr}:${sha}:${pr.baseRefName}:${pr.state}`, summary, question: pr.state === 'MERGED' ? `Record slice ${s} as merged?` : `Merge slice ${s}?`, no: pr.state === 'MERGED' ? 'Not recorded.' : 'Not merged.' })
   if (how.describe) return how.describe
   return finishMerge(ctx, github, n, s, ready, how.via)
 }
