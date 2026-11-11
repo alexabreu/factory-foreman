@@ -305,3 +305,21 @@ test('in a Claude Code chat, approve and slice merge ask the person instead of r
     if (saved.FACTORY_FOREMAN_ASKS_DIR === undefined) delete process.env.FACTORY_FOREMAN_ASKS_DIR; else process.env.FACTORY_FOREMAN_ASKS_DIR = saved.FACTORY_FOREMAN_ASKS_DIR
   }
 })
+
+test('a relayed approval goes through the guard only as one plain command, for a channel the person turned on', () => {
+  const home = mkdtempSync(join(tmpdir(), 'ff-home-'))
+  const saved = process.env.FACTORY_FOREMAN_HOME
+  process.env.FACTORY_FOREMAN_HOME = home
+  try {
+    const cmd = 'factory-foreman approve slice 1 --issue 1 --relayed claude-app:card-1 --expect 8d6ac3c'
+    assert.match(decide({ tool_input: { command: cmd } }).stderr, /is for a person/)
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'claude-app' ] } }))
+    assert.equal(decide({ tool_input: { command: cmd } }), null)
+    assert.equal(decide({ tool_input: { command: 'factory-foreman slice merge 1 --relayed=claude-app:c --expect=8d6ac3c' } }), null)
+    for (const bad of [ `${cmd} && gh pr merge 5`, 'factory-foreman approve slice 1 --relayed claude-app:card-1', 'factory-foreman approve slice 1 --relayed slack:x --expect 8d6ac3c', 'factory-foreman approve slice 1 --relayed claude-app:c --expect "$X"', `PATH=/x ${cmd}`, 'gh pr merge 5 --relayed claude-app:c --expect 8d6ac3c' ]) {
+      assert.equal(decide({ tool_input: { command: bad } }).code, 2, bad)
+    }
+  } finally {
+    if (saved === undefined) delete process.env.FACTORY_FOREMAN_HOME; else process.env.FACTORY_FOREMAN_HOME = saved
+  }
+})

@@ -49,14 +49,14 @@ export async function approve(ctx, { positionals, flags = {}, argv = [] }) {
   const shown = parseDraft(current.body)
   const items = step === 'shape' ? shown.criteria.map((c) => `  ${plain(c.id)}: ${plain(c.criterion)}${c.visual ? ' (visual)' : ''}`) : shown.slices.map((s) => `  ${s.n}. ${plain(s.title)}${s.acs.length ? ` (${plain(s.acs.join(', '))})` : ''}`)
   const summary = [ `${title(step)} ${version} on #${n}${state.issue.url ? ` (${plain(state.issue.url)})` : ''}, posted by @${plain(info.latest.author)}:`, ...(items.length ? items : [ `  ${plain(shown.lead)}` ]) ].join('\n')
-  const how = await confirm(ctx, { flags, argv, bind: `approve:${github.repo}:${n}:${step}:${version}:${info.latest.comment.id}:${info.latest.hash}:${approver}`, summary, question: `Approve ${title(step)} ${version} on #${n} as @${approver}?`, no: 'Not approved.' })
+  const how = await confirm(ctx, { flags, argv, bind: `approve:${github.repo}:${n}:${step}:${version}:${info.latest.comment.id}:${info.latest.hash}:${approver}`, summary, question: `Approve ${title(step)} ${version} on #${n} as @${approver}?`, expect: info.latest.hash, no: 'Not approved.' })
   if (how.describe) return how.describe
   // Someone may have checkpointed while the person was reading and typing.
   const fresh = (await loadIssue(github, n, config.approvals)).steps[step]
   if (fresh.latest?.comment.id !== info.latest.comment.id) throw new Refusal(`${title(step)} ${fresh.latest?.version ?? '?'} was posted while you were confirming, so ${version} isn't the latest any more. Read it and approve that one.`)
 
   const now = ctx.now()
-  const record = { type: 'approval', repo: github.repo, issue: n, step, version, checkpoint: info.latest.comment.id, artifact: info.latest.artifact, hash: info.latest.hash, approver, at: now.toISOString(), via: how.via, ...(how.session ? { session: how.session } : {}) }
+  const record = { type: 'approval', repo: github.repo, issue: n, step, version, checkpoint: info.latest.comment.id, artifact: info.latest.artifact, hash: info.latest.hash, approver, at: now.toISOString(), via: how.via, ...(how.session ? { session: how.session } : {}), ...(how.ref ? { ref: how.ref } : {}) }
   await github.comment(n, recordComment(`Approved **${title(step)} ${version}**.`, record), 'user')
 
   const draft = parseDraft(current.body)
@@ -101,11 +101,11 @@ async function approveSlice(ctx, which, { flags, argv }) {
   const checks = await github.checksAt(sha)
   const ci = !checks.length ? 'no CI yet' : checks.every((c) => GREEN.has(c.state)) ? `CI green (${checks.length} check(s))` : `CI not green: ${checks.filter((c) => !GREEN.has(c.state)).map((c) => `${c.name} (${c.state})`).join(', ')}`
   const summary = `Slice ${k} of #${n}: #${slice.pr} at ${short(sha)}, iteration ${iteration.k ?? slice.iterations.indexOf(iteration) + 1}, ${ci}. Read its diff and evidence first. Approving also merges it into ${slice.base.branch} once CI is green.`
-  const how = await confirm(ctx, { flags, argv, bind: `slice-approval:${github.repo}:${n}:${k}:${slice.pr}:${sha}:${slice.base.branch}:${approver}`, summary, question: `Approve slice ${k} at ${short(sha)} as @${approver}?`, no: 'Not approved.' })
+  const how = await confirm(ctx, { flags, argv, bind: `slice-approval:${github.repo}:${n}:${k}:${slice.pr}:${sha}:${slice.base.branch}:${approver}`, summary, question: `Approve slice ${k} at ${short(sha)} as @${approver}?`, expect: sha, no: 'Not approved.' })
   if (how.describe) return how.describe
   // A push while the person was reading moves the head: approve what they saw only.
   if ((await github.pr(slice.pr)).headRefOid !== sha) throw new Refusal(`#${slice.pr} moved while you were confirming, so ${short(sha)} isn't its head any more. Read the new head and approve that.`)
-  const record = { type: 'slice-approval', repo: github.repo, issue: n, slice: k, pr: slice.pr, head: sha, approver, at: ctx.now().toISOString(), via: how.via, ...(how.session ? { session: how.session } : {}) }
+  const record = { type: 'slice-approval', repo: github.repo, issue: n, slice: k, pr: slice.pr, head: sha, approver, at: ctx.now().toISOString(), via: how.via, ...(how.session ? { session: how.session } : {}), ...(how.ref ? { ref: how.ref } : {}) }
   await github.comment(slice.pr, recordComment(`Approved **slice ${k}** at ${short(sha)}.`, record), 'user')
   // Approving is merging, once everything slice merge needs is there.
   let ready

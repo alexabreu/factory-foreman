@@ -74,7 +74,9 @@ the person's behalf.
    what they're approving; their Allow is the approval. Never answer for them,
    rephrase the command to avoid the prompt, or retry after they deny it.
    Elsewhere (Codex, a headless run) it refuses: they approve in their own
-   terminal with the same command.
+   terminal with the same command. If the person approved somewhere else they
+   turned on for it (a card in the Claude app), and only on their actual tap,
+   run it relayed: `--relayed <channel>:<ref> --expect <what they were shown>`.
 
 Design can only be checkpointed once a Shape version is approved.
 

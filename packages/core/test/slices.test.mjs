@@ -452,6 +452,36 @@ test('chat approval: the hook\'s describe run writes a one-shot ticket; the allo
   assert.match((await inChat({ ...agentEnv, FACTORY_FOREMAN_ASK: again.nonce }).run('approve', 'slice', '1')).err, /isn't open|ticket is gone/)
 })
 
+test('relayed approval: with the person\'s own opt-in, an agent runs approve slice --relayed with what they were shown; it approves and merges', async () => {
+  const f = await feature()
+  const { ana, world } = f
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  await reviewed(ana, 1)
+  ok(await ana.run('slice', 'iterate', '1'))
+  const head = ana.g('rev-parse', 'HEAD')
+  const pr1 = [ ...world.issues.values() ].find((i) => i.pr?.head === 'factory-foreman/7-slice-1')
+  world.checks = new Map([ [ head, [ { name: 'CI', state: 'success' } ] ] ])
+  const home = mkdtempSync(join(tmpdir(), 'ff-home-'))
+  const agent = (env) => { const d = developer(world, 'ana', { isTTY: false }); const base = d.ctx; d.ctx = () => ({ ...base(), env: { CLAUDECODE: '1', FACTORY_FOREMAN_HOME: home, ...env } }); d.run = (...argv) => main(argv, d.ctx); return d }
+  const relay = [ 'approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--expect', head.slice(0, 7) ]
+  // Not without the person's own opt-in.
+  assert.match((await agent({}).run(...relay)).err, /Relayed approvals aren't turned on/)
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'claude-app' ] } }))
+  // Not for a channel they didn't list, not without what they were shown, not if it changed.
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'slack:x', '--expect', head.slice(0, 7))).err, /from slack aren't turned on/)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'claude-app:card-1')).err, /Pass --expect/)
+  assert.match((await agent({}).run('approve', 'slice', '1', '--relayed', 'claude-app:card-1', '--expect', 'deadbeef')).err, /isn't what this would approve now/)
+  assert.equal(pr1.comments.filter((c) => c.login === 'ana').length, 0)
+  const done = ok(await agent({}).run(...relay))
+  assert.match(done.out, /Approved slice 1 .* Merged slice 1/)
+  assert.deepEqual(pr1.pr.merged, { sha: head, by: 'ana' })
+  const record = JSON.parse(pr1.comments.find((c) => c.login === 'ana').body.match(/record (\{.*\}) -->/)[1])
+  assert.deepEqual([ record.via, record.ref ], [ 'claude-app', 'card-1' ])
+  assert.match(pr1.comments.at(-1).body, /\(confirmed in claude-app, as relayed by the agent\)/)
+})
+
 test('chat approval: a change between the prompt and the run is refused, and tickets expire', async () => {
   const world = fakeGitHub({ permissions: { ana: 'write' } })
   world.addIssue(7, '')

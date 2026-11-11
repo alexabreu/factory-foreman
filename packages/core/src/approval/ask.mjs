@@ -31,17 +31,42 @@ const TICKET = /^[a-f0-9]{32}\.json(\.used-[\w-]+)?$/
 // A headless or SDK run has no person to answer the prompt, whatever answers it.
 const NOBODY = 'This session has no person in it to ask, so it can\'t approve or merge; the person does it in their own chat or terminal.'
 
+// Relayed approvals: the person confirmed somewhere factory-foreman can't see
+// (a tap on a card in the Claude app), and the agent that saw it runs the
+// command with --relayed <channel>:<ref> and --expect <what the card showed>.
+// Only channels the person listed in their own config, outside any repo
+// (~/.factory-foreman/config.json: { "approvals": { "relay": ["claude-app"] } }),
+// are accepted. Nothing checks the tap itself: the agent attests to it, and
+// the record says so, with the ref to trace it.
+const userConfig = (env) => { try { return JSON.parse(readFileSync(join(env.FACTORY_FOREMAN_HOME || join(homedir(), '.factory-foreman'), 'config.json'), 'utf8')) } catch { return {} } }
+export const relayChannels = (env) => { const list = userConfig(env)?.approvals?.relay; return Array.isArray(list) ? list.filter((c) => typeof c === 'string' && /^[\w-]{1,40}$/.test(c)) : [] }
+
+function relayed(ctx, { flags, expect }) {
+  const m = /^([\w-]{1,40}):([\w.:-]{1,200})$/.exec(String(flags.relayed))
+  if (!m) throw new Refusal('Name the relay as --relayed <channel>:<ref>, for example --relayed claude-app:<the card\'s id>.')
+  if (!relayChannels(ctx.env).includes(m[1])) throw new Refusal(`Approvals relayed from ${m[1]} aren't turned on. The person turns them on in their own ~/.factory-foreman/config.json ({ "approvals": { "relay": ["${m[1]}"] } }).`)
+  const shown = String(flags.expect ?? '').toLowerCase()
+  if (!/^[0-9a-f]{7,64}$/.test(shown)) throw new Refusal('Pass --expect with what the person was shown (the version\'s hash or the head commit, at least 7 characters).')
+  if (!String(expect).toLowerCase().startsWith(shown)) throw new Refusal(`What the person was shown (${shown}) isn't what this would approve now (${String(expect).slice(0, 12)}). Show them the current one and ask again.`)
+  return { via: m[1], ref: m[2] }
+}
+
 // Which path this run is on: 'describe' (the hook asking what it would do),
-// 'chat' (allowed in the chat), or 'terminal'. A terminal run is refused where
-// an agent could be typing, before anything is read.
+// 'chat' (allowed in the chat), 'relayed' (confirmed elsewhere and relayed),
+// or 'terminal'. A terminal run is refused where an agent could be typing,
+// before anything is read.
 export function confirmPath(ctx, flags) {
+  if (flags.relayed !== undefined) return 'relayed'
   if (flags['ask-ticket'] !== undefined) return 'describe'
   if (ctx.env.FACTORY_FOREMAN_ASK !== undefined) return 'chat'
   return 'terminal'
 }
 
 export function requireTerminal(ctx, flags, what) {
-  if (confirmPath(ctx, flags) !== 'terminal') return
+  const path = confirmPath(ctx, flags)
+  if (path === 'relayed' && (flags['ask-ticket'] !== undefined || ctx.env.FACTORY_FOREMAN_ASK !== undefined)) throw new Refusal('A relayed approval doesn\'t also carry a chat ticket.')
+  if (path === 'relayed' && !relayChannels(ctx.env).length) throw new Refusal('Relayed approvals aren\'t turned on. The person turns them on in their own ~/.factory-foreman/config.json.')
+  if (path !== 'terminal') return
   const blocked = agentShell({ env: ctx.env, isTTY: ctx.isTTY })
   if (blocked) throw new Refusal(`${what} must be confirmed by a person: in their own terminal, or in a Claude Code chat where the harness asks them. Here ${blocked}.`)
 }
@@ -92,8 +117,9 @@ function redeem(ctx, { argv, bind }) {
 
 // The one place a person confirms. On the describe run it stops here with the
 // description; in the chat it redeems the ticket; at a terminal it asks y/N.
-export async function confirm(ctx, { flags, argv, bind, summary, question, no = 'Not confirmed.' }) {
+export async function confirm(ctx, { flags, argv, bind, summary, question, expect, no = 'Not confirmed.' }) {
   const path = confirmPath(ctx, flags)
+  if (path === 'relayed') return relayed(ctx, { flags, expect })
   if (path === 'describe') return { describe: mint(ctx, { argv, bind, summary: `${summary}\n${question}`, flags }) }
   if (path === 'chat') return redeem(ctx, { argv, bind })
   const answer = (await ctx.prompt(`${summary}\n${question} [y/N] `)).trim()

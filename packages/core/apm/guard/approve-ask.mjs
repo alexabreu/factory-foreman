@@ -95,3 +95,16 @@ export function chatDecision(payload, command, reason, { lex }) {
   const args = plain(command, lex)
   return args ? chatAsk(payload, args) : { refuse: PLAIN }
 }
+
+// A relayed approval (the person confirmed in a channel they turned on in
+// their own ~/.factory-foreman/config.json; see the CLI's src/approval/ask.mjs)
+// goes through as one plain command naming that channel and what was shown.
+// Every other approve or merge from an agent's shell is still refused.
+const relayChannels = () => { try { const list = JSON.parse(readFileSync(join(process.env.FACTORY_FOREMAN_HOME || join(homedir(), '.factory-foreman'), 'config.json'), 'utf8'))?.approvals?.relay; return Array.isArray(list) ? list : [] } catch { return [] } }
+export function relayedAllowed(command, { lex }) {
+  const args = typeof command === 'string' ? plain(command, lex) : null
+  if (!args || !(args[0] === 'approve' || (args[0] === 'slice' && args[1] === 'merge'))) return false
+  const value = (flag) => { const i = args.findIndex((w) => w === flag || w.startsWith(`${flag}=`)); return i === -1 ? null : args[i].includes('=') ? args[i].slice(flag.length + 1) : args[i + 1] }
+  const relay = /^([\w-]{1,40}):[\w.:-]{1,200}$/.exec(value('--relayed') ?? '')
+  return Boolean(relay && /^[0-9a-f]{7,64}$/i.test(value('--expect') ?? '') && relayChannels().includes(relay[1]))
+}
