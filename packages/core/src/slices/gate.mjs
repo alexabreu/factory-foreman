@@ -106,7 +106,19 @@ export const waitedIds = (message) => waitsIn(message).flatMap((w) => chainIds(w
 // echo of the message's first line, and attachment and error-context notes,
 // aren't sections of their own.
 function sections(message) {
-  const parts = message.split(/\n[ \t]*\n(?:[ \t]*\n)+/).map((p) => p.trim()).filter(Boolean).filter((p) => !/^(?:Error Context:|attachment #\d+:|─)/.test(p))
+  const raw = message.split(/\n[ \t]*\n(?:[ \t]*\n)+/).map((p) => p.trim()).filter(Boolean).filter((p) => !/^(?:Error Context:|attachment #\d+:|─)/.test(p))
+  const parts = []
+  for (const p of raw) {
+    const last = parts.at(-1)
+    // Still inside one error: toPass's own call log, a diff with blank lines
+    // before the error reaches its call log, or a value quoted in the call log.
+    // An "unexpected value" in the call log can span blank lines too, until its closing quote.
+    const openValue = last !== undefined && /- unexpected value "[^"]*$/.test(last)
+    if (last !== undefined && (/^Call Log:/.test(p) || openValue || (/^\s*Locator:/m.test(last) && !/^\s*Call log:/m.test(last) && !/^\w*Error: /.test(p)))) parts[parts.length - 1] = `${last}\n\n${p}`
+    else parts.push(p)
+  }
+  // A test or hook timeout heads the error that was pending, when there is one.
+  for (let i = parts.length - 2; i >= 0; i--) if (/^Test timeout of \d+ms exceeded[^\n]*$/.test(parts[i])) parts.splice(i, 2, `${parts[i]}\n\n${parts[i + 1]}`)
   return parts.filter((p, i) => !(!p.includes('\n') && parts.slice(i + 1).some((q) => q.split('\n').some((l) => l.trim().replace(/^\w*Error: /, '') === p.replace(/^\w*Error: /, '')))))
 }
 const FOUND = /locator resolved to (?!0 elements)|^\s*Received(?: string| value)?:\s*(?!<element\(s\) not found>)\S/m
@@ -142,7 +154,7 @@ export function classify(text, { owned, testIds, known = null }, type = '') {
   // a test id the contract adds, or an assertion on an element that is. Every
   // test id a locator passes through must be the contract's or exist at base,
   // found or not, so a typo can't hide behind an assertion.
-  if (waitsIn(message).length) {
+  if (waitsIn(message).length && /^\s*(?:Call log:|Locator:)/m.test(message)) {
     const verdicts = sections(message).map((section) => {
       const ws = waitsIn(section)
       const found = FOUND.test(section)

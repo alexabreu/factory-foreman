@@ -528,6 +528,16 @@ test('real reporters: Playwright and Vitest JUnit, and a Playwright run that sto
     'soft found then hang': false, 'soft new then promise hang': false, 'soft new then throw string': false, 'soft new then goto bad': false,
     'has filter': false, 'regex id': false, 'typo then new': false, 'typo count': false,
   })
+  // Sections from real runs: hook timeouts head the pending error, toPass's call log and diffs with blank lines stay in one error.
+  const known = [ 'item', 'items', 'summary', 'new-title', 'add', 'filter', 'item-title', 'item-toggle' ]
+  const verdicts = Object.fromEntries([ 'x', 'y', 'z' ].flatMap((f) => parseJUnit(fixture(`playwright-sections-${f}.xml`)).map((c) => [ c.name, classify(c.text, { owned: [], testIds: [ 'item-remove' ], known }, c.type).ok ])))
+  assert.deepEqual(verdicts, {
+    'x timeout in click': true, 'x timeout in expect': true, 'x timeout in expect existing': true, 'x multiline diff': true, 'x multiline diff new id after': true, 'x aria': true,
+    'x screenshot existing': false, 'x screenshot new': true, 'x text array new': true, 'x poll': true, 'x toPass': true, 'x step': true, 'x two soft new': true,
+    'y hook hang': false, 'y hook goto': false, 'y toPass hang': true, 'before › z beforeEach new': true, 'after › z afterEach new only': true,
+  })
+  // A Vitest string diff with a line starting "waiting for" isn't a Playwright call log.
+  assert.equal(classify('AssertionError: expected \'a\' to be \'b\'\n\n- Expected\n+ Received\n\n- waiting for x\n+ done', ctx, 'AssertionError').kind, 'assertion')
   // Nested suites and tests straight under <testsuites> (node's reporter) all count.
   const nested = parseJUnit('<testsuites><testsuite name="e" file="e2e/a.mjs"/><testsuite name="a" file="e2e/b.mjs"><testsuite name="d"><testcase name="AC-1 x"/></testsuite><testcase name="AC-2 y"><failure message="AssertionError: no" type="AssertionError"/></testcase></testsuite><testcase name="AC-3 z" file="e2e/c.mjs"/></testsuites>')
   assert.deepEqual(nested.map((c) => [ c.name, c.file, c.outcome ]), [ [ 'AC-1 x', 'e2e/b.mjs', 'passed' ], [ 'AC-2 y', 'e2e/b.mjs', 'failed' ], [ 'AC-3 z', 'e2e/c.mjs', 'passed' ] ])
