@@ -1,5 +1,6 @@
 // PreToolUse guard: an agent's shell may not approve, merge a slice, review or merge a pull request, or post a record; a
 // person does those in their own terminal. Reads the hook payload on stdin and denies (see decide). Zero deps. It stops honest mistakes, not determined ones.
+import { chatDecision } from './approve-ask.mjs'
 const SKIP = new Set([ 'env', 'command', 'exec', 'nohup', 'time', 'sudo', 'xargs', 'builtin', 'nice', 'timeout', 'watch', 'stdbuf', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', '!', '{', '}', '--' ])
 const SHELLS = new Set([ 'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish' ]); const base = (t) => t.split('/').pop()
 const VALUE = new Set([ '--issue', '--draft', '--kind', '--step', '--slice', '--findings', '--reason', '--transcript', '--session', '--event', '-R', '--repo' ])
@@ -7,18 +8,15 @@ const OWN = { sudo: [ '-u', '-g', '-C', '-h', '-p' ], timeout: [ '-s', '-k', '--
 const RUNNERS = { npx: [], bunx: [], pnpx: [], pnpm: [ 'exec', 'dlx', 'run' ], yarn: [ 'exec', 'dlx', 'run' ], npm: [ 'exec', 'x', 'run' ], node: [], bun: [ 'x', 'run' ] }; const MUTATION = /\b(addPullRequestReview|submitPullRequestReview|mergePullRequest|enablePullRequestAutoMerge|approvePullRequest)\b/i
 // Splits a command line into simple commands as a shell would, quoted text whole; text a shell runs on its own ($(…), `…`, heredocs) goes to `nested`.
 export function lex(src, nested = []) {
-  const cmds = [ [] ]
-  let word = null
+  const cmds = [ [] ]; let word = null
   let here = false // the next word is a here-string, which a shell runs as a script
   const end = () => { if (word !== null && here && SHELLS.has(base(cmds.at(-1)[0] ?? ''))) nested.push(word); else if (word !== null) cmds.at(-1).push(word); if (word !== null) here = false; word = null }
   const add = (s) => { word = (word ?? '') + s }
   const sub = (i, open, close) => { let d = 1; let j = i; while (j < src.length && d) { if (src[j] === open && open !== close) d++; else if (src[j] === close) d--; j++ } nested.push(src.slice(i, j - 1)); add('\uE000'); return j }
   for (let i = 0; i < src.length;) {
-    const c = src[i]
-    if (c === '\\') { if (src[i + 1] !== '\n') add(src[i + 1] ?? ''); i += 2; continue }
+    const c = src[i]; if (c === '\\') { if (src[i + 1] !== '\n') add(src[i + 1] ?? ''); i += 2; continue }
     if (c === "'") { const j = src.indexOf("'", i + 1); add(src.slice(i + 1, j === -1 ? src.length : j)); i = j === -1 ? src.length : j + 1; continue }
-    if (c === '"') {
-      let j = i + 1
+    if (c === '"') { let j = i + 1
       for (add(''); j < src.length && src[j] !== '"';) if (src[j] === '\\') { add(src[j + 1] ?? ''); j += 2 } else if (src.startsWith('$(', j)) j = sub(j + 2, '(', ')'); else if (src[j] === '`') j = sub(j + 1, '`', '`'); else add(src[j++])
       i = j + 1; continue
     }
@@ -57,6 +55,7 @@ const GH_WRITE = (t) => !t.some((w, i) => (/^(-X|--method)$/.test(w) && /^GET$/i
 export function verdict(command, depth = 0) {
   if (Array.isArray(command)) command = command.map((w) => (/^[\w./=:@%+,-]+$/.test(w) ? w : `'${String(w).replace(/'/g, "'\\''")}'`)).join(' ')
   if (typeof command !== 'string' || !command.trim() || depth > 4) return null
+  if (/FACTORY_FOREMAN_ASK|--ask-ticket/.test(command)) return 'factory-foreman\'s approval tickets are written and used by the approve hook alone.'
   // Records come from factory-foreman itself: a terminal approval is only as strong as this.
   const nested = []; for (const words of lex(command, nested)) {
     const t = head(words)
@@ -87,7 +86,8 @@ const deny = (why, copilot, code = copilot ? 0 : 2) => ({ code, stderr: code ===
 export function decide(payload) {
   let command = payload?.tool_input?.command ?? payload?.toolInput?.command; const args = payload?.toolArgs
   if (command === undefined && args !== undefined) { try { command = (typeof args === 'string' ? JSON.parse(args) : args)?.command } catch { command = args } }
-  const reason = verdict(command); return reason ? deny(`${reason} Ask the person to run it.`, COPILOT(payload)) : null
+  const reason = verdict(command); const chat = chatDecision(payload, command, reason, { lex }) // Claude Code asks the person in the chat
+  return chat ? (chat.ask ? { code: 0, stdout: JSON.stringify(chat.ask) } : deny(chat.refuse, false)) : reason ? deny(`${reason} Ask the person to run it.`, COPILOT(payload)) : null
 }
 const UNREAD = 'The approve guard couldn\'t read this command, and it may approve or merge. Ask the person to run it.'
 export function run(input) { try { return decide(JSON.parse(input || '{}')) } catch { return /factory-foreman|cli\.m?js|\bgh\b/.test(input) ? deny(UNREAD, /"tool(Name|Args|Input)"/.test(input) && !/"tool_(name|input)"/.test(input), 2) : null } } // fails closed

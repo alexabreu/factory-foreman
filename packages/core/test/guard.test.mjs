@@ -2,7 +2,9 @@
 // review or merge a pull request, however the command is dressed up.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { decide, verdict } from '../apm/guard/approve-guard.mjs'
 
@@ -212,7 +214,10 @@ test('runs as a hook: exit 2 and the reason on stderr, silent otherwise, failing
 test('the guard stays small and dependency-free', () => {
   const source = readFileSync(new URL('../apm/guard/approve-guard.mjs', import.meta.url), 'utf8')
   assert.ok(source.split('\n').length < 100)
-  assert.deepEqual([ ...source.matchAll(/^import .* from '([^']+)'/gm) ].map((m) => m[1]), [])
+  // No packages: only the guard's sibling and Node's own modules.
+  assert.deepEqual([ ...source.matchAll(/^import .* from '([^']+)'/gm) ].map((m) => m[1]), [ './approve-ask.mjs' ])
+  const ask = readFileSync(new URL('../apm/guard/approve-ask.mjs', import.meta.url), 'utf8')
+  assert.ok([ ...ask.matchAll(/^import .* from '([^']+)'/gm) ].every((m) => m[1].startsWith('node:')))
 })
 
 test('the hook config wires the guard and capture for every harness APM deploys to', () => {
@@ -242,4 +247,43 @@ test('the package stays free of any one product\'s names', () => {
   const files = execFileSync('git', [ 'ls-files', '--cached', '--others', '--exclude-standard', 'src', 'apm', 'README.md', 'factory-foreman.config.schema.json' ], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean)
   assert.ok(files.length > 20)
   for (const file of files) assert.doesNotMatch(readFileSync(new URL(file, root), 'utf8'), /\b(esri|arcgis|calcite|lumina|flight[- ]?components)\b/i, file)
+})
+
+test('in a Claude Code chat, approve and slice merge ask the person instead of refusing; elsewhere they still refuse', () => {
+  const bin = mkdtempSync(join(tmpdir(), 'ff-bin-'))
+  const asks = mkdtempSync(join(tmpdir(), 'ff-asks-'))
+  // A stand-in CLI: the describe run prints what it would do and a ticket nonce.
+  writeFileSync(join(bin, 'factory-foreman'), '#!/bin/sh\ncase "$*" in *--ask-ticket*) printf \'{"summary":"Approve Design v2 on #1","nonce":"%s"}\' "$(printf a%.0s $(seq 32))";; *) echo ran;; esac\n', { mode: 0o755 })
+  const saved = { PATH: process.env.PATH, FACTORY_FOREMAN_ASKS_DIR: process.env.FACTORY_FOREMAN_ASKS_DIR }
+  process.env.PATH = `${bin}:${process.env.PATH}`
+  process.env.FACTORY_FOREMAN_ASKS_DIR = asks
+  try {
+    const claude = (command, extra = {}) => decide({ session_id: 's', transcript_path: '/t.jsonl', cwd: bin, permission_mode: 'default', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_1', tool_input: { command, description: 'd' }, ...extra })
+    const asked = claude('factory-foreman approve design v2 --issue 1')
+    assert.equal(asked.code, 0)
+    const out = JSON.parse(asked.stdout).hookSpecificOutput
+    assert.equal(out.permissionDecision, 'ask')
+    assert.match(out.permissionDecisionReason, /^Approve Design v2 on #1\n\nAllow confirms it as you/)
+    assert.deepEqual(out.updatedInput, { command: `FACTORY_FOREMAN_ASK=${'a'.repeat(32)} factory-foreman approve design v2 --issue 1`, description: 'd' })
+    assert.equal(JSON.parse(claude('factory-foreman slice merge 1').stdout).hookSpecificOutput.permissionDecision, 'ask')
+    // Modes that wouldn't ask, chained commands, Codex, and hand-made tickets are refused.
+    assert.match(claude('factory-foreman approve design v2', { permission_mode: 'bypassPermissions' }).stderr, /In bypassPermissions mode Claude Code wouldn't ask you/)
+    assert.match(claude('factory-foreman approve design v2', { permission_mode: 'dontAsk' }).stderr, /dontAsk/)
+    assert.match(claude('factory-foreman approve design v2 && echo hi').stderr, /one plain command/)
+    assert.match(claude('factory-foreman approve design v2 # ok').stderr, /one plain command/)
+    assert.match(claude('factory-foreman approve design v2', { turn_id: 't', model: 'gpt' }).stderr, /is for a person in their own terminal/)
+    assert.match(claude('factory-foreman approve design v2 --ask-ticket x').stderr, /tickets are written and used by the approve hook alone/)
+    assert.match(claude('FACTORY_FOREMAN_ASK=abc factory-foreman approve design v2').stderr, /tickets are written and used by the approve hook alone/)
+    // A command carrying a live ticket is asked about again, never let through on its own.
+    writeFileSync(join(asks, `${'b'.repeat(32)}.json`), '{}')
+    const again = JSON.parse(claude(`FACTORY_FOREMAN_ASK=${'b'.repeat(32)} factory-foreman approve design v2`).stdout).hookSpecificOutput
+    assert.equal(again.permissionDecision, 'ask')
+    assert.equal(again.updatedInput, undefined)
+    assert.match(claude(`FACTORY_FOREMAN_ASK=${'b'.repeat(32)} factory-foreman approve design v2`, { permission_mode: 'bypassPermissions' }).stderr, /wouldn't ask you/)
+    // Ordinary commands are untouched.
+    assert.equal(claude('ls'), null)
+  } finally {
+    process.env.PATH = saved.PATH
+    if (saved.FACTORY_FOREMAN_ASKS_DIR === undefined) delete process.env.FACTORY_FOREMAN_ASKS_DIR; else process.env.FACTORY_FOREMAN_ASKS_DIR = saved.FACTORY_FOREMAN_ASKS_DIR
+  }
 })
