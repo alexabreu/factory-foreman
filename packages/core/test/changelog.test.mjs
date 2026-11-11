@@ -43,8 +43,10 @@ test('body line and artifact entry', () => {
   const diff = unifiedDiff('a\n', 'b\n', { from: 'v1', to: 'v2' })
   assert.equal(bodyLine({ step: 'shape', version: 'v2', date: '2026-11-10', author: 'alx', diff }), '- 2026-11-10: Shape v2 by @alx (+1 −1 lines)')
   assert.equal(bodyLine({ step: 'design', version: 'v1', date: '2026-11-10', author: 'alx', diff: '' }), '- 2026-11-10: Design v1 by @alx (first version)')
-  const entry = artifactEntry({ step: 'shape', version: 'v2', previous: 'v1', date: '2026-11-10', author: 'alx', harness: 'codex', diff, notes: [ 'Dropped sync' ] })
+  const entry = artifactEntry({ step: 'shape', version: 'v2', previous: 'v1', date: '2026-11-10', author: 'alx', harness: 'codex', diff, decisions: 2, questions: [ 'Export?' ] })
   assert.match(entry, /^## Shape v2, 2026-11-10\n\nBy @alx from codex\. Changes since v1:/)
-  assert.match(entry, /How we got here:\n\n- Dropped sync/)
+  // Decisions are counted, not repeated: they're in the Decisions artifact.
+  assert.match(entry, /2 decisions added \(see the Decisions artifact\)\.\n\nQuestions raised:\n\n- Export\?/)
+  assert.doesNotMatch(artifactEntry({ step: 'shape', version: 'v1', date: 'd', author: 'a' }), /decision/)
   assert.match(entry, /```diff\n--- v1\n\+\+\+ v2\n@@ -1,1 \+1,1 @@\n-a\n\+b\n```/)
 })

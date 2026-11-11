@@ -1,13 +1,14 @@
 import { artifactEntry, bodyLine, unifiedDiff } from '../changelog.mjs'
 import { Refusal } from '../errors.mjs'
 import { byBot, hash, isApproved, nextMinor, nextVersion, parseLabel, recordComment } from '../issue/records.mjs'
-import { addChangelogLine, addDecisionRows, setSection, updateBody } from '../issue/sections.mjs'
+import { writeDecisions } from '../issue/decisions.mjs'
+import { addChangelogLine, inert, setSection, updateBody, withDecisionsLine } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { postedBody, readDraftFile, requireReview, reviewersFor } from '../review/briefs.mjs'
 import { checkStructure, parseDraft, structuralBlocks } from '../steps/structure.mjs'
 import { affectedSlices } from '../slices/plan.mjs'
 import { sha256 } from './wireframes.mjs'
-import { readLog } from '../state/local.mjs'
+import { appendLog, noPersonInLoop, readLog } from '../state/local.mjs'
 import { entriesSince } from './draft.mjs'
 import { approvedBody, loadIssue, requireStep, sameText, title, today } from './common.mjs'
 
@@ -91,7 +92,9 @@ async function post(ctx, { step, file: given, amend: amending }) {
 
   // Extracted notes are only guesses until someone keeps or drops them.
   const unconfirmed = entriesSince(readLog(ctx.stateDir()), info.latest?.at, step).filter((e) => e.confirmed === false)
-  if (unconfirmed.length) {
+  // With no person in the session, they're left for the person: posted without them, and named.
+  const leftForPerson = noPersonInLoop(ctx.env) ? unconfirmed : []
+  if (unconfirmed.length && !leftForPerson.length) {
     throw new Refusal(`${unconfirmed.length} extracted note(s) since ${info.latest?.version ?? 'the start'} aren't confirmed. Keep, edit or drop each one (factory-foreman note --keep <id>, --edit <id> "<text>", --drop <id>):\n${unconfirmed.map((e) => `  - ${e.id}: [${e.kind}] ${e.text}`).join('\n')}`, { unconfirmed: unconfirmed.map((e) => e.id) })
   }
 
@@ -153,7 +156,8 @@ async function post(ctx, { step, file: given, amend: amending }) {
   }
 
   // 2. The changelog artifact, one full entry per version.
-  const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, notes: notes.map((e) => `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`), amend: amending })
+  const asked = entriesSince(readLog(ctx.stateDir()), info.latest?.at, step).filter((e) => e.confirmed && e.kind === 'question')
+  const entry = artifactEntry({ step, version, previous, date, author, harness: ctx.harness, diff, decisions: notes.length, questions: asked.map((e) => e.text), amend: amending })
   // Another checkpoint may append at the same moment, from the same version,
   // and either write could drop the other's entry. So each write holds every
   // entry any App-written version has held, plus ours, and is checked again.
@@ -169,6 +173,8 @@ async function post(ctx, { step, file: given, amend: amending }) {
     if (i === 3) throw new Refusal(`The Changelog on #${n} kept changing, so ${title(step)} ${version}'s entry isn't in it. Checkpoint again.`)
     await github.editArtifact(n, changelog, `# Changelog\n\n${all.join('\n\n')}\n`, 'app')
   }
+  // The questions are in the Changelog now, so a deferred one isn't raised again.
+  for (const e of asked) appendLog(ctx.stateDir(), { op: 'posted', id: e.id, at: now.toISOString() })
 
   // 3. The record that makes the version count.
   const record = {
@@ -180,14 +186,30 @@ async function post(ctx, { step, file: given, amend: amending }) {
   }
   const ask = amending?.minor ? `It's a minor amendment, so it keeps ${amending.carries}'s approval.` : `To approve it, run \`factory-foreman approve ${step} ${version}\` in a terminal.`
   const why = amending ? ` Amended because: ${amending.reason.replace(/\s+/g, ' ')}` : ''
-  await github.comment(n, recordComment(`**${title(step)} ${version}** posted by @${author} from ${ctx.harness}${diff ? '' : ' (first version)'}.${why} ${ask}`, record), 'app')
+  const waiting = leftForPerson.length ? ` Left for the person to keep, edit or drop: ${leftForPerson.map((e) => `"${inert(e.text).replace(/\s+/g, ' ')}"`).join('; ')}.` : ''
+  await github.comment(n, recordComment(`**${title(step)} ${version}** posted by @${author} from ${ctx.harness}${diff ? '' : ' (first version)'}.${why} ${ask}${waiting}`, record), 'app')
 
   // 4. The issue body: changelog line, decisions, and a status read afresh,
   // so a checkpoint or approval that landed meanwhile shows too.
   const states = (await loadIssue(github, n, config.approvals)).steps
-  const rows = notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}` }))
-  await updateBody(github, n, (b) => setSection(addDecisionRows(addChangelogLine(b, bodyLine({ step, version, date, author, diff, amend: amending })), rows), 'status', statusLine(states)))
+  const rows = notes.filter((e) => e.kind !== 'question').map((e) => ({ date, text: `${e.kind === 'rejected' ? 'Rejected: ' : ''}${e.text}`, by: `@${author}`, step: `${title(step)} ${version}`, id: e.id }))
+  // Decisions go to their own artifact; the body only counts them.
+  // A failed Decisions write mustn't stop the body update: the notes are kept
+  // for the next checkpoint instead, and it says so.
+  let count = 0
+  const dir = ctx.stateDir()
+  try {
+    count = await writeDecisions(github, n, rows, { body: state.issue.body })
+    for (const e of notes) appendLog(dir, { op: 'posted', id: e.id, at: now.toISOString() })
+  } catch (error) {
+    for (const e of notes) appendLog(dir, { op: 'defer', id: e.id, at: now.toISOString() })
+    warnings.push(`The Decisions artifact wasn't updated (${error.message}); this version's ${rows.length} decision(s) will go with the next checkpoint.`)
+  }
+  // Notes left for the person carry over to a later checkpoint once they're settled.
+  for (const e of leftForPerson) appendLog(dir, { op: 'defer', id: e.id, at: now.toISOString() })
+  await updateBody(github, n, (b) => setSection(withDecisionsLine(addChangelogLine(b, bodyLine({ step, version, date, author, diff, amend: amending })), count), 'status', statusLine(states)))
 
   const next = amending?.minor ? `It keeps ${amending.carries}'s approval.` : `Approve it from a terminal: factory-foreman approve ${step} ${version}`
-  return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}${amending ? `, ${amending.minor ? 'minor' : 'material'} amendment` : ''}). ${next}`, json: record, ...(warnings.length ? { err: warnings.join('\n') } : {}) }
+  const left = leftForPerson.length ? `\nLeft for the person to keep, edit or drop (this session has no person in it): ${leftForPerson.map((e) => `${e.id} [${e.kind}] ${e.text}`).join('; ')}` : ''
+  return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}${amending ? `, ${amending.minor ? 'minor' : 'material'} amendment` : ''}). ${next}${left}`, json: { ...record, leftForPerson: leftForPerson.map((e) => e.id) }, ...(warnings.length ? { err: warnings.join('\n') } : {}) }
 }

@@ -7,55 +7,159 @@
 // every problem is reported on stderr and the command still exits 0.
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs'
 import { basename } from 'node:path'
-import { KINDS, appendLog, claimCapture, newId, readLog, readMarker, writeMarker } from '../state/local.mjs'
+import { KINDS, appendLog, claimCapture, newId, noPersonInLoop, readLog, readMarker, writeMarker } from '../state/local.mjs'
 
 // Enough for a long stretch of conversation, and well under any limit on stdin.
 const MAX_TEXT = 60_000
+// The most of a transcript read at once: the newest part of a very long one.
+const MAX_READ = 16 * 1024 * 1024
+// The longest line kept whole; lines are always well under MAX_TEXT.
+const MAX_LINE = 4_000
 // Events that end or compact a session read whatever is new; Stop fires every
 // turn, so it waits until enough has been said.
 const FINAL_EVENTS = new Set([ 'SessionEnd', 'sessionEnd', 'PreCompact', 'preCompact' ])
 
-// Text the people and agents said, from a JSONL transcript (Claude Code and
-// Codex both write one object per line). Tool calls and their output are
-// skipped: decisions are in what was said, not in command output.
+// What was said, from a JSONL transcript (Claude Code and Codex both write one
+// object per line), as the person's and the agent's turns, every line marked
+// ("PERSON| …", "AGENT| …") so text inside a turn can't pose as the other.
+// Tool calls and their output are skipped: decisions are in what was said.
+// Text a harness puts in the user's role isn't the person: meta, compaction
+// and side-chain entries, and injected blocks (reminders, environment and
+// project instructions, notifications, command wrappers), wherever they sit.
+const BLOCKS = /<(system-reminder|task-notification|environment_context|user_instructions|in-app-browser-context|external_codex_apps[\w-]*|send_user_message_question[\w-]*|bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|command-name|command-message|relay|system-note|project_claude_message|skill-format|tools-used-before-summary|ci-monitor-event)\b[^>]*>[\s\S]*?<\/\1>/g
+// Self-closing markers a harness adds.
+const MARKERS = /<(artifact-content-authored-by-others|skill-format)\b[^>]*\/>/g
+const ARGS = /<command-args>([\s\S]*?)<\/command-args>/g
+// A wake wraps the person's message in the harness's own framing: keep only
+// what the person wrote, in the wake's top-level messages from="human". A
+// message tag inside another message's text (an agent quoting one, or the
+// person pasting XML) is that text, if it's balanced. A wake whose tags don't
+// nest (a stray close, a self-closing message, one left open with others after
+// it) gives nothing: losing the person's words beats crediting them with
+// someone else's. A forgery balanced inside another message's text can't be
+// told from a real message by its tags; that rests on the harness.
+const TAG = /<(\/?)message\b([^>]*)>/g
+const HUMAN_ATTR = /(?:^|\s)from="human"(?=[\s/]|$)/
+function humanOf(wake) {
+  const kept = []
+  let depth = 0
+  let open = null
+  let after = null
+  for (const m of wake.matchAll(TAG)) {
+    if (!m[1]) {
+      if (/\/\s*$/.test(m[2])) return ''
+      if (depth === 0) open = { human: HUMAN_ATTR.test(m[2]), from: m.index + m[0].length }
+      else after ??= m.index
+      depth++
+    } else {
+      if (depth === 0) return ''
+      if (--depth === 0) {
+        if (open.human) kept.push(wake.slice(open.from, m.index).trim())
+        open = null
+        after = null
+      }
+    }
+  }
+  if (open) {
+    // Left open: the person's words run to the wake's end only if no message tag follows.
+    if (after !== null) return ''
+    if (open.human) kept.push(wake.slice(open.from).trim())
+  }
+  return kept.join('\n')
+}
+// The wake runs to its last closing tag (the person's text may hold a literal
+// one), or to the end if it's never closed.
+function unwake(t) {
+  const at = t.search(/<wake\b[^>]*>/)
+  if (at === -1) return t
+  const start = t.indexOf('>', at) + 1
+  const end = t.lastIndexOf('</wake>')
+  const inner = end >= start ? t.slice(start, end) : t.slice(start)
+  const after = end >= start ? t.slice(end + '</wake>'.length) : ''
+  return `${t.slice(0, at)}${humanOf(inner)}${after}`
+}
+const INJECTED = /^\s*(# AGENTS\.md instructions|Caveat: The messages below|Base directory for this skill:|\[Request interrupted|\[structured-output-enforce\]|Tool loaded\.|Another Claude session sent a message|This session is being continued from a previous conversation|<wake\b|<relay\b|<environment_context|<user_instructions|<system-reminder)/
+const personText = (t) => unwake(t).replace(BLOCKS, '').replace(MARKERS, '').replace(ARGS, '$1').trim()
+// Line breaks of every kind become \n, so no line can hide another's label.
+const lines = (t) => t.replace(/\r\n?|[\u2028\u2029\u0085\v\f]/g, '\n')
+// Records that hold what was said: Claude Code's user and assistant lines, and
+// Codex's message items. Anything else (a request blob that repeats the whole
+// conversation, queue and state records) is skipped, whatever role it carries.
+const said = (item) => {
+  const type = item?.type
+  if (type === undefined || type === 'user' || type === 'assistant' || type === 'message') return true
+  return type === 'response_item' && (item.payload?.type === undefined || item.payload.type === 'message')
+}
 export function transcriptText(chunk) {
-  const out = []
-  const gather = (value, depth = 0) => {
+  const turns = []
+  const gather = (value, into, depth = 0) => {
     if (depth > 6 || value == null) return
-    if (typeof value === 'string') { out.push(value); return }
-    if (Array.isArray(value)) { value.forEach((v) => gather(v, depth + 1)); return }
+    if (typeof value === 'string') { into.push(value); return }
+    if (Array.isArray(value)) { value.forEach((v) => gather(v, into, depth + 1)); return }
     if (typeof value !== 'object') return
-    if (/tool|function_call|reasoning/i.test(String(value.type ?? ''))) return
-    if (typeof value.text === 'string') out.push(value.text)
-    else if (value.content !== undefined) gather(value.content, depth + 1)
-    else if (value.message !== undefined) gather(value.message, depth + 1)
-    else if (value.payload !== undefined) gather(value.payload, depth + 1)
+    if (/tool|function_call|reasoning|thinking|image/i.test(String(value.type ?? ''))) return
+    if (typeof value.text === 'string') into.push(value.text)
+    else if (value.content !== undefined) gather(value.content, into, depth + 1)
+    else if (value.message !== undefined) gather(value.message, into, depth + 1)
+    else if (value.payload !== undefined) gather(value.payload, into, depth + 1)
   }
   for (const line of chunk.split('\n')) {
     if (!line.trim()) continue
     try {
       const item = JSON.parse(line)
-      const role = item?.message?.role ?? item?.role ?? item?.payload?.role ?? item?.type
-      if (/^(system|tool)/i.test(String(role))) continue
-      const before = out.length
-      gather(item.message ?? item.payload ?? item)
-      if (out.length > before && /^(user|assistant)$/i.test(String(role))) out.splice(before, 0, `${role}:`)
+      if (!said(item) || item.isCompactSummary || item.isSidechain || item.isVisibleInTranscriptOnly) continue
+      const role = String(item?.message?.role ?? item?.role ?? item?.payload?.role ?? item?.type ?? '')
+      if (!/^(user|assistant)$/i.test(role)) continue
+      const person = /^user$/i.test(role)
+      const parts = []
+      gather(item.message ?? item.payload ?? item, parts)
+      // Meta entries are the harness's, except an edited message, which comes as
+      // a meta wake on its own; only the person's message in it is kept.
+      if (item.isMeta && !(person && typeof item.message?.content === 'string' && /^\s*<wake\b[^>]*\breason="message-edited"/.test(item.message.content))) continue
+      const text = parts.map((t) => lines(person ? personText(t) : t).trim()).filter((t) => t && !(person && INJECTED.test(t))).join('\n')
+      // Blank runs collapse to one blank line.
+      const clean = text.replace(/<\/?conversation>/g, '').replace(/\n\s*\n(\s*\n)*/g, '\n\n').trim()
+      if (clean) turns.push({ person, text: clean })
     } catch {
       // A partial last line, or not JSON: skip it.
     }
   }
-  const text = out.join('\n').trim()
-  return text.length > MAX_TEXT ? text.slice(-MAX_TEXT) : text
+  // Every line carries its label; blank lines stay blank.
+  // A line longer than MAX_LINE (a pasted log) keeps its start and is marked cut.
+  const clip = (l) => (l.length > MAX_LINE ? `${l.slice(0, MAX_LINE)} …[cut]` : l)
+  const render = (t) => t.text.split('\n').map((l) => (l.trim() ? `${t.person ? 'PERSON' : 'AGENT'}| ${clip(l)}` : '')).join('\n')
+  const rendered = turns.map((t) => ({ person: t.person, text: render(t) }))
+  // Over the limit, the agent's turns go first, oldest first; then the person's
+  // oldest. A turn too long on its own keeps its last whole lines.
+  let total = rendered.reduce((n, t) => n + t.text.length + 2, 0)
+  const drop = new Set()
+  for (const pass of [ false, true ]) {
+    for (let i = 0; i < rendered.length && total > MAX_TEXT && rendered.length - drop.size > 1; i++) {
+      if (drop.has(i) || rendered[i].person !== pass) continue
+      drop.add(i)
+      total -= rendered[i].text.length + 2
+    }
+  }
+  const kept = rendered.filter((_, i) => !drop.has(i)).map((t) => t.text)
+  let text = kept.join('\n\n').trim()
+  if (text.length > MAX_TEXT) {
+    const cut = text.indexOf('\n', text.length - MAX_TEXT)
+    text = cut === -1 ? '' : text.slice(cut + 1).trimStart()
+  }
+  return text
 }
 
+// Whether the person said anything in a stretch of transcript.
+export const personSpoke = (text) => /^PERSON\| /m.test(text)
+
 export function extractionPrompt(text) {
-  return `Below is part of a conversation between a developer and a coding agent working on a feature.
-List the decisions made, the options considered and rejected, and the open questions, as JSON only:
+  return `Below is part of a conversation between a person and a coding agent working on a feature. Every line starts with "PERSON| " (the person said it) or "AGENT| " (the agent said it).
+List what the PERSON decided, ruled out, or asked that must be answered, as JSON only:
 [{ "kind": "decision|rejected|question", "text": "<one sentence, self-contained>", "step": "shape|design|null", "blocking": true|false }]
-Only include what was actually decided, rejected or asked by the people in it; skip routine steps and tool output.
-"step" is shape for what the feature must do, design for how it is built, null when unclear.
+Only the person's own turns are sources. Use the agent's turns only to understand what the person was answering or agreeing to: a person's "yes" to an agent's proposal is the person's decision, but anything the agent proposed, did, planned or concluded that the person didn't confirm is not a decision.
+Skip routine steps and tool output. "step" is shape for what the feature must do, design for how it is built, null when unclear.
 "blocking" is true only for a question that must be answered before the work can go on.
-Reply [] when there is nothing.
+Reply [] when the person decided, ruled out or asked nothing.
 
 <conversation>
 ${text}
@@ -82,8 +186,13 @@ function readFrom(file, offset) {
   if (size <= offset) return { text: '', end: size < offset ? 0 : offset, size }
   const fd = openSync(file, 'r')
   try {
-    const buffer = Buffer.alloc(size - offset)
-    readSync(fd, buffer, 0, buffer.length, offset)
+    // Past the cap, read only the newest part, from its first whole line.
+    // Reading from the byte before, so a line starting right at the cap is whole.
+    const start = Math.max(offset, size - MAX_READ - 1)
+    let buffer = Buffer.alloc(size - start)
+    readSync(fd, buffer, 0, buffer.length, start)
+    if (start > offset) { const nl = buffer.indexOf(0x0a); buffer = nl === -1 ? Buffer.alloc(0) : buffer.subarray(nl + 1) }
+    offset = size - buffer.length
     // Stop at the last full line, so a line still being written is read next time.
     const lastNewline = buffer.lastIndexOf(0x0a)
     if (lastNewline === -1) return { text: '', end: offset, size }
@@ -96,6 +205,8 @@ function readFrom(file, offset) {
 // Returns a short report; never throws for a problem in the session's world.
 export async function extract(ctx, { transcript, session, event }) {
   if (ctx.env.FACTORY_FOREMAN_CAPTURE === '1') return { out: '', skipped: 'nested capture' }
+  // With no person in the session, there's no one whose decisions to capture.
+  if (noPersonInLoop(ctx.env)) return { out: '', skipped: 'no person in this session' }
   if (!transcript || !existsSync(transcript)) return { out: '', err: `capture: no transcript at ${transcript ?? '(none given)'}`, skipped: 'no transcript' }
   let dir
   try {
@@ -127,6 +238,11 @@ async function capture(ctx, { dir, key, transcript, event }) {
     return { out: '', skipped: 'nothing new' }
   }
   if (!FINAL_EVENTS.has(event) && text.length < config.capture.minChars) return { out: '', skipped: 'not enough new text yet' }
+  // Nothing the person said: nothing to extract, however much the agent said.
+  if (!personSpoke(text)) {
+    advance()
+    return { out: '', skipped: 'the person said nothing new' }
+  }
 
   const command = ctx.harness === 'codex' ? config.capture.codex : config.capture.claude
   // Well inside the ten minutes after which another capture may take the claim over.

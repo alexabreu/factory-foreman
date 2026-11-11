@@ -1,6 +1,7 @@
 import { Refusal } from '../errors.mjs'
 import { hash, isApproved, parseLabel, recordComment } from '../issue/records.mjs'
-import { addDecisionRows, inert, setSection, updateBody } from '../issue/sections.mjs'
+import { writeDecisions } from '../issue/decisions.mjs'
+import { inert, setSection, updateBody, withDecisionsLine } from '../issue/sections.mjs'
 import { statusLine } from '../issue/status.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { agentShell } from '../state/local.mjs'
@@ -60,6 +61,14 @@ export async function approve(ctx, { positionals }) {
   const states = (await loadIssue(github, n, config.approvals)).steps
   const section = `## ${title(step)} ${version} (approved)\n\n${inert(draft.lead)}\n\n<details><summary>Full ${title(step)} ${version}</summary>\n\n${inert(current.body.trim())}\n\n</details>`
   const row = { date: today(now), text: `Approved ${title(step)} ${version}`, by: `@${approver}`, step: `${title(step)} ${version}` }
-  await updateBody(github, n, (b) => setSection(addDecisionRows(setSection(b, step, section), [ row ]), 'status', statusLine(states)))
-  return { out: `Approved ${title(step)} ${version} on #${n}.`, json: record }
+  // The approval is recorded either way; a failed Decisions write is reported, not fatal.
+  let count = 0
+  let warning = null
+  try {
+    count = await writeDecisions(github, n, [ row ], { body: state.issue.body })
+  } catch (error) {
+    warning = `The approval is recorded, but the Decisions artifact wasn't updated (${error.message}).`
+  }
+  await updateBody(github, n, (b) => setSection(withDecisionsLine(setSection(b, step, section), count), 'status', statusLine(states)))
+  return { out: `Approved ${title(step)} ${version} on #${n}.`, json: record, ...(warning ? { err: warning } : {}) }
 }

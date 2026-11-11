@@ -21,7 +21,7 @@ factory-foreman note "Can titles repeat?" --kind question --blocking --step shap
 ```
 
 Notes are the "how we got here" for the next version, and decisions become rows
-in the issue's Decisions table. Note the decision, not the conversation. Never
+in the issue's Decisions artifact. Note the decision, not the conversation. Never
 put secrets, tokens or personal data in a note.
 
 The session hooks also extract notes from the conversation as it goes (when
@@ -38,6 +38,13 @@ factory-foreman note --drop 3f9a1c2e
 ```
 
 Only confirmed notes reach GitHub.
+
+Notes are extracted only from what the person says; your own narration never
+becomes a note. In a session with no person in it (claude -p, CI, or a run
+marked FACTORY_FOREMAN_NO_PERSON=1), notes you write stay unconfirmed and
+`note --keep/--edit/--drop` refuses: leave them. Checkpoint posts without them
+and names them, and the person settles them later. Never keep or drop a note on
+the person's behalf.
 
 ## Draft, check, checkpoint
 
