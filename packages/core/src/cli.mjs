@@ -44,6 +44,7 @@ const HELP = `factory-foreman ${version}
   slice iterate [<n>]                  checks, AC gate, review, show scripts, then push and tag
   slice merge <n>                      (a person, in their own terminal)
   slice list
+  review feature | review save feature --findings <file>   the whole feature, on its issue branch, before it ships
   status
 
 Every issue command takes --issue <n>, or reads it from a factory-foreman/<n> branch.

@@ -5,7 +5,7 @@
 // and head runs are real.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -83,7 +83,7 @@ process.exitCode = cases.some((c) => c.error) ? 1 : 0
 `
 
 const CONFIG = {
-  reviewers: { shape: [], design: [], slice: [ 'code-reviewer' ], verify: [] },
+  reviewers: { shape: [], design: [], slice: [ 'code-reviewer' ], feature: [ 'code-reviewer' ], verify: [] },
   secondOpinion: null,
   tests: { ac: { files: [ 'e2e/**/*.ac.mjs' ], run: [ 'node', 'run-ac.mjs' ], cwd: '.', timeout: 60_000 }, show: { files: [ 'show/**/*.json' ] } },
   checks: { tiers: { slice: [ { name: 'syntax', run: [ 'node', '--check', 'src/app.mjs' ], when: 'changed:src/**' } ], verify: 'ci' }, plugins: [] },
@@ -306,8 +306,8 @@ test('slice iterate refuses a hollow test, a file outside the slice, a changed f
   // A config the slice brings with it doesn't set its rules.
   put(ana, 'factory-foreman.config.json', '{ "version": 1, "sharedFiles": ["**"], "budgets": { "sliceLines": 99999 } }\n')
   commit(ana, 'loosen the rules', 'factory-foreman.config.json')
-  assert.match((await ana.run('slice', 'review', '1')).err, /factory-foreman\.config\.json isn't committed at the slice's base/)
-  assert.match((await ana.run('slice', 'iterate', '1')).err, /factory-foreman\.config\.json isn't committed at the slice's base/)
+  assert.match((await ana.run('slice', 'review', '1')).err, /factory-foreman\.config\.json isn't committed at the base/)
+  assert.match((await ana.run('slice', 'iterate', '1')).err, /factory-foreman\.config\.json isn't committed at the base/)
   ana.g('reset', '-q', '--hard', 'HEAD~1')
   // A light check that fails stops the iteration before anything runs or pushes.
   put(ana, 'src/app.mjs', 'export const = broken\n')
@@ -875,4 +875,74 @@ test('a retried iteration reuses the evidence it already published when only the
   assert.equal(published, 1)
   assert.equal(it.iteration.evidence, first)
   assert.equal(origin('rev-parse', 'refs/heads/factory-foreman-assets/7'), first)
+})
+
+test('slice review reads the whole feature so far against the base branch, with earlier slices as context', async () => {
+  const f = await feature()
+  const { ana } = f
+  // Code already on the issue branch, as an earlier slice would leave it.
+  put(ana, 'src/earlier.mjs', 'export const earlier = 1\n')
+  commit(ana, 'earlier slice', 'src/earlier.mjs')
+  ana.g('push', '-q', 'origin', 'factory-foreman/7', 'main')
+  await frozenSlice1(f)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  commit(ana, 'counter', 'src/counter.mjs')
+  const { briefs } = JSON.parse(ok(await ana.run('slice', 'review', '1', '--json')).out)
+  const brief = briefs[0].brief
+  assert.match(brief, /in the whole feature so far, not as a diff alone/)
+  // No origin/HEAD (the fixture never cloned), so origin/main stands in, fetched first.
+  assert.equal(spawnSync('git', [ 'rev-parse', '--verify', '--quiet', 'origin/HEAD' ], { cwd: ana.cwd }).status, 1)
+  assert.match(brief, /Read every file the feature touches in full[\s\S]*the code on origin\/main it should reuse/)
+  assert.match(brief, /against origin\/main at [0-9a-f]{7}/)
+  for (const file of [ 'src/earlier.mjs', 'e2e/AC-1.ac.mjs', 'src/counter.mjs' ]) assert.match(brief, new RegExp(`^- ${file}$`, 'm'))
+  assert.match(brief, /earlier slices is context, not under review: raise a finding on it only where this slice duplicates it/)
+  // The diff is still only what the slice adds.
+  const diff = brief.slice(brief.indexOf('<diff>'))
+  assert.match(diff, /src\/counter\.mjs/)
+  assert.doesNotMatch(diff, /src\/earlier\.mjs/)
+  // Without any base branch the slice is still reviewed from its diff, and the brief says so.
+  const lost = () => ({ ...ana.ctx(), config: () => ({ ...structuredClone(DEFAULTS), ...structuredClone(CONFIG), baseBranch: 'origin/develop' }) })
+  const unscoped = ok(await main([ 'slice', 'review', '1' ], lost)).out
+  assert.match(unscoped, /^Note: Can't find the base branch origin\/develop here/)
+  assert.match(unscoped, /The base branch isn't available, so read each file the diff touches in full/)
+  // The person's fix-it advice stays in the note, out of the reviewer's brief.
+  assert.equal(unscoped.match(/set baseBranch/g).length, 1)
+  assert.match(unscoped, /<diff>[\s\S]*src\/counter\.mjs/)
+})
+
+test('review feature briefs the whole feature on its issue branch and saves settled findings against its head', async () => {
+  const f = await feature()
+  const { ana } = f
+  // Not on the issue branch: it can't read the feature as it will ship.
+  ana.g('switch', '-q', '-c', 'elsewhere')
+  assert.match((await ana.run('review', 'feature')).err, /switch to factory-foreman\/7 first/)
+  ana.g('switch', '-q', 'factory-foreman/7')
+  assert.match((await ana.run('review', 'feature')).err, /no changes against main yet/)
+  put(ana, 'src/counter.mjs', 'export const add = (n) => n + 1\n')
+  put(ana, 'src/reset.mjs', 'export const reset = () => 0\n')
+  rmSync(join(ana.cwd, 'src/app.mjs'))
+  commit(ana, 'slices merged', 'src/counter.mjs', 'src/reset.mjs', 'src/app.mjs')
+  // Behind or ahead of origin's issue branch, it isn't the feature as it will ship.
+  assert.match((await ana.run('review', 'feature')).err, /factory-foreman\/7 here \([0-9a-f]{7}\) isn't origin's \([0-9a-f]{7}\): pull or push it first/)
+  ana.g('push', '-q', 'origin', 'factory-foreman/7')
+  const out = JSON.parse(ok(await ana.run('review', 'feature', '--json')).out)
+  assert.deepEqual(out.files, [ 'src/counter.mjs', 'src/reset.mjs' ])
+  assert.deepEqual(out.briefs.map((b) => b.reviewer), [ 'code-reviewer' ])
+  assert.match(out.briefs[0].brief, /Review the whole feature for issue #7 at [0-9a-f]{7}, as it will ship to main/)
+  assert.match(out.briefs[0].brief, /^- src\/reset\.mjs$/m)
+  // A deleted file isn't one to read in full; it's listed apart.
+  assert.match(out.briefs[0].brief, /Files it deletes:\n- src\/app\.mjs$/m)
+  // Saving needs every finding settled, and records the head it covers.
+  const file = join(ana.cwd, 'feature-findings.json')
+  writeFileSync(file, JSON.stringify({ reviewers: { 'code-reviewer': [ { id: 'C1', text: 'Duplicates the base\'s counter', severity: 'major' } ] } }))
+  assert.match((await ana.run('review', 'save', 'feature', '--findings', file)).err, /C1 isn't settled/)
+  writeFileSync(file, JSON.stringify({ reviewers: { 'code-reviewer': [ { id: 'C1', text: 'Duplicates the base\'s counter', severity: 'major', settlement: 'changed' } ] } }))
+  const saved = JSON.parse(ok(await ana.run('review', 'save', 'feature', '--findings', file, '--json')).out)
+  assert.equal(saved.head, ana.g('rev-parse', 'HEAD'))
+  assert.equal(JSON.parse(readFileSync(saved.file, 'utf8')).reviewers['code-reviewer'][0].settlement, 'changed')
+  // The feature can't switch off its own review: who reviews is read at the base.
+  put(ana, 'factory-foreman.config.json', JSON.stringify({ version: 1, reviewers: { feature: [] } }))
+  commit(ana, 'no feature review', 'factory-foreman.config.json')
+  ana.g('push', '-q', 'origin', 'factory-foreman/7')
+  assert.match((await ana.run('review', 'feature')).err, /factory-foreman\.config\.json isn't committed at the base/)
 })

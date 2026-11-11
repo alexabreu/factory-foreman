@@ -1,6 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Refusal } from '../errors.mjs'
-import { SECOND_OPINION, reviewFile, brief, secondOpinionCommand, visualReviewers, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
+import { SECOND_OPINION, SEVERITIES, reviewFile, brief, secondOpinionCommand, visualReviewers, checkSettlements, draftHash, parseFindings, readDraftFile, reviewersFor, saveReview } from '../review/briefs.mjs'
+import { featureScope, readWhole } from '../review/feature.mjs'
+import { issueBranch } from '../slices/plan.mjs'
+import { currentBranch, head } from '../util/git.mjs'
+import { configAt, remoteSha } from './slice.mjs'
 import { changedBy, lineDiff, markSaved, readRounds, recordRound } from '../review/rounds.mjs'
 import { inCodexSandbox } from '../state/local.mjs'
 import { parseDraft } from '../steps/structure.mjs'
@@ -83,7 +88,9 @@ function preface(before, draft, k, saved = null) {
 // factory-foreman review <shape|design> [--draft <file>] [--headless]
 // factory-foreman review save <shape|design> --findings <file> [--draft <file>]
 export async function review(ctx, args) {
-  if (args.positionals[0] === 'save') return save(ctx, { ...args, positionals: args.positionals.slice(1) })
+  const saving = args.positionals[0] === 'save'
+  if (args.positionals[saving ? 1 : 0] === 'feature') return feature(ctx, { ...args, saving })
+  if (saving) return save(ctx, { ...args, positionals: args.positionals.slice(1) })
   const { positionals, flags } = args
   const step = requireStep(positionals[0])
   const n = ctx.issue()
@@ -143,6 +150,50 @@ export async function review(ctx, args) {
   if (briefs.length) lines.push('', `Settle every finding, then: factory-foreman review save ${step} --findings <file>`)
   if (Object.keys(failures).length) throw new Refusal(lines.join('\n'), { hash: digest, findings, failures })
   return { out: lines.join('\n'), json: { step, issue: n, hash: digest, findings } }
+}
+
+// factory-foreman review feature | review save feature --findings <file>
+// The last code review before the feature goes to the base branch: the whole
+// feature as it will ship, on the issue branch, saved against its head commit.
+const featureFile = (dir, sha) => join(dir, 'reviews', `feature-${sha}.json`)
+
+async function feature(ctx, { flags, saving }) {
+  const n = ctx.issue()
+  const branch = issueBranch(n)
+  if ((await currentBranch(ctx)) !== branch) throw new Refusal(`The feature review reads the feature as it will ship: switch to ${branch} first.`)
+  const tip = await head(ctx)
+  const short = tip.slice(0, 7)
+  // slice merge merges on GitHub, so the local issue branch is behind until
+  // pulled. ls-remote writes nothing to .git, so this runs in Codex's sandbox too.
+  const shipped = await remoteSha(ctx, branch)
+  if (shipped !== tip) throw new Refusal(`${branch} here (${short}) isn't origin's (${shipped ? shipped.slice(0, 7) : 'not pushed'}): pull or push it first, so the review covers the feature as it will ship.`)
+  const scope = await featureScope(ctx, { baseBranch: ctx.config().baseBranch, tip })
+  // Who reviews is the base's config, as for slices: the feature can't set its own rules.
+  const reviewers = ((await configAt(ctx, scope.fork)).reviewers.feature ?? []).map((r) => r.split('?')[0])
+  if (saving) {
+    if (typeof flags.findings !== 'string') throw new Refusal('Name the settled findings: factory-foreman review save feature --findings <file>.')
+    let findings
+    try { findings = JSON.parse(readFileSync(flags.findings, 'utf8')) } catch (error) { throw new Refusal(`Can't read ${flags.findings} as JSON: ${error.message}`) }
+    const problems = checkSettlements(findings, reviewers)
+    if (problems.length) throw new Refusal(`The review can't be saved yet:\n  - ${problems.join('\n  - ')}`, { problems })
+    const file = featureFile(ctx.stateDir(), tip)
+    mkdirSync(join(ctx.stateDir(), 'reviews'), { recursive: true })
+    writeFileSync(file, `${JSON.stringify({ step: 'feature', head: tip, savedAt: ctx.now().toISOString(), reviewers: Object.fromEntries(reviewers.map((r) => [ r, findings.reviewers[r] ])) }, null, 2)}\n`)
+    return { out: `Saved the feature review of ${branch} at ${short}. It covers that commit only.`, json: { step: 'feature', head: tip, file } }
+  }
+  if (!reviewers.length) return { out: 'No reviewers are configured for feature (reviewers.feature).', json: { step: 'feature', head: tip, briefs: [] } }
+  if (!scope.files.length && !scope.deleted.length) throw new Refusal(`${branch} has no changes against ${scope.baseBranch} yet; there's no feature to review.`)
+  const briefs = reviewers.map((reviewer) => ({ reviewer, brief: [
+    `You are the ${reviewer} reviewer. Follow your agent instructions (the ${reviewer} agent), and load the repo's standards skill for your role if it has one.`,
+    `Review the whole feature for issue #${n} at ${short}, as it will ship to ${scope.baseBranch}: the approved Shape and Design on issue #${n}, every criterion, and all of its code, whichever slice it came from.`,
+    '', ...readWhole(scope), '',
+    `Reply with only a JSON array of findings: [{ "id": "<short-id>", "severity": "${SEVERITIES.join('|')}", "text": "…", "where": "<file:line>" }]. Reply [] when there is nothing to fix.`,
+  ].join('\n') }))
+  const stale = scope.refreshed ? [] : [ `Note: ${scope.baseBranch} wasn't refreshed from origin, so the feature's files are as of the copy here.` ]
+  return {
+    out: [ ...stale, `Feature review of ${branch} at ${short} against ${scope.baseBranch}.`, ...briefs.flatMap((b) => [ '', `=== ${b.reviewer} (run as a subagent: the ${b.reviewer} agent) ===`, b.brief ]), '', 'Settle every finding, then: factory-foreman review save feature --findings <file>' ].join('\n'),
+    json: { step: 'feature', head: tip, base: scope.baseBranch, refreshed: scope.refreshed, files: scope.files, deleted: scope.deleted, briefs },
+  }
 }
 
 async function save(ctx, { positionals, flags }) {

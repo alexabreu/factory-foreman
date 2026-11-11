@@ -22,6 +22,7 @@ export const DEFAULTS = Object.freeze({
     shape: [ 'test-verification-engineer' ],
     design: [ 'software-architect', 'ux-designer?visual' ],
     slice: [ 'code-reviewer' ],
+    feature: [ 'code-reviewer' ],
     verify: [ 'test-verification-engineer' ],
   },
   // Each command reads its prompt on stdin. The second opinion comes from the

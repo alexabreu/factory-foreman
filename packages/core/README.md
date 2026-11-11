@@ -27,6 +27,7 @@ capture and the approve guard work; slices and verify arrive in later phases.
 | `slice iterate [<n>]` | Light checks, the AC gate, the saved review and the show scripts; then pushes, tags and posts the iteration |
 | `approve slice <n>` | A person approves the slice PR's head (they can't on GitHub if they opened it) and it merges once CI is green |
 | `slice merge <n>` | A person merges the slice once its PR is approved at the head and CI is green |
+| `review feature` / `review save feature --findings <file>` | On the issue branch, before the feature ships: review every file it touches against the base branch, settled the same way |
 | `slice list` | Each slice: state, PR, owner, iterations and pinned versions |
 | `status` | Each step's latest and approved version, open blocking questions, and slices (stale ones flagged) |
 
@@ -56,7 +57,8 @@ Without it, factory writes are refused rather than posted as you.
 
 ## Reviews
 
-`reviewers` in the config names the reviewer agents per step; a name ending in
+`reviewers` in the config names the reviewer agents per step (`feature`, default
+`code-reviewer`, briefs `review feature`); a name ending in
 `?visual` is used only when there is a visual criterion. The package ships six:
 `test-verification-engineer`, `software-architect`, `ux-designer`,
 `code-reviewer`, `product-engineer` and `principal-engineer`. Each loads the
@@ -232,6 +234,12 @@ approval is a warning; once approved, slices pinned below it show as stale in
    each test failing at base for a reason the slice fixes (the base half of
    the AC gate), so a hollow test is caught while it can still be fixed.
 3. Build the slice, `slice review <n>`, settle the findings, `slice review save`.
+   The brief names every file the feature touches against `baseBranch`
+   (default `origin/HEAD`; without it, `origin/main`, `origin/master`, `main` or
+   `master`, fetched first when it's on origin), so the
+   reviewer reads the slice in the whole feature so far; earlier slices' code
+   is context, raised only where the slice duplicates it, crosses a boundary
+   with it, or leaves it dead or wrong.
 4. `slice iterate` refuses unless the frozen tests and show scripts are
    unchanged, the diff stays within the slice's files plus `sharedFiles` and
    `budgets.sliceLines` (and never touches `factory-foreman.config.json`), the

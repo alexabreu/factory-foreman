@@ -41,6 +41,7 @@
         "shape": { "$ref": "#/$defs/names" },
         "design": { "$ref": "#/$defs/names" },
         "slice": { "$ref": "#/$defs/names" },
+        "feature": { "$ref": "#/$defs/names" },
         "verify": { "$ref": "#/$defs/names" }
       }
     },

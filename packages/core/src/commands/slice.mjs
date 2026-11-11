@@ -21,6 +21,7 @@ import { Refusal } from '../errors.mjs'
 import { isApproved, sliceApprovers } from '../issue/records.mjs'
 import { inert, setSection, updateBody } from '../issue/sections.mjs'
 import { SEVERITIES, checkSettlements } from '../review/briefs.mjs'
+import { featureScope, readWhole } from '../review/feature.mjs'
 import { runChecks } from '../slices/checks.mjs'
 import { acGate } from '../slices/gate.mjs'
 import { acsIn, issueBranch, iterationTag, sliceBranch, slicePlan } from '../slices/plan.mjs'
@@ -50,11 +51,11 @@ function requireTestConfig(config, plan) {
 }
 
 // The config as it is at a commit: what a slice is held to is its base's.
-async function configAt(ctx, sha) {
+export async function configAt(ctx, sha) {
   const file = await ctx.exec([ 'git', 'show', `${sha}:${CONFIG_FILE}` ], { timeout: 60_000 })
   if (file.code !== 0) {
     // A config only in the working tree would let a slice set its own rules.
-    if (existsSync(join(await topLevel(ctx), CONFIG_FILE))) throw new Refusal(`${CONFIG_FILE} isn't committed at the slice's base (${short(sha)}); slices are held to the committed one. Commit it on the base branch first.`)
+    if (existsSync(join(await topLevel(ctx), CONFIG_FILE))) throw new Refusal(`${CONFIG_FILE} isn't committed at the base (${short(sha)}), where the rules are read from; slices and features are held to the committed one. Commit it on the base branch first.`)
     return ctx.config()
   }
   const dir = mkdtempSync(join(tmpdir(), 'ffc-'))
@@ -118,7 +119,7 @@ async function updateChecklist(ctx, github, n) {
   await updateBody(github, n, (b) => setSection(b, 'slices', `### Slices\n${lines.join('\n')}`))
 }
 
-async function remoteSha(ctx, branch) {
+export async function remoteSha(ctx, branch) {
   const out = await git(ctx, [ 'ls-remote', 'origin', `refs/heads/${branch}` ], `Reading ${branch} on origin`)
   return out.split(/\s/)[0] || null
 }
@@ -302,14 +303,21 @@ async function review(ctx, { positionals, flags }) {
     writeFileSync(reviewPath(ctx.stateDir(), s, tip), `${JSON.stringify({ slice: s, head: tip, savedAt: ctx.now().toISOString(), reviewers: Object.fromEntries(reviewers.map((r) => [ r, findings.reviewers[r] ])) }, null, 2)}\n`)
     return { out: `Saved the review of slice ${s} at ${short(tip)}. A new commit needs a new review.`, json: { slice: s, head: tip } }
   }
+  // Without the base branch the slice is still reviewed, from its diff, and the brief says so.
+  let scope = null
+  let unscoped = ''
+  try { scope = await featureScope(ctx, { baseBranch: config.baseBranch, tip }) } catch (error) { if (!(error instanceof Refusal)) throw error; unscoped = error.message }
   const diff = await git(ctx, [ 'diff', `${slice.tests.commit}..${tip}` ], 'Reading the slice\'s diff')
   const briefs = reviewers.map((reviewer) => ({ reviewer, brief: [
     `You are the ${reviewer} reviewer. Follow your agent instructions (the ${reviewer} agent), and load the repo's standards skill for your role if it has one.`,
-    `Review slice ${s} of issue #${n} at ${short(tip)}: the change since its frozen AC tests. The tests aren't yours to change, but say if one doesn't really test its criterion.`,
+    `Review slice ${s} of issue #${n} at ${short(tip)} in the whole feature so far, not as a diff alone. The tests aren't yours to change, but say if one doesn't really test its criterion.`,
+    '', ...(scope ? readWhole(scope) : [ 'The base branch isn\'t available, so read each file the diff touches in full, and search the codebase for code it should reuse.' ]), '',
+    'Code from earlier slices is context, not under review: raise a finding on it only where this slice duplicates it, crosses a boundary with it, or leaves it dead or wrong.',
+    '', 'What this slice adds, since its frozen AC tests:',
     '', '<diff>', diff, '</diff>', '',
     `Reply with only a JSON array of findings: [{ "id": "<short-id>", "severity": "${SEVERITIES.join('|')}", "text": "…", "where": "<file:line>" }]. Reply [] when there is nothing to fix.`,
   ].join('\n') }))
-  return { out: [ `Review of slice ${s} at ${short(tip)}.`, ...briefs.flatMap((b) => [ '', `=== ${b.reviewer} (run as a subagent: the ${b.reviewer} agent) ===`, b.brief ]), '', `Settle every finding, then: factory-foreman slice review save ${s} --findings <file>` ].join('\n'), json: { slice: s, head: tip, briefs } }
+  return { out: [ ...(unscoped ? [ `Note: ${unscoped}` ] : scope.refreshed ? [] : [ `Note: ${scope.baseBranch} wasn't refreshed from origin, so the feature's files are as of the copy here.` ]), `Review of slice ${s} at ${short(tip)}.`, ...briefs.flatMap((b) => [ '', `=== ${b.reviewer} (run as a subagent: the ${b.reviewer} agent) ===`, b.brief ]), '', `Settle every finding, then: factory-foreman slice review save ${s} --findings <file>` ].join('\n'), json: { slice: s, head: tip, briefs } }
 }
 
 // ── iterate ─────────────────────────────────────────────────────────────────

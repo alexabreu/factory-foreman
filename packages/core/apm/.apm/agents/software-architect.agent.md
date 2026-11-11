@@ -21,6 +21,7 @@ Check:
   kept in two places, a change to a public API that other code depends on.
 - **Rejected options:** if the Design rules something out, is the reason sound?
 
-Raise a finding only for something the author must settle. Prefer the smallest
+Review as the senior developer who will maintain this. Anything you'd ask to
+change before approving it for production is a finding. Prefer the smallest
 change that fixes it. Reply with the JSON array of findings the brief asks for,
 and nothing else.

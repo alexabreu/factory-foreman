@@ -21,7 +21,9 @@ first and are frozen; the code then has to make them pass.
    shared files. Commit.
 4. `factory-foreman slice review <n>`: run each brief as a subagent, settle
    every finding with the person, then `slice review save <n> --findings <file>`.
-   A new commit needs a new review.
+   The brief lists every file the feature touches against the base branch, so
+   the reviewer reads the slice in the whole feature so far, not as a diff
+   alone. A new commit needs a new review.
 5. `factory-foreman slice iterate`. If it refuses, fix what it lists:
    - the AC gate: each test must fail at the slice's base only because the
      slice isn't built yet (an assertion, an import of a file the slice adds, or
@@ -37,6 +39,12 @@ first and are frozen; the code then has to make them pass.
    under their login and merges it once CI is green. If CI isn't green yet, say
    so; when it is and they ask, run `factory-foreman slice merge <n>` the same
    way. Never post a factory-foreman record or a comment from a file with gh.
+
+When every slice is merged into the issue branch, and before the feature goes
+to the base branch, review the whole feature as it will ship: switch to
+`factory-foreman/<issue>` and pull it, run `factory-foreman review feature`, run each brief
+as a subagent, settle every finding with the person, then
+`factory-foreman review save feature --findings <file>`.
 
 In Codex's sandbox `.git` is read-only, so committing and pushing need the
 person to add it as a writable root; `slice iterate` refuses there and names
