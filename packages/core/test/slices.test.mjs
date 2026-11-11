@@ -502,6 +502,12 @@ test('real reporters: Playwright and Vitest JUnit, and a Playwright run that sto
   const out = fixture('playwright-import.txt')
   assert.deepEqual(classify(out, ctx), { kind: 'import', detail: '/work/src/remove', ok: true, why: 'imports /work/src/remove, which the slice adds' })
   assert.equal(classify(out, { ...ctx, owned: [ 'src/undo.ts' ] }).ok, false)
+  assert.match(classify("Error: Cannot find module '/tmp/ffg-Ab12/a/src/readingList' imported from /tmp/ffg-Ab12/a/e2e/x.e2e.ts", ctx).why, /^imports src\/readingList, which isn't a file the slice adds/)
+  // A chained locator (a row, then its new button) that ends in the test's own timeout.
+  const chained = parseJUnit(fixture('playwright-chained.xml'))
+  assert.deepEqual(chained.map((c) => classify(c.text, { owned: [], testIds: [ 'item-remove' ] }, c.type)), [ { kind: 'locator', detail: 'item-remove', ok: true, why: "waits for test id item-remove, which the slice's contract adds" } ])
+  assert.equal(classify(chained[0].text, { owned: [], testIds: [] }, chained[0].type).detail, 'item-remove')
+  assert.equal(classify(chained[0].text, { owned: [], testIds: [] }, chained[0].type).ok, false)
   // Nested suites and tests straight under <testsuites> (node's reporter) all count.
   const nested = parseJUnit('<testsuites><testsuite name="e" file="e2e/a.mjs"/><testsuite name="a" file="e2e/b.mjs"><testsuite name="d"><testcase name="AC-1 x"/></testsuite><testcase name="AC-2 y"><failure message="AssertionError: no" type="AssertionError"/></testcase></testsuite><testcase name="AC-3 z" file="e2e/c.mjs"/></testsuites>')
   assert.deepEqual(nested.map((c) => [ c.name, c.file, c.outcome ]), [ [ 'AC-1 x', 'e2e/b.mjs', 'passed' ], [ 'AC-2 y', 'e2e/b.mjs', 'failed' ], [ 'AC-3 z', 'e2e/c.mjs', 'passed' ] ])

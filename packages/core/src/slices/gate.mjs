@@ -69,8 +69,13 @@ export function failureMessage(text) {
 }
 
 const IMPORT = /Cannot find module ['"]([^'"]+)['"](?: imported from ['"]?([^'"\s]+))?|Failed to (?:resolve|load url) (?:import )?["']?([^"'\s]+)["']?(?: (?:from|in) ["']([^"']+)["'])?|Could not resolve ["']([^"']+)["'](?: from ["']([^"']+)["'])?|Cannot find package ['"]([^'"]+)['"]/
-const WAITED = /(?:waiting for|Locator:)\s*(?:locator\()?getByTestId\(\s*['"]([^'"]+)['"]\s*\)|(?:waiting for|Locator:)\s*(?:locator\()?['"]?\[data-testid=\\?["']([^"'\\]+)\\?["']\]/
-const MISSING = /TimeoutError|Timeout \d+ms exceeded|element\(s\) not found/
+// The locator a call log says it waited for, and every test id in it: a
+// chained locator (a row, then its button) names several.
+const WAITED = /(?:waiting for|Locator:)\s*(.+)/g
+const IDS = /getByTestId\(\s*['"]([^'"]+)['"]\s*\)|\[data-testid=\\?["']([^"'\\]+)\\?["']\]/g
+const waitedIds = (message) => [ ...message.matchAll(WAITED) ].flatMap((w) => [ ...w[1].matchAll(IDS) ].map((m) => m[1] ?? m[2]))
+// With no action timeout set, a missing element ends in the test's own timeout.
+const MISSING = /TimeoutError|Timeout \d+ms exceeded|Test timeout of \d+ms exceeded|element\(s\) not found/
 const FOUND = /locator resolved to/
 const ASSERTION_TYPE = /^(?:\w*AssertionError|expect\.\w+)$/
 const ASSERTION_LINE = /^(?:\w*AssertionError\b|Error: expect\(|expect\(|Error: Timed out \d+ms waiting for expect\()/
@@ -92,13 +97,18 @@ export function classify(text, { owned, testIds }, type = '') {
       const bare = noExt(spec.replace(/^(\.\.?\/)+/, ''))
       ok = Boolean(bare) && owned.some((f) => (target ? noExt(f) === target : noExt(f) === bare || noExt(f).endsWith(`/${bare}`)))
     }
-    return { kind: 'import', detail: spec, ok, why: ok ? `imports ${spec}, which the slice adds` : `imports ${spec}, which isn't a file the slice adds: the test can't reach the code it's meant to test` }
+    // A path inside the gate's checkout reads as the repo's own path.
+    const shown = spec.replace(/^.*\/ffg-[^/]+\/[ab]\//, '')
+    return { kind: 'import', detail: spec, ok, why: ok ? `imports ${shown}, which the slice adds` : `imports ${shown}, which isn't a file the slice adds: the test can't reach the code it's meant to test` }
   }
   // A locator that never found its element; one that found it and saw the
   // wrong thing is an assertion.
-  const testId = message.match(WAITED)?.slice(1).find(Boolean)
-  if (testId && MISSING.test(message) && !FOUND.test(message)) {
-    const ok = testIds.includes(testId)
+  // In a chain, the element that never appeared is the one the contract adds.
+  const waited = waitedIds(message)
+  if (waited.length && MISSING.test(message) && !FOUND.test(message)) {
+    const added = waited.filter((id) => testIds.includes(id))
+    const ok = added.length > 0
+    const testId = ok ? added.at(-1) : waited.at(-1)
     return { kind: 'locator', detail: testId, ok, why: ok ? `waits for test id ${testId}, which the slice's contract adds` : `waits for test id ${testId}, which the slice's contract doesn't add (or base already has)` }
   }
   const first = message.split('\n').map((l) => l.trim()).find((l) => /^\w*(Error|AssertionError)\b|^expect\(/.test(l)) ?? message.split('\n').find((l) => l.trim())?.trim() ?? ''
