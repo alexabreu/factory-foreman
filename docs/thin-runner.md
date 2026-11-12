@@ -244,8 +244,9 @@ programmatically with the App's token in the publish workflow.
    developer's login to the media-only branch `factory-foreman-assets/<n>` (the prototype already does this, in
    `src/assets/publish.mjs`). That branch is transport only and is never merged; the trail records each file's hash
    and the pinned commit. No media is on the trail branch, and none merges into base.
-2. **On the issue:** the publish workflow reads the files at that commit and attaches them natively to the slice's
-   issue artifact.
+2. **On the issue:** the developer's own `gh` login uploads the media (`gh issue artifact … --attach`), since App
+   tokens can't upload attachments (spike S6); the publish workflow, acting as the App, references the resulting
+   URLs in the slice's issue artifact.
 3. **On the PR:** the slice PR body embeds the same media, linking the attachment URLs if they're viewable from a
    PR, since GitHub has no documented REST API for uploading attachments to a PR.
 4. **Fallback, only if native attachment fails in S6:** the issue artifact and the PR body embed the pinned

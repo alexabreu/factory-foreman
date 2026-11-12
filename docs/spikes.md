@@ -116,7 +116,7 @@ gh-stack **v0.3.0**, using the developer's own login. No App key was used.
 | S3. Person merges an App-authored slice; guard routes | Not run: needs S2's setup | — |
 | S4. `ready` hook in Codex and VS Code | Not run: needs an interactive Codex TUI (`/hooks` trust) and VS Code | Needs a person at the keyboard, about 15 minutes |
 | S5. OpenSpec deltas for a Design revision | **Partly.** Deltas describe behaviour (requirements), not design. Its validate and archive steps belong in CI | Shape revisions use OpenSpec deltas; Design revisions need our own "Changed since vN" |
-| S6. Media in issue artifacts | **Yes** with the developer's login; as the App it needs **Contents: write** (the upload refused without it) | Native attachments are the route; the assets branch is only transport or fallback |
+| S6. Media in issue artifacts | **Yes** with the developer's login. **App tokens can't upload attachments**, so uploads use the person's login and the App references the URLs | Native attachments are the route; the assets branch is only transport or fallback |
 
 ## S1. `gh stack` with a feature branch as trunk
 
@@ -190,8 +190,15 @@ limited to `main`, secret `FF_APP_PRIVATE_KEY`, variable `FF_APP_ID`.
 - `open-pr`: the App opened PR #9 from `spike/s2-app-pr`, authored by `app/my-factory-foreman`, and the repo's CI
   ran on it (`pull_request`), which a `GITHUB_TOKEN` PR wouldn't trigger. Because the App is the author, the
   developer can approve the PR on GitHub.
-- `artifact` (S6 as the App): refused with "attaching files requires write access to the repository". The App's
-  installation needs **Contents: read and write** for media uploads. Rerun once that's granted.
+- `artifact` (S6 as the App): refused with "attaching files requires write access to the repository". Granting
+  the App Contents read and write didn't change it. GitHub documents no attachment upload for App tokens: the
+  issue-artifacts REST API (`/repos/{owner}/{repo}/issues/{n}/artifacts`, list, create, get, update, delete) takes
+  only text bodies, and `gh`'s `--attach` goes through the `uploads.github.com/user-attachments` path, which works
+  with a person's login. The predecessor also uploaded with the maintainer's own identity.
+- **Design:** media uploads run locally with the developer's own `gh` login (`gh issue artifact … --attach`, as in
+  S6); the publish workflow, acting as the App, references the resulting `user-attachments` URLs in the Slice k
+  artifact and the PR body. The never-merged assets branch is the fallback. Revisit if the issue-artifacts preview
+  adds an upload API for Apps.
 - `link-stack`: the App opened a second PR (#10) on top of #9, then `gh stack link --base main 9 10`, run with the
   App's token in the workflow (no local stack state), linked them as stack #11. So the developer's login pushes the
   slice branches, and the workflow opens the PRs as the App and stacks them.
