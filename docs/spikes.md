@@ -103,3 +103,74 @@ preview in `gh`).
 For the plan: diffs are computed from the history, so the `Changelog` artifact doesn't need to keep full copies,
 and the stale-write check compares the version a draft started from with the latest `version`. Issue artifacts
 are still preview in `gh`, so the calls stay in `github/gh.mjs` behind one function each.
+
+# Week-1 spikes for the thin runner
+
+Run 12 Nov 2026 on `alexabreu/alexabreu-factory-foreman-sample`, on `spike/` branches, with gh **2.103.2** and
+gh-stack **v0.3.0**, using the developer's own login. No App key was used.
+
+| Spike | Answer so far | Effect on the plan |
+| --- | --- | --- |
+| S1. `gh stack` on a feature branch | **Yes** for create, submit and restack; merge-as-approved is waiting on a person's merge | Our restack code can go; publishing can use `gh stack` and `gh stack link` |
+| S2. Publish workflow with the App | Not run: needs one-time setup (below) | — |
+| S3. Person merges an App-authored slice; guard routes | Not run: needs S2's setup | — |
+| S4. `ready` hook in Codex and VS Code | Not run: needs an interactive Codex TUI (`/hooks` trust) and VS Code | Needs a person at the keyboard, about 15 minutes |
+| S5. OpenSpec deltas for a Design revision | **Partly.** Deltas describe behaviour (requirements), not design | Shape revisions use OpenSpec deltas; Design revisions need our own "Changed since vN" |
+| S6. Media in issue artifacts | **Yes** with the developer's login; the App's token is untested | Native attachments are the route; the assets branch is only transport or fallback |
+
+## S1. `gh stack` with a feature branch as trunk
+
+- `gh stack init --base spike/s1-feature spike/s1-slice-1` works without prompts when the first branch is named
+  (with no name it stops: "interactive input required"). `gh stack add -m` on a branch with no commits yet commits
+  there instead of making a new branch.
+- `gh stack submit --auto` pushed both branches and opened draft PRs #4 and #5, with #4 based on the feature
+  branch and #5 on slice 1, and linked them as stack #6. The PRs are authored by whoever runs it.
+- A commit pushed straight to the feature branch underneath the stack: `gh stack rebase` restacked both slices
+  onto it and `gh stack push` updated the PRs, with no conflicts and no prompts.
+- `gh stack view --json` gives each branch's head, base, PR and `needsRebase`, which is what `sync` needs.
+- `gh stack link [--base]` links existing PRs into a stack without local tracking: the route for PRs the App opens.
+- Still to run: a person merging the bottom PR (agents' merges are blocked on this machine, as the M1 design
+  expects), then how the upper PR retargets, and whether a new slice can extend the stack once every slice is
+  merged.
+
+## S5. OpenSpec deltas
+
+Read from OpenSpec's own docs (`docs/writing-specs.md`); its CLI wasn't run, because this machine's safety check
+blocked downloading it with `npx`.
+
+- A spec is requirements (one `SHALL`/`MUST` each) with GIVEN / WHEN / THEN scenarios. A change carries
+  `## ADDED`, `## MODIFIED` (the full new text) and `## REMOVED` (with why) requirement sections; archiving
+  appends, replaces and drops them in the living spec.
+- OpenSpec keeps the *how* in `design.md`, which has no delta format. So it fits Shape (criteria map to
+  requirements and scenarios, and their revisions to deltas) but not Design: the walkthrough's Design v1 to v2
+  change (the data source and a signature) is exactly the kind it leaves out.
+- For the plan: Shape revisions are written as OpenSpec deltas, which also feed the archive. Design revisions get
+  our own "Changed since vN" with the same three headings (added, modified, removed) over contracts, approach and
+  slices. Validating with `openspec validate --strict` needs the CLI installed.
+
+## S6. Media in issue artifacts
+
+Tested on issue #7 ("Spike S6"), with the developer's login and `GH_DEBUG=api`.
+
+- `gh issue artifact create … --attach <file>#<alt>` uploads each file with
+  `POST https://uploads.github.com/user-attachments/assets?content_type=…&name=…&repository_id=…`, then creates
+  the artifact with `POST /repos/{owner}/{repo}/issues/{n}/artifacts`. The body embeds each file as
+  `![alt](https://github.com/user-attachments/assets/<id>)`.
+- `gh issue artifact edit … --attach <file>` appended a second image and made version 2: a build history on the
+  issue.
+- The same `user-attachments` URL renders in a PR body (PR #5); GitHub serves it through a signed
+  `private-user-images` link, so it needs no assets branch.
+- Not yet tested: the upload endpoint with the App's installation token (inside the publish workflow), and video
+  (needs ffmpeg for recordings).
+
+## Setup a person has to do for S2, S3 and S6 (App part)
+
+On `alexabreu/alexabreu-factory-foreman-sample`, once:
+
+1. Make sure the factory-foreman App is installed on the repo, with **Issues**, **Contents** and **Pull requests**
+   set to read and write.
+2. Create an environment, `factory-foreman-publish`, limited to the `main` branch.
+3. Add the App's private key to that environment as the secret `FF_APP_PRIVATE_KEY`, and its App id (or client id)
+   as the variable `FF_APP_ID`.
+4. Merge the spike's publish workflow into `main` when its PR is up, since a dispatch only reads the environment
+   from `main`.

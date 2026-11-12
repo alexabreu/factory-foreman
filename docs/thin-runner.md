@@ -621,18 +621,20 @@ archive.
 
 ## Milestones
 
-Spikes (S) and evals (Ev) come before rewrites; deletions come after their replacement works (end of M1).
+Spikes (S) and evals (Ev) come before rewrites; deletions come after their replacement works (end of M1). Every
+milestone ends with **cleanup**: whatever it replaced (code, branches, PRs, local state, docs) is removed, not left
+sitting.
 
 | # | Scope | Done when | Estimate |
 | --- | --- | --- | --- |
-| S | **Spikes** on a scratch repo (S1–S6, below) | Each spike has a written answer in `docs/spikes.md` | 2–3 days |
-| Ev | **Eval harness**: Tessl-format scenarios, the predecessor's cases, seeded defects, at least 3 runs per variant | Current personas have a baseline score | 1–2 days |
-| P | **Prompts**: implementer brief; clarifying protocol; evidence bar, synthesis and finding outcomes; per-criterion feature verdict; SKILL.md trimmed. Then merge PR #12 with these | Precision up and recall not down against the baseline | 2 days |
-| M1 | **Stacks and the trail**: setup (environment, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack` and PRs opened by the App, merged by the person on GitHub; `publish` and `revise` with deltas and drafted reasons; feed-forward notes and proposals in the ledger; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision, with every step in the trail | 3–4 days |
+| S | **Spikes** on a scratch repo (S1–S6, below) | Each spike has a written answer in `docs/spikes.md`; spike branches, PRs and issues closed | 2–3 days |
+| Ev | **Eval harness**: Tessl-format scenarios, the predecessor's cases, seeded defects, at least 3 runs per variant | Current personas have a baseline score; throwaway eval runs removed | 1–2 days |
+| P | **Prompts**: implementer brief; clarifying protocol; evidence bar, synthesis and finding outcomes; per-criterion feature verdict; SKILL.md trimmed. Then merge PR #12 with these | Precision up and recall not down against the baseline; PR #12 closed and the prompts it carried folded in | 2 days |
+| M1 | **Stacks and the trail**: setup (environment, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack` and PRs opened by the App, merged by the person on GitHub; `publish` and `revise` with deltas and drafted reasons; feed-forward notes and proposals in the ledger; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision, with every step in the trail; the deleted code paths, their tests and docs gone, and stale branches and local state from the prototype removed | 3–4 days |
 | First real feature | The first real feature after M1, ideally one that revises its Design | What hurts decides M2 and M3 | — |
-| M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) pushed to the assets branch and attached to the slice's issue artifact and PR by the publish workflow; the Verification artifact; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR | 2–3 days |
-| M3 | **Trail on GitHub and sync**: Decisions and Changelog as they happen; provenance capture and footers; `sync` with ETags; `resume` and `doctor` | A GitHub comment shows up in the next session as a finding; every record shows its provenance | 2–3 days |
-| M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive; cost budgets. The App merging slices after a recorded answer only if real use asked for it (ruleset with bypass, patch-id matching) | A second repo extends the profile and gets its standards and demos | 2–3 days |
+| M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) pushed to the assets branch and attached to the slice's issue artifact and PR by the publish workflow; the Verification artifact; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR; the old iteration records and evidence comments retired | 2–3 days |
+| M3 | **Trail on GitHub and sync**: Decisions and Changelog as they happen; provenance capture and footers; `sync` with ETags; `resume` and `doctor` | A GitHub comment shows up in the next session as a finding; every record shows its provenance; the old record formats removed | 2–3 days |
+| M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive; cost budgets. The App merging slices after a recorded answer only if real use asked for it (ruleset with bypass, patch-id matching) | A second repo extends the profile and gets its standards and demos; unused options, flags and docs removed | 2–3 days |
 
 Spikes:
 
