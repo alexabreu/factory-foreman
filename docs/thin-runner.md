@@ -665,6 +665,29 @@ is the test; which one is to be chosen, and the flight-components feature consid
 | Prompt changes making things worse | Borrowed text may not fit | Eval baseline before P |
 | Scope | A lot is planned | Milestones in order; nothing from a later one starts early |
 
+## Speed and tokens
+
+The developer has to feel the factory is responsive: they see progress, and they get something to react to
+quickly. Every place below either cuts waiting or cuts tokens, and provenance measures both.
+
+**What we've measured so far** (eval runs, 12 Nov): a code review of a small public case takes about 20 s on Claude
+Code and 60–110 s on Codex; a review of a larger private diff takes about 4 minutes. dev-team's experiments found
+that splitting tester from implementer cost about 3× for no gain (D46).
+
+| Where | What to do | Saves |
+| --- | --- | --- |
+| Clarify and Shape | Ask the few questions that matter up front, with defaults, so nothing is rebuilt later; show drafts in short pieces the developer can react to | Rework, the costliest tokens |
+| Slice size | Keep slices small (400 lines), so each build and review cycle is short and gives feedback often | Waiting |
+| Reviews | Run reviewers in parallel as subagents; route only the lenses a change needs (no UI lens on a pure data change); the maintainer's per-slice pass is light; the second opinion runs only at feature review | Tokens and wall time |
+| Review rounds | A later round re-reads only what changed and its own earlier findings; refuted or declined findings never come back; `rulings.md` stops repeat questions | Tokens |
+| Context | Give reviewers the file list and the slice's diff plus short notes from earlier slices, and let them open files as needed, instead of pasting the whole feature; keep the persona and Design as a stable prompt prefix so prompt caching applies | Tokens |
+| Models | A small fast model for mechanical steps (decision capture, formatting, the publish check, grading); the strongest model for implementing and reviewing; choose per step from eval scores, the cheapest that clears the bar | Tokens and time |
+| Checks | Fast local checks first (types, lint, red-at-base), heavy ones in the repo's CI; agent-browser only for slices with a visual checkpoint | Waiting |
+| Publishing | Dispatch the publish workflow and carry on; `sync` reports the result later, so the session never waits on GitHub | Waiting |
+| Stacks | While CI runs on slice k, the agent can start slice k+1 on top of it | Waiting |
+| Progress | Short progress lines during long steps ("slice 2: 3 of 5 tests green"); the status line shows stage, tokens and time so far; the readiness card shows the slice's cost | The feeling of waiting |
+| Measuring | Provenance records tokens and wall time per step, so the slow and costly steps are visible; evals record time per run, and a prompt change is judged on cost as well as quality | Guesswork |
+
 ## Gaps still open
 
 From the pipeline map ([line map](https://claude.ai/artifact/Raf59bN9YUr8ydGPGtqZZo)); each goes into the milestone noted.
