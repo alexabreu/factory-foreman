@@ -64,3 +64,10 @@ test('a case in the predecessor format is read in place, skipping criteria that 
   assert.equal(c.criteria.length, 1)
   assert.equal(c.criteria[0].check('a bug').passed, true)
 })
+
+test('JSON findings are rendered in the legacy review style for legacy checks', async () => {
+  const { asLegacyReview } = await import('../evals/run.mjs')
+  const out = asLegacyReview('```json\n[{"file":"src/a.ts","line":3,"severity":"high","summary":"Breaks undo","why":"stale index","fix":"store id"}]\n```')
+  assert.match(out, /^- \*\*blocker\*\* src\/a\.ts:3: Breaks undo\n {2}Why: stale index\n {2}Fix: store id/u)
+  assert.equal(asLegacyReview('plain text review'), 'plain text review')
+})

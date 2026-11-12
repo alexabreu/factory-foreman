@@ -62,6 +62,25 @@ function ask(argv, input, timeoutMs = 600_000) {
 // tools, which these evals don't provide; they're skipped and listed in the report.
 export const NEEDS_REPO = [ /deterministic tool output/iu, /change (repository|any) files/iu, /does not change/iu ]
 
+// The reviewer personas reply with a JSON array of findings; the predecessor's
+// checks expect its Markdown style (blocker/concern/nit, Why, Fix, file:line).
+// This renders JSON findings that way, ahead of the original reply, so legacy
+// format checks judge the same content. Replies that aren't JSON pass through.
+const SEVERITY = { blocking: 'blocker', blocker: 'blocker', critical: 'blocker', high: 'blocker', major: 'concern', medium: 'concern', concern: 'concern', minor: 'nit', low: 'nit', nit: 'nit' }
+export function asLegacyReview(reply) {
+  const start = reply.indexOf('[')
+  const end = reply.lastIndexOf(']')
+  let findings
+  try { findings = JSON.parse(reply.slice(start, end + 1)) } catch { return reply }
+  if (!Array.isArray(findings) || !findings.length) return reply
+  const lines = findings.map((f) => {
+    const where = f.where ?? (f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : '')
+    const text = f.text ?? f.summary ?? f.issue ?? f.title ?? f.description ?? ''
+    return [ `- **${SEVERITY[String(f.severity ?? '').toLowerCase()] ?? 'concern'}** ${where}: ${text}`, f.why ? `  Why: ${f.why}` : '', f.fix ? `  Fix: ${f.fix}` : '' ].filter(Boolean).join('\n')
+  })
+  return `${lines.join('\n')}\n\n${reply}`
+}
+
 // A case in this package's format (scenario.json, criteria.mjs), or in the
 // predecessor's (case.yaml, prompt.md, graders/assertions.mjs), read in place.
 export async function loadCase(caseDir, casesRoot) {
@@ -79,7 +98,7 @@ export async function loadCase(caseDir, casesRoot) {
   const task = `${readFileSync(join(caseDir, 'prompt.md'), 'utf8').trim()}\n\nThere is no repository checkout here: the change description and the diff are included below, so review from them.`
   return {
     scenario: { id: meta.name, persona: meta.persona, task, inputs: meta.inputs },
-    criteria: kept.map((a) => ({ text: a.text, weight: 1, check: (o) => a.check({ output: o, all: o, changedFiles: [] }) })),
+    criteria: kept.map((a) => ({ text: a.text, weight: 1, check: (o) => { const t = asLegacyReview(o); return a.check({ output: t, all: t, changedFiles: [] }) } })),
     skipped: assertions.filter((a) => !kept.includes(a)).map((a) => a.text),
   }
 }
