@@ -112,11 +112,11 @@ gh-stack **v0.3.0**, using the developer's own login. No App key was used.
 | Spike | Answer so far | Effect on the plan |
 | --- | --- | --- |
 | S1. `gh stack` on a feature branch | **Yes**: create, submit, restack, merge one slice, retarget the next; a fully merged stack can't be extended, so the next slice starts a new stack | Our restack code can go; publishing can use `gh stack` and `gh stack link` |
-| S2. Publish workflow with the App | Ready to run: environment created, `FF_APP_ID` set, spike workflow in sample PR #8; waits on the key secret and that PR merging | — |
+| S2. Publish workflow with the App | **Yes**: an App token from an environment secret; the App opened PR #9 and CI ran on it | — |
 | S3. Person merges an App-authored slice; guard routes | Not run: needs S2's setup | — |
 | S4. `ready` hook in Codex and VS Code | Not run: needs an interactive Codex TUI (`/hooks` trust) and VS Code | Needs a person at the keyboard, about 15 minutes |
 | S5. OpenSpec deltas for a Design revision | **Partly.** Deltas describe behaviour (requirements), not design. Its validate and archive steps belong in CI | Shape revisions use OpenSpec deltas; Design revisions need our own "Changed since vN" |
-| S6. Media in issue artifacts | **Yes** with the developer's login; the App's token is untested | Native attachments are the route; the assets branch is only transport or fallback |
+| S6. Media in issue artifacts | **Yes** with the developer's login; as the App it needs **Contents: write** (the upload refused without it) | Native attachments are the route; the assets branch is only transport or fallback |
 
 ## S1. `gh stack` with a feature branch as trunk
 
@@ -180,3 +180,16 @@ On `alexabreu/alexabreu-factory-foreman-sample`, once:
    as the variable `FF_APP_ID`.
 4. Merge the spike's publish workflow into `main` when its PR is up, since a dispatch only reads the environment
    from `main`.
+
+## S2. The publish workflow, acting as the App
+
+Sample repo, workflow `factory-foreman-publish-spike.yml` (sample PR #8), environment `factory-foreman-publish`
+limited to `main`, secret `FF_APP_PRIVATE_KEY`, variable `FF_APP_ID`.
+
+- `actions/create-github-app-token` minted an installation token from the environment secret, scoped to the repo.
+- `open-pr`: the App opened PR #9 from `spike/s2-app-pr`, authored by `app/my-factory-foreman`, and the repo's CI
+  ran on it (`pull_request`), which a `GITHUB_TOKEN` PR wouldn't trigger. Because the App is the author, the
+  developer can approve the PR on GitHub.
+- `artifact` (S6 as the App): refused with "attaching files requires write access to the repository". The App's
+  installation needs **Contents: read and write** for media uploads. Rerun once that's granted.
+- Still to run: `link-stack` with the App's token (S2's `gh stack link` question) and S3's approve-and-merge.
