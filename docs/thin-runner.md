@@ -409,11 +409,23 @@ App permission.
 
 ## What GitHub shows
 
-Rendered from templates and checked before posting: markdown lint, link check, length budgets, a preview through
+Rendered from templates and checked before posting: markdown lint, link check, length budgets (including the issue
+body's), a preview through
 GitHub's `/markdown` renderer, an editor pass that cuts restated or empty content, and snapshot tests.
 
-- **Issue body:** the stage; `<details>` sections for Shape, Design, Decisions, Slices (each slice's PR, its artifact, latest before/after and run
-  links), Open questions, and the provenance roll-up.
+- **Issue body:** compact and scannable, never a novel. Full history lives in the artifacts, not the body. Layout,
+  top to bottom:
+  1. **Status header**, a few lines: the stage, the current slice, what needs the person (if anything), and what
+     changed since they last looked.
+  2. **The newest change first:** a short "Changed since vN" delta for the latest publish, linking the artifact
+     version that has the detail.
+  3. **One collapsible section per artifact** (Shape, Design, each slice, Decisions, Changelog, Verification),
+     collapsed by default, each with a one-line summary and a link to the full artifact. Media stays in the slice
+     artifacts; the body shows at most a thumbnail of the latest slice's after-screenshot.
+  4. **Provenance roll-up**, collapsed: time and tokens per stage.
+
+  **Budget:** at most 3,000 characters of Markdown and one image. The pre-publish check refuses to post a body over
+  budget and moves the overflow into the relevant artifact instead.
 - **Shape and Design artifacts:** "Changed since vN" first, then the snapshot.
 - **Slice PR body:** what this slice delivers (its criteria), how to see it (demo, screenshots, the one command to
   run it locally), what changed since the Design it started from, changes to earlier slices, and collapsed
