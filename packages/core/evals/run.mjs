@@ -58,7 +58,49 @@ function ask(argv, input, timeoutMs = 600_000) {
   })
 }
 
+// Criteria from the predecessor's format that need a repository snapshot and
+// tools, which these evals don't provide; they're skipped and listed in the report.
+export const NEEDS_REPO = [ /deterministic tool output/iu, /change (repository|any) files/iu, /does not change/iu ]
+
+// A case in this package's format (scenario.json, criteria.mjs), or in the
+// predecessor's (case.yaml, prompt.md, graders/assertions.mjs), read in place.
+export async function loadCase(caseDir, casesRoot) {
+  if (existsSync(join(caseDir, 'scenario.json'))) {
+    return {
+      scenario: JSON.parse(readFileSync(join(caseDir, 'scenario.json'), 'utf8')),
+      criteria: (await import(pathToFileURL(join(caseDir, 'criteria.mjs')).href)).default,
+      skipped: [],
+    }
+  }
+  const { parseCaseFile } = await import(pathToFileURL(join(casesRoot, 'lib', 'case-file.mjs')).href)
+  const meta = parseCaseFile(readFileSync(join(caseDir, 'case.yaml'), 'utf8'))
+  const assertions = (await import(pathToFileURL(join(caseDir, 'graders', 'assertions.mjs')).href)).default
+  const kept = assertions.filter((a) => !NEEDS_REPO.some((re) => re.test(a.text)))
+  const task = `${readFileSync(join(caseDir, 'prompt.md'), 'utf8').trim()}\n\nThere is no repository checkout here: the change description and the diff are included below, so review from them.`
+  return {
+    scenario: { id: meta.name, persona: meta.persona, task, inputs: meta.inputs },
+    criteria: kept.map((a) => ({ text: a.text, weight: 1, check: (o) => a.check({ output: o, all: o, changedFiles: [] }) })),
+    skipped: assertions.filter((a) => !kept.includes(a)).map((a) => a.text),
+  }
+}
+
+// Re-scores a saved report's replies against the cases' current criteria, without
+// running the model again (for a corrected grader).
+async function regrade(file, casesRoot) {
+  const report = JSON.parse(readFileSync(file, 'utf8'))
+  for (const [ id, c ] of Object.entries(report.cases)) {
+    const { criteria } = await loadCase(join(resolve(casesRoot), report.persona, id), resolve(casesRoot))
+    for (const r of c.runs) Object.assign(r, grade(r.output, criteria))
+    Object.assign(c, summarize(c.runs.map((r) => r.score)))
+  }
+  report.overall = summarize(Object.values(report.cases).flatMap((c) => c.runs.map((r) => r.score)))
+  report.regradedAt = new Date().toISOString()
+  writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`)
+  console.log(`${report.label}: ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} after regrading`)
+}
+
 async function main(argv) {
+  if (argv[0] === '--regrade') return regrade(argv[1], argv[3] ?? join(here, 'cases'))
   const opts = parseArgs(argv)
   const dir = join(resolve(opts.cases), opts.persona)
   if (!existsSync(dir)) throw new Error(`No cases for ${opts.persona} in ${dir}`)
@@ -66,8 +108,7 @@ async function main(argv) {
   const report = { label: opts.label, persona: opts.persona, harness: opts.harness, model: opts.model ?? 'default', runs: opts.runs, at: new Date().toISOString(), cases: {} }
   for (const id of readdirSync(dir).sort()) {
     const caseDir = join(dir, id)
-    const scenario = JSON.parse(readFileSync(join(caseDir, 'scenario.json'), 'utf8'))
-    const criteria = (await import(pathToFileURL(join(caseDir, 'criteria.mjs')).href)).default
+    const { scenario, criteria } = await loadCase(caseDir, resolve(opts.cases))
     const text = prompt(agentText, scenario, (f) => readFileSync(join(caseDir, f), 'utf8'))
     const runs = []
     for (let k = 1; k <= opts.runs; k++) {
@@ -76,7 +117,7 @@ async function main(argv) {
       runs.push({ k, ms: r.ms, ...g, output: r.stdout })
       console.log(`${id} run ${k}: ${(g.score * 100).toFixed(0)}%${g.error ? ` (failed: ${g.error})` : ''}`)
     }
-    report.cases[id] = { ...summarize(runs.map((r) => r.score)), runs }
+    report.cases[id] = { ...summarize(runs.map((r) => r.score)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
   }
   const all = Object.values(report.cases).flatMap((c) => c.runs.map((r) => r.score))
   report.overall = summarize(all)

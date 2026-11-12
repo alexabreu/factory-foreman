@@ -10,5 +10,5 @@ export function summarize(scores) {
   const n = scores.length
   const mean = n ? scores.reduce((s, x) => s + x, 0) / n : 0
   const sd = n > 1 ? Math.sqrt(scores.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1)) : 0
-  return { runs: n, mean, sd, min: Math.min(...scores), max: Math.max(...scores) }
+  return { n, mean, sd, min: Math.min(...scores), max: Math.max(...scores) }
 }

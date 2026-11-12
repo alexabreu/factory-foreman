@@ -44,3 +44,23 @@ test('every bundled case is well formed', async () => {
     }
   }
 })
+
+test('a case in the predecessor format is read in place, skipping criteria that need a repository', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { loadCase } = await import('../evals/run.mjs')
+  const root = mkdtempSync(join(tmpdir(), 'ff-evals-'))
+  const dir = join(root, 'code-reviewer', 'made-up')
+  mkdirSync(join(dir, 'graders'), { recursive: true })
+  mkdirSync(join(root, 'lib'))
+  writeFileSync(join(root, 'lib', 'case-file.mjs'), "export const parseCaseFile = () => ({ name: 'made-up', persona: 'code-reviewer', inputs: [ 'files/pr.diff' ] })\n")
+  writeFileSync(join(dir, 'case.yaml'), 'name: made-up\n')
+  writeFileSync(join(dir, 'prompt.md'), 'Review it.\n')
+  writeFileSync(join(dir, 'graders', 'assertions.mjs'), "export default [ { text: 'Finds the bug', check: ({ output }) => ({ passed: /bug/.test(output), evidence: '' }) }, { text: 'Starts from deterministic tool output', check: () => ({ passed: true }) }, { text: 'Does not change repository files', check: () => ({ passed: true }) } ]\n")
+  const c = await loadCase(dir, root)
+  assert.equal(c.scenario.id, 'made-up')
+  assert.match(c.scenario.task, /^Review it\.\n\nThere is no repository checkout here/u)
+  assert.deepEqual(c.skipped, [ 'Starts from deterministic tool output', 'Does not change repository files' ])
+  assert.equal(c.criteria.length, 1)
+  assert.equal(c.criteria[0].check('a bug').passed, true)
+})
