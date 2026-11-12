@@ -678,14 +678,16 @@ that splitting tester from implementer cost about 3× for no gain (D46).
 | --- | --- | --- |
 | Clarify and Shape | Ask the few questions that matter up front, with defaults, so nothing is rebuilt later; show drafts in short pieces the developer can react to | Rework, the costliest tokens |
 | Slice size | Keep slices small (400 lines), so each build and review cycle is short and gives feedback often | Waiting |
-| Reviews | Run reviewers in parallel as subagents; route only the lenses a change needs (no UI lens on a pure data change); the maintainer's per-slice pass is light; the second opinion runs only at feature review | Tokens and wall time |
+| Reviews | Run reviewers in parallel as subagents; route only the lenses a change needs (no UI lens on a pure data change); the maintainer's per-slice pass is light. The second opinion runs on every slice (D49), in parallel with our lenses, so it adds tokens but little waiting; settled findings never come back, which keeps later rounds short | Tokens and wall time |
 | Review rounds | A later round re-reads only what changed and its own earlier findings; refuted or declined findings never come back; `rulings.md` stops repeat questions | Tokens |
 | Context | Give reviewers the file list and the slice's diff plus short notes from earlier slices, and let them open files as needed, instead of pasting the whole feature; keep the persona and Design as a stable prompt prefix so prompt caching applies | Tokens |
 | Models | A small fast model for mechanical steps (decision capture, formatting, the publish check, grading); the strongest model for implementing and reviewing; choose per step from eval scores, the cheapest that clears the bar | Tokens and time |
 | Checks | Fast local checks first (types, lint, red-at-base), heavy ones in the repo's CI; agent-browser only for slices with a visual checkpoint | Waiting |
 | Publishing | Dispatch the publish workflow and carry on; `sync` reports the result later, so the session never waits on GitHub | Waiting |
 | Stacks | While CI runs on slice k, the agent can start slice k+1 on top of it | Waiting |
-| Progress | Short progress lines during long steps ("slice 2: 3 of 5 tests green"); the status line shows stage, tokens and time so far; the readiness card shows the slice's cost | The feeling of waiting |
+| Progress | Short progress lines during long steps ("slice 2: 3 of 5 tests green"); the status line shows stage, tokens and time so far; every readiness card shows the slice's tokens and time, and a slice well over its usual cost is called out (D50) | The feeling of waiting |
+| Small changes | The fast path (D47): Clarify, a short Shape and one slice, no Design or slicing | Whole stages |
+| Away time | Slices keep building ahead, up to two unapproved, with cards queued (D48) | Idle time |
 | Measuring | Provenance records tokens and wall time per step, so the slow and costly steps are visible; evals record time per run, and a prompt change is judged on cost as well as quality | Guesswork |
 
 ## Gaps still open
@@ -696,7 +698,7 @@ From the pipeline map ([line map](https://claude.ai/artifact/Raf59bN9YUr8ydGPGtq
 - **Tests shown red first and mapped to criteria** in the slice PR, so a reviewer sees each test fail before and pass after (M2).
 - **Design drift:** the maintainer drafts the revise-design delta when code and Design disagree (P, D45).
 - **GitHub comments into findings** through `sync` (M3).
-- **Second opinion only at feature review**, not every slice, to keep cost down (P).
+- **Second opinion on every slice and at feature review**, in parallel, with disagreements between engines going to the person (P, D49).
 - **`doctor` and `resume`** for broken or interrupted state (M3).
 - **Cost on the card:** each readiness question shows the stage's tokens and time so far (M3).
 - **Evals per persona**, not only the code reviewer (Ev, then each milestone).
