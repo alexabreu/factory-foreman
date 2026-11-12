@@ -1,0 +1,26 @@
+diff --git a/src/reading-list.ts b/src/reading-list.ts
+--- a/src/reading-list.ts
++++ b/src/reading-list.ts
+@@ -29,6 +29,13 @@ export function toggle(list: ReadingList, id: number): ReadingList {
+   return { ...list, items: list.items.map(item => (item.id === id ? { ...item, read: !item.read } : item)) }
+ }
+ 
++// Marks every book read, or every book unread if the first one is already read.
++export function toggleAll(list: ReadingList): ReadingList {
++  const read = !list.items[0].read
++  return { ...list, items: list.items.map(item => ({ ...item, read })) }
++}
++
+ export function visible(list: ReadingList, filter: Filter): Item[] {
+   if (filter === 'all') return list.items
+   return list.items.filter(item => item.read === (filter === 'read'))
+diff --git a/src/reading-list.test.ts b/src/reading-list.test.ts
+--- a/src/reading-list.test.ts
++++ b/src/reading-list.test.ts
+@@ -1,3 +1,10 @@
++import { add, empty, toggleAll } from './reading-list'
++
++test('AC-1: mark all read', () => {
++  const list = toggleAll(add(add(empty(), 'Dune'), 'Emma'))
++  expect(list.items.length).toBe(2)
++})

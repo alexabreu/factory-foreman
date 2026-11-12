@@ -1,0 +1,7 @@
+{
+  "id": "seeded-remove-undo",
+  "persona": "code-reviewer",
+  "source": "Synthetic, against the public sample app (alexabreu/alexabreu-factory-foreman-sample). Seeded defects: remove() mutates the list it was given; undo() restores by a stale index; countUnread() is an extraction that adds nothing. Bait: style choices that are not defects.",
+  "task": "Review this slice as the code reviewer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [ "files/pr.md", "files/pr.diff" ]
+}

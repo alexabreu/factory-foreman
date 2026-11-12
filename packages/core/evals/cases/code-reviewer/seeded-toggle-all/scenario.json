@@ -1,0 +1,7 @@
+{
+  "id": "seeded-toggle-all",
+  "persona": "code-reviewer",
+  "source": "Synthetic, against the public sample app. Seeded defects: toggleAll() crashes on an empty list; it decides by the first book only, so a mixed list where the first is read marks everything unread (breaks AC-1); the test asserts only the length, so it can't fail for the criterion. Bait: none.",
+  "task": "Review this slice as the code reviewer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [ "files/pr.md", "files/pr.diff" ]
+}
