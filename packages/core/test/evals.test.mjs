@@ -97,3 +97,14 @@ test('the remove-undo case has no stale-index check: add() appends, so restoring
   const between = criteria.find((c) => /added between/u.test(c.text))
   assert.equal(between.check('AC-2: the test never adds a book in between remove and undo').passed, true)
 })
+
+test('evidence for the remove-undo case: with an appending add(), undo by stored index restores the original order', () => {
+  // The diff's remove and undo, and the sample's add (src/reading-list.ts:25), replayed on plain arrays.
+  const add = (items, title) => [ ...items, title ]
+  const remove = (items, i) => ({ items: items.filter((_, j) => j !== i), removed: { item: items[i], index: i } })
+  const undo = (items, removed) => { const out = [ ...items ]; out.splice(removed.index, 0, removed.item); return out }
+  for (const i of [ 0, 1 ]) {
+    const r = remove([ 'Dune', 'Emma' ], i)
+    assert.deepEqual(undo(add(r.items, 'Ubik'), r.removed), [ 'Dune', 'Emma', 'Ubik' ])
+  }
+})
