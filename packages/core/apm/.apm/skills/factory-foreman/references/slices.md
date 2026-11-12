@@ -35,14 +35,19 @@ first and are frozen; the code then has to make them pass.
    When it passes, it pushes, tags the iteration and posts it on the PR.
 6. The iteration is ready for approval: ask the person right away with the
    harness's choice UI (AskUserQuestion in Claude Code, a decision card in the
-   Claude app, the equivalent in Codex or VS Code, else one short question in
-   chat), naming the slice, its head and CI, with approve, request changes or
-   not yet. Never tell them to type or run a command. On approve, run
-   `factory-foreman approve slice <n>` as one plain command: Claude
-   Code asks them, showing the PR's head and CI, and their Allow approves it
-   under their login and merges it once CI is green. If CI isn't green yet, say
-   so, and when it turns green ask them again the same way before you run
-   `factory-foreman slice merge <n>`. Never post a factory-foreman record or a comment from a file with gh.
+   Claude app, Codex's own question UI, the equivalent in VS Code, else one
+   short question in chat), naming the slice, its head and CI, with approve,
+   request changes or not yet. Never tell them to type or run a command. On
+   approve, run `factory-foreman approve slice <n>` as one plain command: in
+   Claude Code the harness asks them, showing the PR's head and CI, and their
+   Allow approves it under their login and merges it once CI is green. Where
+   they answered on a card or in Codex, run it relayed (`--relayed
+   claude-app:<card id>` or `codex:<turn id>`, with `--expect` and `--as`), if
+   they turned that channel on. If CI isn't green yet, say so, and when it
+   turns green ask them again the same way before you run
+   `factory-foreman slice merge <n>`. With no person present (headless, CI),
+   never approve or merge: say a person needs to approve in their chat. Never
+   post a factory-foreman record or a comment from a file with gh.
 
 When every slice is merged into the issue branch, and before the feature goes
 to the base branch, review the whole feature as it will ship: switch to

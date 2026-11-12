@@ -73,12 +73,15 @@ the person's behalf.
    variables. In Claude Code the harness then asks them, showing
    what they're approving; their Allow is the approval. Never answer for them,
    rephrase the command to avoid the prompt, or retry after they deny it.
-   Elsewhere (Codex, a headless run) it refuses: they approve in their own
-   terminal with the same command. If the person approved somewhere else they
-   turned on for it (a card in the Claude app), and only on their actual tap,
+   If the person answered somewhere they turned on for it (a card in the
+   Claude app, or your question in Codex), and only on their actual answer,
    run it relayed: `--relayed <channel>:<ref> --expect <approve|merge>:<what
-   they were shown> --as <their login>`. Never create or change the person's
-   `~/.factory-foreman` settings to turn a channel on; only they do that.
+   they were shown> --as <their login>`, with `claude-app:<card id>` or
+   `codex:<turn or session id>`. Never create or change the person's
+   `~/.factory-foreman` settings to turn a channel on; only they do that. If
+   the channel isn't on, say so and that only they can turn it on. With no
+   person present (headless, CI), never approve: say a person needs to approve
+   in their chat.
 
 Design can only be checkpointed once a Shape version is approved.
 
@@ -86,9 +89,9 @@ Design can only be checkpointed once a Shape version is approved.
 
 When a version is posted or a slice iteration is up, ask the person straight
 away, without waiting for them to ask. Use the harness's own choice UI:
-AskUserQuestion in Claude Code, a decision card in the Claude app, the
-equivalent in Codex or VS Code, and one short question in the chat only where
-there's none. Name what's ready (the step and version, or the slice, its head
+AskUserQuestion in Claude Code, a decision card in the Claude app, Codex's own
+question UI in Codex, the equivalent in VS Code, and one short question in the
+chat only where there's none. Name what's ready (the step and version, or the slice, its head
 and CI) and offer three options: approve, request changes, or not yet. Never
 tell the person to type or run a command. On approve, you run the approve
 command as described above. On request changes, settle what they raise and

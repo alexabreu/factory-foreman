@@ -141,18 +141,22 @@ agent runs as the person, with their GitHub login, and could approve through a
 route the hook doesn't see (a script, curl with their token). Isolating the
 agent's identity would close that; it isn't done.
 
-Codex can't do this yet: its hooks can't ask (an "ask" lets the command run),
+Codex can't do this: its hooks can't ask (an "ask" lets the command run),
 and its prompt rules can be answered by an automated reviewer or a remembered
-"approve for session". In Codex, approving stays in the person's own terminal.
+"approve for session". In Codex the agent asks the person with Codex's own
+question UI, and on their answer runs the approval relayed from `codex`, if
+the person turned that channel on (below). With no person present (headless,
+CI), nothing is approved: a person approves in their chat.
 
 ## Approving from elsewhere (relayed)
 
 A person can also approve in a place factory-foreman can't see, such as a
-decision card they tap in the Claude app. They turn this on themselves, in
+decision card they tap in the Claude app, or their answer to the agent's
+question in Codex (`--relayed codex:<turn or session id>`). They turn this on themselves, in
 their own settings file `~/.factory-foreman/config.json` (outside any repo,
 theirs alone: a link, or a file others can write, doesn't count):
 
-    { "approvals": { "relay": ["claude-app"] } }
+    { "approvals": { "relay": ["claude-app", "codex"] } }
 
 An agent never writes that file; the approve hook refuses it if it tries.
 Then the agent that saw the person's tap runs, as one plain command:

@@ -29,7 +29,7 @@ const asksDir = (env) => env.FACTORY_FOREMAN_ASKS_DIR || join(homedir(), '.facto
 const NONCE = /^[a-f0-9]{32}$/
 const TICKET = /^[a-f0-9]{32}\.json(\.used-[\w-]+)?$/
 // A headless or SDK run has no person to answer the prompt, whatever answers it.
-const NOBODY = 'This session has no person in it to ask, so it can\'t approve or merge; the person does it in their own chat or terminal.'
+const NOBODY = 'This session has no person in it to ask, so it can\'t approve or merge. Say that a person needs to approve it in their chat.'
 
 // Relayed approvals: the person confirmed somewhere factory-foreman can't see
 // (a tap on a card in the Claude app), and the agent that saw it runs the
@@ -90,7 +90,7 @@ export function confirmPath(ctx, flags) {
 export function requireTerminal(ctx, flags, what) {
   if (confirmPath(ctx, flags) !== 'terminal') return
   const blocked = agentShell({ env: ctx.env, isTTY: ctx.isTTY })
-  if (blocked) throw new Refusal(`${what} must be confirmed by a person: in their own terminal, or in a Claude Code chat where the harness asks them. Here ${blocked}.`)
+  if (blocked) throw new Refusal(`${what} must be confirmed by a person. Ask them in the chat with your harness's choice UI; on approve, run it in a Claude Code chat, where the harness asks them, or relayed (--relayed <channel>:<ref> --expect … --as …) where they answered on a card or in Codex and turned that channel on. Never tell them to run a command. Here ${blocked}.`)
 }
 
 // The command's own words, without the hook's --ask-ticket.

@@ -333,6 +333,11 @@ test('a relayed approval goes through the guard only as one plain command, for a
     // Odd spellings of the same place still count.
     if (process.platform === 'darwin') assert.equal(decide({ tool_name: 'Write', cwd: '/', tool_input: { file_path: join(home, 'CONFIG.json').replace(home, home.toUpperCase()), content: '' } }).code, 2)
     assert.equal(decide({ tool_name: 'Edit', cwd: home, tool_input: { file_path: './config.json', old_string: 'a', new_string: 'b' } }).code, 2)
+    // In Codex the person answers the agent's question there; with codex on, that relays the same way.
+    const inCodex = { session_id: 's', turn_id: 't', hook_event_name: 'PreToolUse', model: 'm', tool_name: 'Bash', tool_use_id: 'u', tool_input: { command: 'factory-foreman approve slice 1 --relayed codex:turn-7 --expect approve:8d6ac3c --as alexabreu' } }
+    assert.equal(decide(inCodex).code, 2)
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'claude-app', 'codex' ] } }))
+    assert.equal(decide(inCodex), null)
     // The guard follows the CLI's rule: a reserved name doesn't count as a channel.
     writeFileSync(join(home, 'config.json'), JSON.stringify({ approvals: { relay: [ 'chat' ] } }))
     assert.equal(decide({ tool_input: { command: 'factory-foreman approve slice 1 --relayed chat:c --expect approve:8d6ac3c --as a' } }).code, 2)
