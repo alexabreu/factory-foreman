@@ -35,8 +35,12 @@ export function parseArgs(argv) {
 export function prompt(agentText, scenario, readInput) {
   const instructions = agentText.replace(/^---\n[\s\S]*?\n---\n/, '').trim()
   const inputs = scenario.inputs.map((f) => `<file path="${f}">\n${readInput(f)}\n</file>`).join('\n\n')
-  return `${instructions}\n\n# Task\n\n${scenario.task}\n\n${inputs}\n`
+  return `${instructions}\n\n# Task\n\n${scenario.task}\n\n${inputs}\n\n${OUTPUT}\n`
 }
+
+// The same output contract the real slice-review brief gives (src/commands/slice.mjs),
+// so evals measure the persona under the conditions it runs in.
+export const OUTPUT = 'Reply with only a JSON array of findings: [{ "id": "<short-id>", "severity": "blocking|major|minor", "text": "…", "where": "<file:line>" }]. Reply [] when there is nothing to fix.'
 
 export function command(harness, model) {
   if (harness === 'claude') return [ 'claude', '-p', '--output-format', 'text', ...(model ? [ '--model', model ] : []) ]
@@ -75,7 +79,7 @@ export function asLegacyReview(reply) {
   if (!Array.isArray(findings) || !findings.length) return reply
   const lines = findings.map((f) => {
     const where = f.where ?? (f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : '')
-    const text = f.text ?? f.summary ?? f.issue ?? f.title ?? f.description ?? ''
+    const text = f.text ?? f.summary ?? f.issue ?? [ f.title, f.body ].filter(Boolean).join(': ') ?? f.description ?? ''
     return [ `- **${SEVERITY[String(f.severity ?? '').toLowerCase()] ?? 'concern'}** ${where}: ${text}`, f.why ? `  Why: ${f.why}` : '', f.fix ? `  Fix: ${f.fix}` : '' ].filter(Boolean).join('\n')
   })
   return `${lines.join('\n')}\n\n${reply}`

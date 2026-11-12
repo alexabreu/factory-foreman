@@ -24,7 +24,7 @@ test('grade weights criteria and summarize gives mean and spread', () => {
 
 test('the prompt drops front matter and includes every input; harnesses get stdin commands', () => {
   const p = prompt('---\nname: x\n---\nBe precise.', { task: 'Review.', inputs: [ 'a.md' ] }, () => 'A')
-  assert.match(p, /^Be precise\.\n\n# Task\n\nReview\.\n\n<file path="a\.md">\nA\n<\/file>/u)
+  assert.match(p, /^Be precise\.\n\n# Task\n\nReview\.\n\n<file path="a\.md">\nA\n<\/file>\n\nReply with only a JSON array of findings/u)
   assert.deepEqual(command('claude', 'opus'), [ 'claude', '-p', '--output-format', 'text', '--model', 'opus' ])
   assert.deepEqual(command('codex'), [ 'codex', 'exec', '-' ])
   assert.throws(() => command('other'), /Unknown harness/u)
