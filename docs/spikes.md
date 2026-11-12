@@ -115,7 +115,7 @@ gh-stack **v0.3.0**, using the developer's own login. No App key was used.
 | S2. Publish workflow with the App | Not run: needs one-time setup (below) | — |
 | S3. Person merges an App-authored slice; guard routes | Not run: needs S2's setup | — |
 | S4. `ready` hook in Codex and VS Code | Not run: needs an interactive Codex TUI (`/hooks` trust) and VS Code | Needs a person at the keyboard, about 15 minutes |
-| S5. OpenSpec deltas for a Design revision | **Partly.** Deltas describe behaviour (requirements), not design | Shape revisions use OpenSpec deltas; Design revisions need our own "Changed since vN" |
+| S5. OpenSpec deltas for a Design revision | **Partly.** Deltas describe behaviour (requirements), not design. Its validate and archive steps belong in CI | Shape revisions use OpenSpec deltas; Design revisions need our own "Changed since vN" |
 | S6. Media in issue artifacts | **Yes** with the developer's login; the App's token is untested | Native attachments are the route; the assets branch is only transport or fallback |
 
 ## S1. `gh stack` with a feature branch as trunk
@@ -135,8 +135,8 @@ gh-stack **v0.3.0**, using the developer's own login. No App key was used.
 
 ## S5. OpenSpec deltas
 
-Read from OpenSpec's own docs (`docs/writing-specs.md`); its CLI wasn't run, because this machine's safety check
-blocked downloading it with `npx`.
+Read from OpenSpec's own docs (`docs/writing-specs.md`). OpenSpec files are plain Markdown, which the agent writes
+directly; nothing needs its CLI on a developer's machine.
 
 - A spec is requirements (one `SHALL`/`MUST` each) with GIVEN / WHEN / THEN scenarios. A change carries
   `## ADDED`, `## MODIFIED` (the full new text) and `## REMOVED` (with why) requirement sections; archiving
@@ -146,7 +146,8 @@ blocked downloading it with `npx`.
   change (the data source and a signature) is exactly the kind it leaves out.
 - For the plan: Shape revisions are written as OpenSpec deltas, which also feed the archive. Design revisions get
   our own "Changed since vN" with the same three headings (added, modified, removed) over contracts, approach and
-  slices. Validating with `openspec validate --strict` needs the CLI installed.
+  slices. OpenSpec's own `validate --strict` and `archive` run in CI or the publish workflow (`npx` in Actions), not
+  locally.
 
 ## S6. Media in issue artifacts
 

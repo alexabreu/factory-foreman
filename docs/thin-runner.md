@@ -634,7 +634,7 @@ sitting.
 | First real feature | The first real feature after M1, ideally one that revises its Design | What hurts decides M2 and M3 | — |
 | M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) pushed to the assets branch and attached to the slice's issue artifact and PR by the publish workflow; the Verification artifact; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR; the old iteration records and evidence comments retired | 2–3 days |
 | M3 | **Trail on GitHub and sync**: Decisions and Changelog as they happen; provenance capture and footers; `sync` with ETags; `resume` and `doctor` | A GitHub comment shows up in the next session as a finding; every record shows its provenance; the old record formats removed | 2–3 days |
-| M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive; cost budgets. The App merging slices after a recorded answer only if real use asked for it (ruleset with bypass, patch-id matching) | A second repo extends the profile and gets its standards and demos; unused options, flags and docs removed | 2–3 days |
+| M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive (its `validate` and `archive` run in the publish workflow or CI, not locally); cost budgets. The App merging slices after a recorded answer only if real use asked for it (ruleset with bypass, patch-id matching) | A second repo extends the profile and gets its standards and demos; unused options, flags and docs removed | 2–3 days |
 
 Spikes:
 
