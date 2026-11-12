@@ -637,8 +637,10 @@ Spikes:
 - **S2:** the publish workflow: minting the App token from an environment secret, validating committed files at a
   SHA, posting artifacts, and opening stacked PRs as the App, with `gh stack` or the REST API (can `gh stack` link
   PRs for branches it didn't push from that checkout?).
-- **S3:** the workflow merging a slice with `gh stack merge` after an approval captured in chat (patch-id match);
-  the feature-branch ruleset with the App as bypass actor; which guard routes an agent can get around.
+- **S3:** the chat answer, then the publish workflow dispatched with the answer's record as input, then the App
+  merging the slice into the feature branch with `gh stack merge` (patch-id match), on the sample repo; the agent
+  never merges itself. Also the feature-branch ruleset with the App as bypass actor, and which guard routes an agent
+  can get around.
 - **S4:** the `ready` hook in Codex (including re-trust) and VS Code (including double firing).
 - **S5:** an OpenSpec delta for a real Design revision.
 - **S6:** media on the issue and PR: first, how issue artifacts accept images and video programmatically (the API
@@ -662,6 +664,23 @@ is the test; which one is to be chosen, and the flight-components feature consid
 | Provenance formats | Internal transcript formats change | `unknown` over guessing; fixtures per version |
 | Prompt changes making things worse | Borrowed text may not fit | Eval baseline before P |
 | Scope | A lot is planned | Milestones in order; nothing from a later one starts early |
+
+## Gaps still open
+
+From the pipeline map ([line map](https://claude.ai/artifact/Raf59bN9YUr8ydGPGtqZZo)); each goes into the milestone noted.
+
+- **Hook parity** across Claude Code, Codex and VS Code (S4).
+- **Tests shown red first and mapped to criteria** in the slice PR, so a reviewer sees each test fail before and pass after (M2).
+- **Design drift:** the maintainer drafts the revise-design delta when code and Design disagree (P, D45).
+- **GitHub comments into findings** through `sync` (M3).
+- **Second opinion only at feature review**, not every slice, to keep cost down (P).
+- **`doctor` and `resume`** for broken or interrupted state (M3).
+- **Cost on the card:** each readiness question shows the stage's tokens and time so far (M3).
+- **Evals per persona**, not only the code reviewer (Ev, then each milestone).
+- **Security and an axe accessibility audit** in slice review (P).
+- **`product-engineer` as a Shape reviewer** (P).
+- **A docs line** in each slice PR: what user docs, stories or changelog changed, or "none" (M2).
+- **Non-UI evidence:** HTTP transcripts and recorded commands for API, CLI and library slices (M4).
 
 ## Working agreements
 
