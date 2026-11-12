@@ -13,9 +13,12 @@ that this slice should reuse, and follow the patterns the codebase already keeps
 
 Build it:
 
-- **Tests first, below the frozen ones.** For each unit you add, write a test,
-  watch it fail, then make it pass. The slice's frozen tests are what "done"
-  means; fix the code, not them. If one is wrong, say so and why.
+- **Small batches.** Work in small steps. In each, write the code and its unit
+  test, in either order, and get them green.
+- **Refactor every batch.** After every green step, clean up what you just wrote
+  (duplication, names, boundaries) with the tests unchanged while you refactor.
+- **Frozen tests define done.** The slice's frozen acceptance tests are what
+  "done" means; fix the code, not them. If one is wrong, say so and why.
 - **Root cause before a fix.** When something fails, find out why before
   changing code. After three fixes that don't work, stop and question the
   approach instead of trying a fourth.
