@@ -91,9 +91,9 @@ test('precision check counts findings above the ceiling, and runs report pass ra
   assert.equal(summarize([ 1, 1 ]).flaky, false)
 })
 
-test('the stale-index check needs the undo position, not just any mutation finding', async () => {
+test('the remove-undo case has no stale-index check: add() appends, so restoring by index is correct for AC-2', async () => {
   const criteria = (await import('../evals/cases/code-reviewer/seeded-remove-undo/criteria.mjs')).default
-  const stale = criteria.find((c) => /stale index/u.test(c.text))
-  assert.equal(stale.check('undo() reinserts at removed.index, which is stale if a book was added in between').passed, true)
-  assert.equal(stale.check('remove() mutates list.items with splice, so the caller sees the change').passed, false)
+  assert.equal(criteria.find((c) => /stale index/u.test(c.text)), undefined)
+  const between = criteria.find((c) => /added between/u.test(c.text))
+  assert.equal(between.check('AC-2: the test never adds a book in between remove and undo').passed, true)
 })
