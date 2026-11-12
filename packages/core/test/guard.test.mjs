@@ -2,7 +2,7 @@
 // review or merge a pull request, however the command is dressed up.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -248,6 +248,23 @@ test('the implementer agent builds slices: it can edit, loads its standards, and
   assert.match(text, /`standards-engineering`/u)
   assert.match(text, /frozen tests/u)
   assert.match(text, /fresh evidence/u)
+})
+
+test('persona files follow the contract: the same eight parts, in order', () => {
+  const dir = new URL('../apm/.apm/agents/', import.meta.url)
+  const parts = [ 'Job', 'Read', 'Steering', 'Method', 'Evidence', 'Leave out', 'Ask the person', 'Output' ]
+  const files = readdirSync(dir).filter(name => name.endsWith('.agent.md'))
+  assert.equal(files.length, 7)
+  for (const file of files) {
+    const headings = readFileSync(new URL(file, dir), 'utf8').match(/^## .+$/gmu).map(line => line.slice(3))
+    assert.deepEqual(headings, parts, file)
+  }
+})
+
+test('the implementer returns a status and never starts its own reviewer', () => {
+  const text = readFileSync(new URL('../apm/.apm/agents/principal-engineer.agent.md', import.meta.url), 'utf8')
+  for (const status of [ 'DONE', 'DONE_WITH_CONCERNS', 'BLOCKED', 'NEEDS_CONTEXT' ]) assert.match(text, new RegExp(`\`${status}\``), status)
+  assert.match(text, /Never start a reviewer/u)
 })
 
 test('the package stays free of any one product\'s names', () => {
