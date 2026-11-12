@@ -1,28 +1,52 @@
 # Decisions
 
-One row per decision, with where it came from. **Decided** means the person said so. **Recommended** means it's
-proposed and waiting for them. A decided item is reopened only with new evidence, recorded here. The plan these
-belong to is [thin-runner.md](thin-runner.md).
+One row per decision, with its source. Statuses:
+
+- **Decided:** the person said so.
+- **Recommended:** proposed and waiting for them.
+- **Superseded:** replaced by a later row, which says why.
+
+Reopening a decision adds a new row that supersedes the old one and links back to it; nothing is deleted. The plan
+these belong to is [thin-runner.md](thin-runner.md).
 
 | # | Decision | Status | Source and evidence |
 | --- | --- | --- | --- |
-| D1 | Work happens locally; GitHub gets pieces when they're ready, and GitHub activity syncs back | Decided, 12 Nov | The person: "work should be done locally and then sync'd to GH"; the approval round-trips required context switching |
-| D2 | Slices are stacked PRs on the feature branch, reviewed one by one; one feature PR to the base branch gets a holistic review | Decided, 12 Nov | The person: stacked slice PRs "can't end up giant PRs"; "a feature still needs a holistic pass" |
-| D3 | Every slice has a checkpoint a person can see working (a demo), not "trust me" | Decided, 12 Nov | The person: "each slice needs to have some sort of checkpoint that is visible … to a human" |
-| D4 | A thin runner: the skill, CLI refusals, harness hooks; no runner process or orchestrator dependency now | Decided, 12 Nov | The person asked for the thin-runner plan; the review found Archon saves only ~300–400 lines and diverges on stacks, the frozen-test gate, Codex and where questions are answered |
-| D5 | Archon is reconsidered as a replaceable runner only if the pilot shows a need for durable waits or unattended runs | Recommended | See thin-runner.md, Toolchain → Rejected |
-| D6 | Avoid vendor lock-in; Claude Code and Codex are equals; use existing tools, one owner per concern, no conflicting tools | Decided, 12 Nov | The person: "trying to avoid vendor lock in", "don't want to pull in conflicting tools" |
+| D1 | Work happens locally; GitHub gets pieces when they're ready, and GitHub activity syncs back | Decided, 12 Nov | The person: "work should be done locally and then sync'd to GH"; approval round-trips forced context switching |
+| D2 | Slices are stacked PRs on the feature branch, reviewed one by one; one feature PR to the base branch gets a holistic review | Decided, 12 Nov | The person: stacked slice PRs so we "can't end up giant PRs"; "a feature still needs a holistic pass" |
+| D3 | Every slice has a checkpoint a person can see working (a demo), not "trust me" | Decided, 12 Nov | The person: each slice needs a checkpoint "visible in some way to a human" |
+| D4 | A thin runner: the skill, the CLI, harness hooks; no runner process or orchestrator dependency now | Decided, 12 Nov | The person asked for the thin-runner plan |
+| D5 | Archon is reconsidered as a runner only if the pilot shows a need for durable waits or unattended runs | Recommended | See D22 for the reasons |
+| D6 | Avoid vendor lock-in; Claude Code and Codex both first-class; existing tools, one owner per job, no conflicting tools | Decided, 12 Nov | The person: "trying to avoid vendor lock in", "don't want to pull in conflicting tools" |
 | D7 | No Claude or project attribution in commits, PR bodies or comments | Decided, 11 Nov | The person: "want no attributions moving forward" |
 | D8 | Record provenance per step: harness, model, reasoning effort, tokens, time | Decided, 12 Nov | The person: "we should be attributing agent/harness, model, reasoning level, tokens consumed, time spent" |
-| D9 | Provenance appears as structured footers on factory-foreman's own artifacts and check runs, not as commit or PR attribution lines | Recommended | Reconciles D7 and D8 |
-| D10 | Customization through layered APM packages (core → profiles → org/team → repo), hook points around stages, adapters; trust gates can't be removed | Recommended | The person: extensibility of skills and workflows for Esri teams is important |
+| D9 | Provenance appears as structured footers on factory-foreman's own records, never as commit or PR attribution | Recommended | Reconciles D7 and D8 |
+| D10 | ~~Customization through layered APM packages; teams can't remove the trust gates~~ | Superseded by D36 | |
 | D11 | First profiles: web-components, then arcgis, from flight-components/factory content | Recommended | |
-| D12 | Merge each slice into the feature branch as it's approved (not all at the end) | Recommended | Avoids rebasing long stacks and dismissed approvals; the base branch is untouched until the feature PR |
-| D13 | The demo contract is a required field of each slice in Design, and its demo gates readiness | Recommended | Implements D3 |
-| D14 | Slice budget stays at 400 changed lines | Recommended | Existing `budgets.sliceLines` |
-| D15 | Preview host: Cloudflare Pages via wrangler (alternative: GitHub Pages with pr-preview-action) | Recommended | GitHub Pages has no native per-PR previews |
-| D16 | Spec format: our Shape and Design stay native; OpenSpec is the archive format after merge; spec-kit not adopted | Recommended | Read-only comparison of the actual templates, 12 Nov |
-| D17 | Borrow prompt text (implementer brief, clarifying protocol, review evidence bar, per-AC feature verdict) from superpowers, spec-kit, OpenSpec, Anthropic's review plugins, Archon, dev-team and our predecessor; adopt none of their workflows | Recommended | Same comparison: our gates are stronger; our implementer, clarifying and review prompts are weaker |
-| D18 | Tessl code review is an optional second-opinion engine, not the default | Recommended | Paid; reconciles lenses well |
+| D12 | Merge each slice into the feature branch as it's approved | Recommended | Base untouched until the feature PR. Tested in spike S1, because a fully merged stack can't be extended. Where later fixes land is D25 |
+| D13 | A demo contract is a required field of each slice in Design | Recommended | Implements D3 |
+| D14 | ~~Slice budget is a hard 400-line limit~~ | Superseded by D27 | |
+| D15 | ~~Cloudflare Pages as the default preview host~~ | Superseded by D29 | The person: "Where did that come from?" It was an assumption and adds a vendor |
+| D16 | Spec format: Shape and Design stay ours; OpenSpec for deltas (pending spike S5) and as the archive after merge; spec-kit not adopted | Recommended | Read-only comparison of the actual templates, 12 Nov |
+| D17 | Borrow prompt text from superpowers, spec-kit, OpenSpec, Anthropic's review plugins, Archon, Tessl, dev-team and our predecessor; adopt none of their workflows | Recommended | Same comparison |
+| D18 | Tessl Code Review is an optional second opinion, not the default | Recommended | Paid (credits per round); reads lens files from the PR head |
 | D19 | PR #12's stance line is replaced by the review evidence bar before #12 merges | Recommended | The stance line invites taste-based findings |
-| D20 | Prompts first (milestone P), then M1–M4, then a pilot | Recommended | Biggest quality gain for the least change |
+| D20 | ~~Prompts first, then M1–M4~~ | Superseded by D30 | |
+| D21 | Publishing model: the App's key lives only in a GitHub environment secret limited to the default branch. The CLI commits snapshot files to the trail branch, pushes with the developer's login and dispatches one central publish workflow with the SHA. The workflow mints a scoped App token, checks its inputs, validates the files at that SHA and posts as the App (artifacts, issue body, slice and feature PRs), recording `github.actor`. `sync` reads with the developer's login. Slice merges by the App follow D28 | Decided, 12 Nov | The person confirmed the model (decision card). Details tightened after two doc reviews: see thin-runner.md, Publishing model. Open: who can create environments and set secrets in the ArcGIS org's repos; which repos have the App; one environment per repo or a central publisher repo |
+| D22 | Archon isn't the engine now. Its direction is less human involvement, and its record lives in its own database. Its SDLC pack runs direction through GitHub issues, and it doesn't stack PRs. Codex steps under it lack Archon hooks, skills, agents, tool restrictions, cost and resolved model (`packages/providers/src/codex/capabilities.ts`); tokens and effort are reported. Churn is very high. Its question shape and review text are borrowed | Recommended | Corrects the first draft: the predecessor was dropped because approvals were `/approve` comments on GitHub, not because of Archon. The person wants approval in chat or on a card, and Archon's waits could be answered there too, so approvals don't decide between Archon and thin |
+| D23 | The value is the decision trail: snapshots, deltas, reasons and evidence. Checks are defaults that record changes; they don't refuse them | Decided, 12 Nov | The person: approvals are decision records, "at this point we decided this, here's what it looked like"; mistakes are expected, and changes are captured. Supersedes the first draft's "the value is in the gates" |
+| D24 | Changing course is a normal step: `revise shape` and `revise design` from any stage, with the delta, what it touches and a reason the agent drafts | Recommended | Implements D23 |
+| D25 | Slices are best-effort. Each slice review is holistic, reads the whole feature so far, and may propose changes to earlier slices. Those changes land in the current slice's PR under "Changes to earlier slices". The feature review is the final pass | Decided, 12 Nov | The person, on slices being best-effort |
+| D26 | Tests can change after they're written. The change is recorded (old, new, why, which criterion, which version caused it) and shown in the slice PR; the guard records it instead of denying it | Recommended | Implements D23 and D25 |
+| D27 | Slice size, file ownership, review-round caps, cost budgets and feature-branch rules are defaults a profile can tune; going past one is recorded with a reason | Recommended | Supersedes D14. Implements D23 |
+| D28 | Merge authority: a slice merges into the feature branch after the person's captured answer (matched to the slice's patch id) or a teammate's GitHub approval; the App performs the merge, never the agent; if it can't, the person merges on GitHub. The feature PR merges through GitHub's normal review | Recommended | Allow rules were tried on 11 Nov; auto mode still blocked agent merges. See thin-runner.md, Merge authority and Threat model |
+| D29 | factory-foreman doesn't build or host previews. Each repo's own CI builds and deploys; if GitHub shows a deployment on the PR, the slice PR body links it, and it doesn't go onto the issue. Visual evidence is produced locally by agent-browser: build and run at base and head, before/after screenshots, a short recording and the visual delta, attached to the slice PR through the publish workflow | Decided, 12 Nov | Supersedes D15. The person: Esri teams stage builds in different places (GitHub Pages, AWS, others), so there's no standard to target |
+| D30 | Order: spikes (S1–S5), eval baseline, prompts, M1, a pilot with a Design revision, then M2–M4; deletions last | Recommended | Supersedes D20. The independent review found four unverified foundations and no eval harness |
+| D31 | The App authors slice and feature PRs, so the person can approve them on GitHub | Decided, 12 Nov | The person's answer; GitHub won't let a PR's author approve it |
+| D32 | Harness tiers: Claude Code tier 1, Codex tier 2 (known gaps), Copilot tier 3; `doctor` reports gaps per machine | Recommended | Codex skips changed hooks until re-trusted and drops agents' tool limits (Phase 0 spikes B and C in spikes.md) |
+| D33 | Review findings end as fixed, refuted or declined, with a reply; rounds are capped and hand disagreements to the person; every decision uses the attention-item shape (question, options, recommendation, answer, who, when) | Recommended | Borrowed from Tessl and Archon |
+| D34 | The in-flight sample work (issue #1, slice PR #2) and its assumptions are dropped; no flight-components pilot for now | Decided, 12 Nov | The person |
+| D35 | Issue artifacts are the public home of the trail: Shape, Design, Decisions, Changelog, plus new Slices and Ledger artifacts; records are no longer posted as comments | Recommended | See thin-runner.md, Issue artifacts |
+| D36 | Customization through layered APM packages (core → profiles → org/team → repo), hook points and adapters; teams tune checks but can't remove the record | Recommended | Supersedes D10, after D23 |
+| D37 | Esri uses github.com, so native stacks and issue artifacts are available | Decided, 12 Nov | The person |
+| D38 | No factory-foreman App key on any developer's machine; the key exists only as a GitHub environment secret | Decided, 12 Nov | The person. An environment secret limited to the default branch, rather than a plain org secret, which any branch's workflow could read |
+| D39 | Approval events are written only by the `capture` hook, from the question tool's result or a platform-attested card answer; the guard denies an agent writing them, approving PRs or editing hook configuration. Guards stop accidents, not a hostile agent: a GitHub approval counts only from a teammate, and the feature PR always gets a person's review | Recommended | Two doc reviews found an agent with the developer's login could otherwise forge either approval path |
