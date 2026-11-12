@@ -1,3 +1,4 @@
+import { readyForApproval } from '../approval/ready.mjs'
 import { artifactEntry, bodyLine, unifiedDiff } from '../changelog.mjs'
 import { Refusal } from '../errors.mjs'
 import { byBot, hash, isApproved, nextMinor, nextVersion, parseLabel, recordComment } from '../issue/records.mjs'
@@ -209,7 +210,7 @@ async function post(ctx, { step, file: given, amend: amending }) {
   for (const e of leftForPerson) appendLog(dir, { op: 'defer', id: e.id, at: now.toISOString() })
   await updateBody(github, n, (b) => setSection(withDecisionsLine(addChangelogLine(b, bodyLine({ step, version, date, author, diff, amend: amending })), count), 'status', statusLine(states)))
 
-  const next = amending?.minor ? `It keeps ${amending.carries}'s approval.` : `Approve it from a terminal: factory-foreman approve ${step} ${version}`
+  const next = amending?.minor ? `It keeps ${amending.carries}'s approval.` : readyForApproval(`factory-foreman approve ${step} ${version}`)
   const left = leftForPerson.length ? `\nLeft for the person to keep, edit or drop (this session has no person in it): ${leftForPerson.map((e) => `${e.id} [${e.kind}] ${e.text}`).join('; ')}` : ''
   return { out: `Posted ${title(step)} ${version} on #${n} (artifact version ${posted.version}${amending ? `, ${amending.minor ? 'minor' : 'material'} amendment` : ''}). ${next}${left}`, json: { ...record, leftForPerson: leftForPerson.map((e) => e.id) }, ...(warnings.length ? { err: warnings.join('\n') } : {}) }
 }

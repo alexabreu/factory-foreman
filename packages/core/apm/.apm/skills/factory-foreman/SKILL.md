@@ -66,8 +66,8 @@ the person's behalf.
    refused, fix each problem it lists and run it again. If it's refused as
    stale, someone else posted first: run `factory-foreman draft shape --reset`,
    fold your changes into the latest version, and checkpoint again.
-7. Tell the person the version is posted and ask whether to approve it.
-   Approve only when they say so in the chat: then run
+7. The version is ready for approval: ask the person right away (see Ask for
+   approval below). Approve only when they choose approve: then run
    `factory-foreman approve shape v<N>` as one plain command: nothing before
    it (no `PATH=…`), and nothing chained, piped, redirected (no `2>&1`) or in
    variables. In Claude Code the harness then asks them, showing
@@ -81,6 +81,19 @@ the person's behalf.
    `~/.factory-foreman` settings to turn a channel on; only they do that.
 
 Design can only be checkpointed once a Shape version is approved.
+
+## Ask for approval
+
+When a version is posted or a slice iteration is up, ask the person straight
+away, without waiting for them to ask. Use the harness's own choice UI:
+AskUserQuestion in Claude Code, a decision card in the Claude app, the
+equivalent in Codex or VS Code, and one short question in the chat only where
+there's none. Name what's ready (the step and version, or the slice, its head
+and CI) and offer three options: approve, request changes, or not yet. Never
+tell the person to type or run a command. On approve, you run the approve
+command as described above. On request changes, settle what they raise and
+draft or iterate again. On not yet, leave it and remind them when it's next
+relevant.
 
 ## Review before you checkpoint
 
@@ -126,8 +139,9 @@ Once Shape and Design are approved, build the Design's slices in order, one
 branch and draft PR each: `factory-foreman slice open <n>`, freeze its AC tests
 with `slice tests <n>`, build it, have it reviewed, and `slice iterate`. Follow
 `references/slices.md`. The person approves each slice, which merges it once
-CI is green, the same way as a version: on their word, you run
-`factory-foreman approve slice <n>` and Claude Code asks them.
+CI is green, the same way as a version: when an iteration is up you ask them
+(Ask for approval), and on approve you run `factory-foreman approve slice <n>`
+and Claude Code asks them to allow it.
 
 ## Amend an approved version
 

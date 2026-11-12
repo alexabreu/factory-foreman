@@ -29,6 +29,7 @@ import { checkShowScript, replayShowScripts } from '../slices/show.mjs'
 import { loadSlice, postSliceRecord, writeSlice } from '../slices/state.mjs'
 import { inCodexSandbox } from '../state/local.mjs'
 import { confirm, confirmPath, requireTerminal } from '../approval/ask.mjs'
+import { readyForApproval } from '../approval/ready.mjs'
 import { parseDraft } from '../steps/structure.mjs'
 import { matchesAny } from '../util/glob.mjs'
 import { changedFiles, currentBranch, git, gitTest, head, lineCounts, requireWritableGit, topLevel } from '../util/git.mjs'
@@ -454,7 +455,7 @@ async function pushIteration(ctx, { n, s, slice, tip, github, config, reviewers,
   rmSync(pendingFile, { force: true })
   await github.ensureTag(tag, tip)
   await updateChecklist(ctx, github, n)
-  return { out: [ ...warnings.map((w) => `Note: ${w}`), `Iteration ${k} of slice ${s} pushed at ${short(tip)} and tagged ${tag}.${files.length ? ` Evidence: ${files.length} file(s) on ${published.branch} at ${short(published.commit)}.` : ''}`, `When the PR is approved and CI is green, the person merges it: factory-foreman slice merge ${s}` ].join('\n'), json: { iteration, gate, checks, shows, evidence: evidence.map((e) => ({ name: e.name, ok: e.ok, summary: e.summary, files: e.files.map((f) => ({ label: f.label, kind: f.kind, url: published?.url(f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-')) })) })) } }
+  return { out: [ ...warnings.map((w) => `Note: ${w}`), `Iteration ${k} of slice ${s} pushed at ${short(tip)} and tagged ${tag}.${files.length ? ` Evidence: ${files.length} file(s) on ${published.branch} at ${short(published.commit)}.` : ''}`, readyForApproval(`factory-foreman approve slice ${s}`) ].join('\n'), json: { iteration, gate, checks, shows, evidence: evidence.map((e) => ({ name: e.name, ok: e.ok, summary: e.summary, files: e.files.map((f) => ({ label: f.label, kind: f.kind, url: published?.url(f.published ?? `${e.name}-${f.name}`.replace(/[^\w.-]/g, '-')) })) })) } }
 }
 
 // ── merge (a person: in their chat when the harness asks them, or in their terminal) ─────────────────────────────────
