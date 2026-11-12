@@ -235,17 +235,21 @@ so a project board can show them.
 `ledger.jsonl` (events, including captured approvals), `slices/<k>.json`, `verification.v<N>.md`. Each file kind has a
 JSON Schema in the package, which the workflow validates against; writing the schemas is part of M1.
 
-**How media gets to the issue and the PR.** No media is on the trail branch, and none merges into base.
+**How media gets to the issue and the PR.** The expected route is **native media in the issue artifact**: issue
+artifacts show images and video, and `gh issue artifact create` and `edit` take `--attach <image or video>` (an edit
+with only `--attach` appends as a new version). Spike S6 first checks how artifacts accept images and video
+programmatically with the App's token in the publish workflow.
 
-1. The CLI pushes screenshots, recordings and visual deltas with the developer's login to the media-only branch
-   `factory-foreman-assets/<n>`, which the prototype already uses for wireframes and evidence (`src/assets/publish.mjs`).
-   That branch is never merged. The trail records each file's hash and the pinned commit.
-2. The publish workflow reads them at that commit and **attaches them to the issue artifact**. `gh issue artifact
-   create` and `edit` take `--attach <image or video>`, and an edit with only `--attach` appends to the artifact as a
-   new version. Issue artifacts are in preview, so this is checked in spike S6.
-3. The slice PR body embeds the same media. GitHub has no documented REST API for uploading user attachments to a
-   PR, so the body links the attachment URLs from the issue artifact if they're viewable there, or the pinned
-   assets-branch URLs if not (S6).
+1. **Getting the files to the workflow:** the CLI pushes screenshots, recordings and visual deltas with the
+   developer's login to the media-only branch `factory-foreman-assets/<n>` (the prototype already does this, in
+   `src/assets/publish.mjs`). That branch is transport only and is never merged; the trail records each file's hash
+   and the pinned commit. No media is on the trail branch, and none merges into base.
+2. **On the issue:** the publish workflow reads the files at that commit and attaches them natively to the slice's
+   issue artifact.
+3. **On the PR:** the slice PR body embeds the same media, linking the attachment URLs if they're viewable from a
+   PR, since GitHub has no documented REST API for uploading attachments to a PR.
+4. **Fallback, only if native attachment fails in S6:** the issue artifact and the PR body embed the pinned
+   assets-branch URLs instead.
 
 Workflow-dispatch inputs are short strings, so media never goes through them.
 
@@ -629,8 +633,9 @@ Spikes:
   agent can get around. (The App's own merge is tested only if it's adopted later.)
 - **S4:** the `ready` hook in Codex (including re-trust) and VS Code (including double firing).
 - **S5:** an OpenSpec delta for a real Design revision.
-- **S6:** media on the issue and PR: `gh issue artifact create/edit --attach` with the App's token in the publish
-  workflow, whether the attachment URLs embed in a PR body, and the assets-branch fallback.
+- **S6:** media on the issue and PR: first, how issue artifacts accept images and video programmatically (the API
+  behind `gh issue artifact --attach`) with the App's token in the publish workflow; then whether the attachment URLs
+  embed in a PR body; the assets-branch links only as a fallback.
 
 About 3 weeks to M1 through M4, including spikes and evals, with no scheduled pilot. The first real feature after M1
 is the test; which one is to be chosen, and the flight-components feature considered earlier isn't it for now.
