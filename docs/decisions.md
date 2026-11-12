@@ -63,3 +63,4 @@ these belong to is [thin-runner.md](thin-runner.md).
 | D53 | product-engineer reviews every Shape, except on the fast path (D47) | Provisional, 12 Nov | Recommended in the gap interview; reversible |
 | D54 | Every slice card carries a docs line: what docs changed, or none and why | Provisional, 12 Nov | Recommended in the gap interview; reversible |
 | D55 | **Code-review lenses per slice:** correctness, silent failures, and scope with contracts always run, in parallel. Security runs when the slice touches input, auth, secrets, CI or dependencies. A skipped lens is named on the slice card | Decided, 12 Nov | The person, on a card ("Core three, security by diff") |
+| D56 | **Claude Code first.** M1 ships on Claude Code. Codex is best-effort until the S4 hook spike passes, then catches up | Decided, 12 Nov | The person, on a card ("Claude Code first") |
