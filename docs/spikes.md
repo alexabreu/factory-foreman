@@ -192,4 +192,7 @@ limited to `main`, secret `FF_APP_PRIVATE_KEY`, variable `FF_APP_ID`.
   developer can approve the PR on GitHub.
 - `artifact` (S6 as the App): refused with "attaching files requires write access to the repository". The App's
   installation needs **Contents: read and write** for media uploads. Rerun once that's granted.
-- Still to run: `link-stack` with the App's token (S2's `gh stack link` question) and S3's approve-and-merge.
+- `link-stack`: the App opened a second PR (#10) on top of #9, then `gh stack link --base main 9 10`, run with the
+  App's token in the workflow (no local stack state), linked them as stack #11. So the developer's login pushes the
+  slice branches, and the workflow opens the PRs as the App and stacks them.
+- Still to run: S3's approve-and-merge by a person.
