@@ -232,7 +232,7 @@ test('the hook config wires the guard and capture for every harness APM deploys 
 
 test('the reviewer agents are named, scoped and each loads its standards skill', () => {
   const dir = new URL('../apm/.apm/agents/', import.meta.url)
-  const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', maintainer: 'standards-architecture' }
+  const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', maintainer: 'standards-architecture', 'correctness-lens': 'standards-code-review', 'silent-failure-lens': 'standards-code-review', 'scope-lens': 'standards-code-review', 'security-lens': 'standards-security', verifier: 'standards-code-review' }
   for (const [ name, skill ] of Object.entries(expected)) {
     const text = readFileSync(new URL(`${name}.agent.md`, dir), 'utf8')
     // No model: each harness uses its own session model (a Claude model name means nothing to Codex).
@@ -254,11 +254,16 @@ test('persona files follow the contract: the same eight parts, in order', () => 
   const dir = new URL('../apm/.apm/agents/', import.meta.url)
   const parts = [ 'Job', 'Read', 'Steering', 'Method', 'Evidence', 'Leave out', 'Ask the person', 'Output' ]
   const files = readdirSync(dir).filter(name => name.endsWith('.agent.md'))
-  assert.equal(files.length, 7)
+  assert.equal(files.length, 12)
   for (const file of files) {
     const headings = readFileSync(new URL(file, dir), 'utf8').match(/^## .+$/gmu).map(line => line.slice(3))
     assert.deepEqual(headings, parts, file)
   }
+})
+
+test('the verifier keeps every finding with an outcome, rejected ones included', () => {
+  const text = readFileSync(new URL('../apm/.apm/agents/verifier.agent.md', import.meta.url), 'utf8')
+  for (const word of [ '`verified`', '`suspected`', '`rejected`', 'never invent a defence' ]) assert.ok(text.includes(word), word)
 })
 
 test('the implementer returns a status and never starts its own reviewer', () => {

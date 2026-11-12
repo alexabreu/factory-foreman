@@ -57,10 +57,14 @@ Without it, factory writes are refused rather than posted as you.
 ## Reviews
 
 `reviewers` in the config names the reviewer agents per step; a name ending in
-`?visual` is used only when there is a visual criterion. The package ships seven:
+`?visual` is used only when there is a visual criterion. The package ships twelve, each
+following the [persona contract](../../docs/persona-contract.md):
 `test-verification-engineer`, `software-architect`, `ux-designer`,
-`code-reviewer`, `product-engineer`, `maintainer` and `principal-engineer` (the implementer, which
-builds slices rather than reviewing them). Each loads the
+`product-engineer`, `maintainer`, `code-reviewer`, the slice-review lenses
+`correctness-lens`, `silent-failure-lens`, `scope-lens` and `security-lens`, the
+`verifier` that judges every lens finding, and `principal-engineer` (the
+implementer, which builds slices rather than reviewing them). The lenses and the
+verifier replace `code-reviewer` once their eval beats it. Each loads the
 repo's `standards-*` skill for its role when there is one. Steps listed in
 `secondOpinion.steps` also get a brief for `secondOpinion.command`, which by
 default is the other vendor's model: `claude -p` under Codex, `codex exec -`
