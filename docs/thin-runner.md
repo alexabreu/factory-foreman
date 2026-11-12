@@ -88,10 +88,10 @@ Each layer has one job, and each tool sits in exactly one layer.
 | 1. Harness | Where the developer and the agent work | Claude Code, Codex, Copilot / VS Code; the Claude app for answering on the go | Pick |
 | 2. Factory contract | The same stages, prompts and checks everywhere, at a known version | factory-foreman CLI and skill (stage order, drafts, revisions, publish, sync); personas and hooks packaged with APM; profiles per stack; prompt text borrowed from Archon, Tessl, spec-kit, OpenSpec, superpowers and our predecessor | Build the CLI, skill and profiles; pick APM; borrow the text |
 | 3. Trail | Snapshots, deltas, reasons and provenance that outlive the session | The ledger; the trail branch; harness transcripts for model, effort, tokens and time; the publish workflow, posting as the factory-foreman GitHub App to issue artifacts and PR bodies; sync bringing GitHub back | Build the ledger, templates and publish workflow; pick the App, gh and issue artifacts |
-| 4. Evidence and review | A visible checkpoint per slice, and holistic review as you go | gh stack; agent-browser capturing each slice locally at base and head; Playwright (or the profile's runner); an AC-check job in CI posting per-criterion check runs; review personas with borrowed evidence rules; Tessl review as an optional second opinion | Pick |
+| 4. Evidence and review | A visible checkpoint per slice, and holistic review as you go | gh stack; agent-browser capturing each slice locally at base and head; Playwright (or the profile's runner); the repo's CI test report (or an optional AC-check job); review personas with borrowed evidence rules; Tessl review as an optional second opinion | Pick |
 
 The **factory version** is five things together: the factory-foreman package tag, the APM lockfile, the publish
-workflow's ref, the AC-check job's ref, and the repo's `factory-foreman.config.json`. All five are written
+workflow's ref, the AC-check job's ref (when used), and the repo's `factory-foreman.config.json`. All five are written
 into every trail record, so "which factory made this" always has an answer.
 
 No existing tool does layer 3. It's the reason factory-foreman exists, and it's where most of our code goes; layer 2
@@ -128,9 +128,11 @@ The forward path is the default. Going back is a normal move, not an exception.
   the same stack; nothing is redone unless the delta says so.
 - **Holistic review feeds forward.** Every slice review writes a short "what this changes" note: earlier code to
   revisit, a criterion that now reads differently, a slice to split or drop. Each note becomes a proposal for the
-  next slice or a revision.
-- **Changes to earlier slices land in the current slice's PR**, under "Changes to earlier slices": the files, the
-  reason, and any test that changed. Reviewed PRs aren't rewritten.
+  next slice or a revision. The ledger records both (a `review-note` event and a `proposal` event linked to it, then
+  the decision that settles it), so feed-forward is traceable.
+- **Fixes to a slice whose PR is still open update that PR.** Only **merged** slices get changes carried forward:
+  those land in the current slice's PR, under "Changes to earlier slices", with the files, the reason, and any test
+  that changed. Merged PRs aren't rewritten.
 - **Tests can change.** The tests are the current snapshot of "done". Changing one records the old and new
   assertion, the reason, the criterion, and the Shape or Design version that caused it, and the slice PR shows it.
 - **Discoveries end as a decision:** in this slice, a later slice, a revision, or a follow-up issue.
@@ -162,9 +164,12 @@ tune**, and going past it is recorded with a reason, not refused.
 
 - **Locally:** red-at-base, and the **visual checkpoint**. An agent-browser step builds and runs the app at base
   and at head, captures before/after screenshots and a short recording of the slice's checkpoint, and computes the
-  visual delta (`diff screenshot`). These are attached to the slice PR through the publish workflow.
-- **In CI:** green-at-head and the per-criterion check run, from the AC-check job (factory-foreman's reusable job,
-  or the repo's own CI if it already runs the suite and the job only reads its report).
+  visual delta (`diff screenshot`). These are attached to the slice PR through the publish workflow; the trail keeps their hashes and
+  links.
+- **Green at head**, by default, comes from the repo's own CI test report when there is one, or else from the local
+  green-at-head run recorded in the trail. factory-foreman doesn't need to know how a repo builds or tests. An
+  optional AC-check job turns either into a per-criterion check run on the PR (with `GITHUB_TOKEN`) for teams that
+  want one.
 - **Builds and previews belong to the repo's own CI.** There's no Esri standard for staging (GitHub Pages, AWS and
   others are all in use), so factory-foreman doesn't build or host previews. If the repo's CI produces a deployment,
   GitHub already shows it on the PR, and the slice PR body links it when present. It doesn't go onto the issue.
@@ -178,7 +183,7 @@ separately, to the trail branch (see [Publishing model](#publishing-model-decide
 
 | File | Contents |
 | --- | --- |
-| `ledger.jsonl` | Append-only events: snapshot, revision (with its delta and reason), question asked and answered, finding and its outcome, test changed, check run, published, synced. Each event carries the factory version and its provenance |
+| `ledger.jsonl` | Append-only events: snapshot, revision (with its delta and reason), question asked and answered, finding and its outcome, review note and the proposal it becomes, test changed, check run, published, synced. Each event carries the factory version and its provenance |
 | `shape.md`, `design.md` | Current drafts (published versions are committed as `shape.v<N>.md`, `design.v<N>.md`) |
 | `reviews/` | Review rounds and finding outcomes |
 | `slices/<n>.json` | Slice state: tests, iterations, head, PR |
@@ -215,15 +220,16 @@ Records that aren't issue artifacts:
 | --- | --- | --- |
 | Issue body | Stage, links to every artifact and PR, provenance roll-up | On every publish |
 | Slice PR body | What the slice delivers, before/after screenshots and recording, changes since its Design, changes to earlier slices, provenance | On publish |
-| Check run | Per-criterion results at the slice head | From the AC-check job |
+| Check run (optional) | Per-criterion results at the slice head | From the optional AC-check job |
 | Feature PR body | Plan history, per-criterion verdict, provenance roll-up | When the feature PR opens |
 
 Slice records go to the **Slices** artifact on the issue, plus the slice PR body (the reviewer-facing summary) and
 the check run (per-criterion results).
 
 **Trail branch layout** (`factory-foreman-trail/<n>`, folder `trail/`): `shape.v<N>.md`, `design.v<N>.md`,
-`ledger.jsonl` (events, including captured approvals), `slices/<n>.json`, `media/<slice>/` (before/after
-screenshots and recordings). Each file kind has a JSON Schema in the package, which the workflow validates against;
+`ledger.jsonl` (events, including captured approvals), `slices/<n>.json`. **No media**: the CLI uploads before/after
+screenshots and recordings to the publish workflow as run inputs, which posts them as PR (or issue) attachments; the
+trail keeps only their hashes and links. Media never lands on the trail branch and never merges into base. Each file kind has a JSON Schema in the package, which the workflow validates against;
 writing the schemas is part of M1.
 
 ### Provenance
@@ -264,7 +270,10 @@ There's no runner process. Four things do the job:
 
 ### Merge authority
 
-- **Slices into the feature branch** need one of:
+- **In M1, the person merges slice PRs on GitHub.** The App authors the PRs, so the developer (or a teammate) approves
+  and merges natively, and `sync` records the merge in the trail. Nothing more is needed to start.
+- **Later, only if real use shows the need:** the App merges a slice after a recorded answer. Slices into the feature
+  branch then need one of:
   - the person's approval from the readiness question or a card, captured by the `capture` hook and matched to the
     slice's **patch id** (its diff against its base), so a server-side rebase of the stack doesn't invalidate it; or
   - an approval on the slice PR by a teammate, meaning a person with write access other than the developer whose
@@ -276,7 +285,7 @@ There's no runner process. Four things do the job:
 - **Why not an allow rule:** allow rules for `factory-foreman approve` and `factory-foreman slice merge` were tried
   on 11 Nov; Claude Code's auto mode still blocked the agent's merges after a relayed tap ("Merge Without Review").
   The merge has to happen outside the agent.
-- **Fallback:** if the workflow can't merge, the person merges the slice PR on GitHub.
+- **Either way, never the agent.** If the App's merge is ever adopted and fails, the person merges on GitHub.
 
 ### Threat model
 
@@ -298,7 +307,7 @@ authors the PRs, the person can approve them on GitHub.
 | --- | --- |
 | Publishing snapshots and deltas | Writes issue artifacts and the issue body |
 | Opening PRs | Opens slice and feature PRs, so the person can approve them on GitHub |
-| Merging slices | Merges an approved slice into the feature branch once the recorded approval matches the slice's patch id |
+| Merging slices (later) | Merges an approved slice once the recorded approval matches the slice's patch id; in M1 the person merges on GitHub |
 
 **No App key on a laptop.** The prototype keeps `app.pem` in `~/.config/factory-foreman` and signs locally. The new
 version drops this; the key exists only as a GitHub environment secret.
@@ -307,8 +316,8 @@ version drops this; the key exists only as a GitHub environment secret.
 
 The App's key never touches a developer's machine. Everything the App does runs in one publish workflow.
 
-1. **The CLI commits snapshot files** (Shape, Design, ledger events including captured approvals, slice records,
-   media) to the **trail branch** `factory-foreman-trail/<n>`, not the feature branch, so publishing never moves the
+1. **The CLI commits snapshot files** (Shape, Design, ledger events including captured approvals, slice
+   records) to the **trail branch** `factory-foreman-trail/<n>`, not the feature branch, so publishing never moves the
    stack's trunk. It **pushes with the developer's own login** and **dispatches the publish workflow** with inputs:
    the trail commit's SHA, the operation (`publish`, `open-pr` or `merge`) and a correlation id. The run's
    `run-name` includes the correlation id, so `sync` can find it.
@@ -326,7 +335,8 @@ The App's key never touches a developer's machine. Everything the App does runs 
 
 - The SHA is 40 hex characters and reachable from `factory-foreman-trail/<n>` (compare API).
 - Every file read is under `trail/` and matches its schema.
-- An approval names the slice's patch id, which must match the PR's current diff; its "who" equals `github.actor`.
+- A captured answer's "who" equals `github.actor`. (When the App's merge is adopted later, an approval must also
+  name the slice's patch id and match the PR's current diff.)
 - Inputs reach scripts through environment variables, never interpolated into `run:` lines.
 
 **Safeguards**
@@ -357,7 +367,7 @@ The App's key never touches a developer's machine. Everything the App does runs 
 2. Create the environment with the key as its secret, limited to the default branch.
 3. Add the caller workflow, and allow access to the central workflow repo in its Actions settings.
 4. Add CODEOWNERS and the default-branch rule.
-5. Add the feature-branch ruleset. It targets `factory-foreman/*` but excludes `factory-foreman/*-slice-*`;
+5. Optional, only when the App's merge is adopted: add the feature-branch ruleset. It targets `factory-foreman/*` but excludes `factory-foreman/*-slice-*`;
    requires a pull request; restricts updates, not creations, so `start` can create the branch; and lists the App
    as a bypass actor for pull requests only, so the person's fallback merge on GitHub still works.
 
@@ -400,7 +410,7 @@ run the slice locally.
 ## Toolchain
 
 Each tool does one job better than we'd write it. Statuses: **Adopt** (we depend on it), **Borrow** (we take its
-words, formats or ideas, not the tool), **Optional** (a team can plug it in, or we revisit after the pilot).
+words, formats or ideas, not the tool), **Optional** (a team can plug it in, or we revisit after real use).
 
 ### Layer 1: harness
 
@@ -444,8 +454,8 @@ words, formats or ideas, not the tool), **Optional** (a team can plug it in, or 
 | Tool | Role | Value | Status |
 | --- | --- | --- | --- |
 | gh stack (github/gh-stack) | One PR per slice, stacked on the feature branch; merges from the bottom, GitHub rebases the rest | Small PRs without our restack code | Adopt |
-| GitHub Actions (AC-check job) | Runs the criteria tests at the slice head (or reads the repo CI's report) and posts the per-criterion check | The same check on every repo, whatever its build | Adopt |
-| GitHub check runs | Pass/fail per criterion, posted by the AC-check job with `GITHUB_TOKEN` | Status without leaving the PR | Adopt |
+| GitHub Actions (AC-check job) | Reads the repo CI's test report (or the trail's local result) and posts a per-criterion check | A per-criterion check for teams that want one, without knowing the build | Optional |
+| GitHub check runs | Pass/fail per criterion, posted by the optional AC-check job with `GITHUB_TOKEN` | Status without leaving the PR | Optional |
 | Playwright Test (or the profile's runner) | Criteria tests | Evidence that the slice does what was agreed | Adopt, via the profile |
 | agent-browser | Builds and runs the app locally at base and head; screenshots, recording, visual delta (`diff screenshot`), accessibility audit, the `dogfood` exploratory pass | A person sees the slice's checkpoint, before and after | Adopt (already used) |
 | ffmpeg | Video and GIFs for agent-browser's recordings | Short recordings inline in the PR | Adopt, locally |
@@ -454,7 +464,7 @@ words, formats or ideas, not the tool), **Optional** (a team can plug it in, or 
 | Argos | Visual-diff check | Screenshot changes reviewed like code | Optional, per profile |
 | reviewdog | Lint as inline comments | Lint off the reviewer's plate | Optional |
 
-### Later, if the pilot asks for it
+### Later, if real use asks for it
 
 | Tool | What would bring it in | What it would add |
 | --- | --- | --- |
@@ -585,11 +595,11 @@ Spikes (S) and evals (Ev) come before rewrites; deletions come after their repla
 | S | **Spikes** on a scratch repo (S1–S5, below) | Each spike has a written answer in `docs/spikes.md` | 2–3 days |
 | Ev | **Eval harness**: Tessl-format scenarios, the predecessor's cases, seeded defects, at least 3 runs per variant | Current personas have a baseline score | 1–2 days |
 | P | **Prompts**: implementer brief; clarifying protocol; evidence bar, synthesis and finding outcomes; per-criterion feature verdict; SKILL.md trimmed. Then merge PR #12 with these | Precision up and recall not down against the baseline | 2 days |
-| M1 | **Stacks, the App and changing course**: setup (environment, ruleset, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack`, PRs opened and approved slices merged by the App; `publish` and `revise` with deltas and drafted reasons; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision | 3–4 days |
-| Pilot | One real feature with at least one Design revision | What hurts decides M2 and M3 | 1 week |
-| M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) attached through the publish workflow; the AC-check job and per-criterion check run; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR | 2–3 days |
+| M1 | **Stacks and the trail**: setup (environment, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack` and PRs opened by the App, merged by the person on GitHub; `publish` and `revise` with deltas and drafted reasons; feed-forward notes and proposals in the ledger; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision, with every step in the trail | 3–4 days |
+| First real feature | The first real feature after M1, ideally one that revises its Design | What hurts decides M2 and M3 | — |
+| M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) attached through the publish workflow; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR | 2–3 days |
 | M3 | **Trail on GitHub and sync**: Decisions and Changelog as they happen; provenance capture and footers; `sync` with ETags; `resume` and `doctor` | A GitHub comment shows up in the next session as a finding; every record shows its provenance | 2–3 days |
-| M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive; cost budgets | A second repo extends the profile and gets its standards and demos | 2–3 days |
+| M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive; cost budgets. The App merging slices after a recorded answer only if real use asked for it (ruleset with bypass, patch-id matching) | A second repo extends the profile and gets its standards and demos | 2–3 days |
 
 Spikes:
 
@@ -598,13 +608,13 @@ Spikes:
 - **S2:** the publish workflow: minting the App token from an environment secret, validating committed files at a
   SHA, posting artifacts, and opening stacked PRs as the App, with `gh stack` or the REST API (can `gh stack` link
   PRs for branches it didn't push from that checkout?).
-- **S3:** the workflow merging a slice after a recorded approval (patch-id match, `sha=` on merge); the
-  feature-branch ruleset with the App as bypass actor; which guard routes an agent can get around.
+- **S3:** a person approving and merging an App-authored slice PR, and `sync` recording it; which guard routes an
+  agent can get around. (The App's own merge is tested only if it's adopted later.)
 - **S4:** the `ready` hook in Codex (including re-trust) and VS Code (including double firing).
 - **S5:** an OpenSpec delta for a real Design revision.
 
-About 3–4 weeks including spikes, evals and the pilot. The pilot repo and feature are to be chosen; the
-flight-components feature considered earlier isn't the pilot for now.
+About 3 weeks to M1 through M4, including spikes and evals, with no scheduled pilot. The first real feature after M1
+is the test; which one is to be chosen, and the flight-components feature considered earlier isn't it for now.
 
 ## Risks and open questions
 
