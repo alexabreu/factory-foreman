@@ -230,9 +230,9 @@ test('the hook config wires the guard and capture for every harness APM deploys 
   assert.match(readFileSync(new URL('apm.yml', root), 'utf8'), /- claude\n\s+- codex\n\s+- copilot/)
 })
 
-test('the six reviewer agents are named, scoped and each loads its standards skill', () => {
+test('the reviewer agents are named, scoped and each loads its standards skill', () => {
   const dir = new URL('../apm/.apm/agents/', import.meta.url)
-  const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', 'principal-engineer': 'standards-engineering' }
+  const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', maintainer: 'standards-architecture' }
   for (const [ name, skill ] of Object.entries(expected)) {
     const text = readFileSync(new URL(`${name}.agent.md`, dir), 'utf8')
     // No model: each harness uses its own session model (a Claude model name means nothing to Codex).
@@ -240,6 +240,14 @@ test('the six reviewer agents are named, scoped and each loads its standards ski
     assert.match(text, new RegExp(`\`${skill}\``), `${name} loads ${skill}`)
     assert.match(text, /JSON\s+array\s+of\s+findings/, `${name} answers in the brief's format`)
   }
+})
+
+test('the implementer agent builds slices: it can edit, loads its standards, and claims nothing without evidence', () => {
+  const text = readFileSync(new URL('../apm/.apm/agents/principal-engineer.agent.md', import.meta.url), 'utf8')
+  assert.match(text, /^---\nname: principal-engineer\ndescription: .+\ntools: .*\bEdit\b.*\bWrite\b.*\n---\n/u)
+  assert.match(text, /`standards-engineering`/u)
+  assert.match(text, /frozen tests/u)
+  assert.match(text, /fresh evidence/u)
 })
 
 test('the package stays free of any one product\'s names', () => {
