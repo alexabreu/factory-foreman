@@ -6,9 +6,13 @@ export function grade(output, criteria) {
   return { score: total ? earned / total : 0, results }
 }
 
+export const PASS = 0.8
+
 export function summarize(scores) {
   const n = scores.length
   const mean = n ? scores.reduce((s, x) => s + x, 0) / n : 0
   const sd = n > 1 ? Math.sqrt(scores.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1)) : 0
-  return { n, mean, sd, min: Math.min(...scores), max: Math.max(...scores) }
+  // A run passes at PASS or above; a case is flaky when its runs land on both sides.
+  const passRate = n ? scores.filter((x) => x >= PASS).length / n : 0
+  return { n, mean, sd, min: Math.min(...scores), max: Math.max(...scores), passRate, flaky: passRate > 0 && passRate < 1 }
 }

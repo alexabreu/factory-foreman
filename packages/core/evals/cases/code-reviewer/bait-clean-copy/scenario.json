@@ -1,0 +1,7 @@
+{
+  "id": "bait-clean-copy",
+  "persona": "code-reviewer",
+  "source": "Synthetic, against the public sample app. A correct slice with no defect: splice runs on a copy, both edges are handled and tested. Bait: splice looks like mutation at a glance. Measures false alarms.",
+  "task": "Review this slice as the code reviewer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [ "files/pr.md", "files/pr.diff" ]
+}

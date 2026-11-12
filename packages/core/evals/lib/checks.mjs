@@ -1,3 +1,5 @@
+import { findingsFrom } from './findings.mjs'
+
 // Small, objective checks the criteria compose. Each returns { passed, evidence },
 // so every score explains itself. Adapted from the predecessor's eval checks
 // (flight-components/factory/evals/lib/checks.mjs).
@@ -26,4 +28,16 @@ export function citesAtLeast(text, file, minimum) {
   const json = [ ...text.matchAll(new RegExp(`"file"\\s*:\\s*"[^"]*${file.source}"[^}]{0,200}?"line"\\s*:\\s*(\\d+)`, 'gu')) ].map((m) => `${m[0].match(/"file"\s*:\s*"([^"]*)"/u)[1]}:${m[1]}`)
   const distinct = [ ...new Set([ ...inline, ...json ]) ]
   return { passed: distinct.length >= minimum, evidence: `${distinct.length} distinct location(s) (need ${minimum}): ${distinct.slice(0, 6).join(', ')}` }
+}
+
+// For precision: the reply raises no finding above `ceiling` (minor by default).
+// A reply with no JSON array fails, since nothing can be counted.
+const RANK = { minor: 1, major: 2, blocking: 3 }
+export function noFindingsAbove(text, ceiling = 'minor') {
+  const findings = findingsFrom(text)
+  if (!findings) return { passed: false, evidence: 'No JSON array of findings in the reply' }
+  const over = findings.filter((f) => (RANK[String(f.severity).toLowerCase()] ?? 2) > RANK[ceiling])
+  return over.length
+    ? { passed: false, evidence: `${over.length} finding(s) above ${ceiling}: ${over.map((f) => f.text ?? f.title ?? '').join(' | ').slice(0, 200)}` }
+    : { passed: true, evidence: `${findings.length} finding(s), none above ${ceiling}` }
 }

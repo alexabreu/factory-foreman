@@ -15,6 +15,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { findingsFrom } from './lib/findings.mjs'
 import { grade, summarize } from './lib/grade.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -72,11 +73,8 @@ export const NEEDS_REPO = [ /deterministic tool output/iu, /change (repository|a
 // format checks judge the same content. Replies that aren't JSON pass through.
 const SEVERITY = { blocking: 'blocker', blocker: 'blocker', critical: 'blocker', high: 'blocker', major: 'concern', medium: 'concern', concern: 'concern', minor: 'nit', low: 'nit', nit: 'nit' }
 export function asLegacyReview(reply) {
-  const start = reply.indexOf('[')
-  const end = reply.lastIndexOf(']')
-  let findings
-  try { findings = JSON.parse(reply.slice(start, end + 1)) } catch { return reply }
-  if (!Array.isArray(findings) || !findings.length) return reply
+  const findings = findingsFrom(reply)
+  if (!findings?.length) return reply
   const lines = findings.map((f) => {
     const where = f.where ?? (f.file ? `${f.file}${f.line ? `:${f.line}` : ''}` : '')
     const text = f.text ?? f.summary ?? f.issue ?? [ f.title, f.body ].filter(Boolean).join(': ') ?? f.description ?? ''

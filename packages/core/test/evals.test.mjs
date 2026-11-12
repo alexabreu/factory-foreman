@@ -71,3 +71,29 @@ test('JSON findings are rendered in the legacy review style for legacy checks', 
   assert.match(out, /^- \*\*blocker\*\* src\/a\.ts:3: Breaks undo\n {2}Why: stale index\n {2}Fix: store id/u)
   assert.equal(asLegacyReview('plain text review'), 'plain text review')
 })
+
+test('findings are found despite narration, brackets in prose and fences', async () => {
+  const { findingsFrom } = await import('../evals/lib/findings.mjs')
+  assert.deepEqual(findingsFrom('Here [see notes] is my review:\n```json\n[{"id":"C1","severity":"major","text":"x"}]\n```\nDone.'), [ { id: 'C1', severity: 'major', text: 'x' } ])
+  assert.deepEqual(findingsFrom('I checked [a, b]. Result: [{"id":"C1","text":"y"}]'), [ { id: 'C1', text: 'y' } ])
+  assert.deepEqual(findingsFrom('Nothing to fix.\n```json\n[]\n```'), [])
+  assert.equal(findingsFrom('no json here'), null)
+})
+
+test('precision check counts findings above the ceiling, and runs report pass rate and flakiness', async () => {
+  const { noFindingsAbove } = await import('../evals/lib/checks.mjs')
+  assert.equal(noFindingsAbove('[{"severity":"minor","text":"nit"}]').passed, true)
+  assert.equal(noFindingsAbove('[{"severity":"major","text":"bad"}]').passed, false)
+  assert.equal(noFindingsAbove('no array').passed, false)
+  const s = summarize([ 1, 0.5, 0.9 ])
+  assert.ok(Math.abs(s.passRate - 2 / 3) < 1e-9)
+  assert.equal(s.flaky, true)
+  assert.equal(summarize([ 1, 1 ]).flaky, false)
+})
+
+test('the stale-index check needs the undo position, not just any mutation finding', async () => {
+  const criteria = (await import('../evals/cases/code-reviewer/seeded-remove-undo/criteria.mjs')).default
+  const stale = criteria.find((c) => /stale index/u.test(c.text))
+  assert.equal(stale.check('undo() reinserts at removed.index, which is stale if a book was added in between').passed, true)
+  assert.equal(stale.check('remove() mutates list.items with splice, so the caller sees the change').passed, false)
+})
