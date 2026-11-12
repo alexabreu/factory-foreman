@@ -164,8 +164,8 @@ tune**, and going past it is recorded with a reason, not refused.
 
 - **Locally:** red-at-base, and the **visual checkpoint**. An agent-browser step builds and runs the app at base
   and at head, captures before/after screenshots and a short recording of the slice's checkpoint, and computes the
-  visual delta (`diff screenshot`). These are attached to the slice PR through the publish workflow; the trail keeps their hashes and
-  links.
+  visual delta (`diff screenshot`). These are attached to that slice's issue artifact and shown on the slice PR, through the publish
+  workflow; the trail keeps their hashes and links.
 - **Green at head**, by default, comes from the repo's own CI test report when there is one, or else from the local
   green-at-head run recorded in the trail. factory-foreman doesn't need to know how a repo builds or tests. An
   optional AC-check job turns either into a per-criterion check run on the PR (with `GITHUB_TOKEN`) for teams that
@@ -208,10 +208,11 @@ carry their session ids.
 | Artifact | What it holds | When it's written | How a revision renders | Committed snapshot file (trail branch) |
 | --- | --- | --- | --- | --- |
 | **Shape** | Problem, who it's for, out of scope, criteria with example values | Each `publish shape` / `revise shape` | A new artifact version. It opens with "Changed since vN": each added, modified or removed item, with its reason and a link to the decision; the snapshot follows | `shape.v<N>.md`. The artifact version is published from the file at a commit, and its footer names that commit |
-| **Design** | Approach and the rejected option, contracts and signatures, code to reuse, wireframes, slices with demo contracts | Each `publish design` / `revise design` | The same: "Changed since vN" with what each change touches (criteria, merged slices, tests, slices to come), then the snapshot | `design.v<N>.md`, same rule |
+| **Design** | Approach and the rejected option, contracts and signatures, code to reuse, slices with demo contracts; wireframe images attached | Each `publish design` / `revise design` | The same: "Changed since vN" with what each change touches (criteria, merged slices, tests, slices to come), then the snapshot; changed wireframes attached again | `design.v<N>.md`, same rule |
 | **Decisions** | Every decision in the attention-item shape (question, options, recommendation and why, answer, who, when); reopenings supersede and link | As each decision is made | Append-only rows; a superseded row is marked and links to its replacement | None; derived from the committed ledger events |
 | **Changelog** | One entry per published version or revision: what changed, why, and which slices it touches | On every publish | Append-only; each entry links the two artifact versions it compares | None; built from the committed snapshots and decisions |
-| **Slices** (new) | One section per slice: its criteria, demo contract, PR, red-at-base and green-at-head results, the checks' links, finding outcomes, changes to earlier slices, approval and merge | When a slice is published, approved and merged | Each section is replaced with the slice's latest state; the artifact's version history keeps every earlier state | `slices/<n>.json` |
+| **Slice k** (new, one per slice) | The slice's **evidence history**: its criteria, demo contract, PR, red-at-base and green-at-head results, finding outcomes, changes to earlier slices, approval and merge, and for every publish the **before/after screenshots, the recording and the visual delta**, attached | When the slice is published (each publish appends that build's evidence), approved and merged | Each publish appends a dated entry with that build's media; the artifact's version history keeps every build | `slices/<k>.json` (media on the assets branch) |
+| **Verification** (new) | The feature review: a met / unmet / deferred verdict per criterion with evidence, the exploratory pass's findings, and the final before/after of the whole feature, attached | When the feature PR opens, and again if it changes | A new version per review | `verification.v<N>.md` |
 | **Ledger** (new) | The full event log, with provenance on every event | When the feature closes | One version per export | `ledger.jsonl` (transcripts stay local) |
 
 Records that aren't issue artifacts:
@@ -223,14 +224,30 @@ Records that aren't issue artifacts:
 | Check run (optional) | Per-criterion results at the slice head | From the optional AC-check job |
 | Feature PR body | Plan history, per-criterion verdict, provenance roll-up | When the feature PR opens |
 
-Slice records go to the **Slices** artifact on the issue, plus the slice PR body (the reviewer-facing summary) and
-the check run (per-criterion results).
+Slice records, including the screenshots, recordings and visual delta, go to that slice's **Slice k** artifact
+on the issue, so the build history lives on the issue. The slice PR body shows the latest build's media and links
+the artifact.
+
+Optionally, **issue fields** (GA) hold the feature's stage, slices merged out of planned, and the factory version,
+so a project board can show them.
 
 **Trail branch layout** (`factory-foreman-trail/<n>`, folder `trail/`): `shape.v<N>.md`, `design.v<N>.md`,
-`ledger.jsonl` (events, including captured approvals), `slices/<n>.json`. **No media**: the CLI uploads before/after
-screenshots and recordings to the publish workflow as run inputs, which posts them as PR (or issue) attachments; the
-trail keeps only their hashes and links. Media never lands on the trail branch and never merges into base. Each file kind has a JSON Schema in the package, which the workflow validates against;
-writing the schemas is part of M1.
+`ledger.jsonl` (events, including captured approvals), `slices/<k>.json`, `verification.v<N>.md`. Each file kind has a
+JSON Schema in the package, which the workflow validates against; writing the schemas is part of M1.
+
+**How media gets to the issue and the PR.** No media is on the trail branch, and none merges into base.
+
+1. The CLI pushes screenshots, recordings and visual deltas with the developer's login to the media-only branch
+   `factory-foreman-assets/<n>`, which the prototype already uses for wireframes and evidence (`src/assets/publish.mjs`).
+   That branch is never merged. The trail records each file's hash and the pinned commit.
+2. The publish workflow reads them at that commit and **attaches them to the issue artifact**. `gh issue artifact
+   create` and `edit` take `--attach <image or video>`, and an edit with only `--attach` appends to the artifact as a
+   new version. Issue artifacts are in preview, so this is checked in spike S6.
+3. The slice PR body embeds the same media. GitHub has no documented REST API for uploading user attachments to a
+   PR, so the body links the attachment URLs from the issue artifact if they're viewable there, or the pinned
+   assets-branch URLs if not (S6).
+
+Workflow-dispatch inputs are short strings, so media never goes through them.
 
 ### Provenance
 
@@ -391,7 +408,7 @@ App permission.
 Rendered from templates and checked before posting: markdown lint, link check, length budgets, a preview through
 GitHub's `/markdown` renderer, an editor pass that cuts restated or empty content, and snapshot tests.
 
-- **Issue body:** the stage; `<details>` sections for Shape, Design, Decisions, Slices (PR, check, demo and run
+- **Issue body:** the stage; `<details>` sections for Shape, Design, Decisions, Slices (each slice's PR, its artifact, latest before/after and run
   links), Open questions, and the provenance roll-up.
 - **Shape and Design artifacts:** "Changed since vN" first, then the snapshot.
 - **Slice PR body:** what this slice delivers (its criteria), how to see it (demo, screenshots, the one command to
@@ -447,7 +464,7 @@ words, formats or ideas, not the tool), **Optional** (a team can plug it in, or 
 | ccusage | Token and cost totals from the same logs | A roll-up without our own tracker | Adopt, or read the logs directly |
 | factory-foreman GitHub App | Factory identity for artifacts, PRs and slice merges; its token exists only inside the publish workflow | Machine output apart from people's words; approval on GitHub | Adopt (exists) |
 | gh CLI | Every GitHub call; polling with ETags for sync | One client both ways | Adopt |
-| GitHub issue artifacts | Shape, Design, Decisions, Changelog, Slices, the Ledger | The public home of the trail; every version reads back ([Phase 0 spike E](spikes.md)) | Adopt (preview API, behind one module) |
+| GitHub issue artifacts | Shape, Design, Decisions, Changelog, one per slice, Verification, the Ledger; media attached with `--attach` | The public home of the trail; every version reads back ([Phase 0 spike E](spikes.md)) | Adopt (preview API, behind one module) |
 
 ### Layer 4: evidence and review
 
@@ -592,12 +609,12 @@ Spikes (S) and evals (Ev) come before rewrites; deletions come after their repla
 
 | # | Scope | Done when | Estimate |
 | --- | --- | --- | --- |
-| S | **Spikes** on a scratch repo (S1–S5, below) | Each spike has a written answer in `docs/spikes.md` | 2–3 days |
+| S | **Spikes** on a scratch repo (S1–S6, below) | Each spike has a written answer in `docs/spikes.md` | 2–3 days |
 | Ev | **Eval harness**: Tessl-format scenarios, the predecessor's cases, seeded defects, at least 3 runs per variant | Current personas have a baseline score | 1–2 days |
 | P | **Prompts**: implementer brief; clarifying protocol; evidence bar, synthesis and finding outcomes; per-criterion feature verdict; SKILL.md trimmed. Then merge PR #12 with these | Precision up and recall not down against the baseline | 2 days |
 | M1 | **Stacks and the trail**: setup (environment, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack` and PRs opened by the App, merged by the person on GitHub; `publish` and `revise` with deltas and drafted reasons; feed-forward notes and proposals in the ledger; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision, with every step in the trail | 3–4 days |
 | First real feature | The first real feature after M1, ideally one that revises its Design | What hurts decides M2 and M3 | — |
-| M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) attached through the publish workflow; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR | 2–3 days |
+| M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) pushed to the assets branch and attached to the slice's issue artifact and PR by the publish workflow; the Verification artifact; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR | 2–3 days |
 | M3 | **Trail on GitHub and sync**: Decisions and Changelog as they happen; provenance capture and footers; `sync` with ETags; `resume` and `doctor` | A GitHub comment shows up in the next session as a finding; every record shows its provenance | 2–3 days |
 | M4 | **Profiles and polish**: profile-web-components; templates with the publish check; OpenSpec archive; cost budgets. The App merging slices after a recorded answer only if real use asked for it (ruleset with bypass, patch-id matching) | A second repo extends the profile and gets its standards and demos | 2–3 days |
 
@@ -612,6 +629,8 @@ Spikes:
   agent can get around. (The App's own merge is tested only if it's adopted later.)
 - **S4:** the `ready` hook in Codex (including re-trust) and VS Code (including double firing).
 - **S5:** an OpenSpec delta for a real Design revision.
+- **S6:** media on the issue and PR: `gh issue artifact create/edit --attach` with the App's token in the publish
+  workflow, whether the attachment URLs embed in a PR body, and the assets-branch fallback.
 
 About 3 weeks to M1 through M4, including spikes and evals, with no scheduled pilot. The first real feature after M1
 is the test; which one is to be chosen, and the flight-components feature considered earlier isn't it for now.
