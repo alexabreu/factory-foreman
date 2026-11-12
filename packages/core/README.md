@@ -57,9 +57,10 @@ Without it, factory writes are refused rather than posted as you.
 ## Reviews
 
 `reviewers` in the config names the reviewer agents per step; a name ending in
-`?visual` is used only when there is a visual criterion. The package ships six:
+`?visual` is used only when there is a visual criterion. The package ships seven:
 `test-verification-engineer`, `software-architect`, `ux-designer`,
-`code-reviewer`, `product-engineer` and `principal-engineer`. Each loads the
+`code-reviewer`, `product-engineer`, `maintainer` and `principal-engineer` (the implementer, which
+builds slices rather than reviewing them). Each loads the
 repo's `standards-*` skill for its role when there is one. Steps listed in
 `secondOpinion.steps` also get a brief for `secondOpinion.command`, which by
 default is the other vendor's model: `claude -p` under Codex, `codex exec -`
