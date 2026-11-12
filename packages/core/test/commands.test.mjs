@@ -68,8 +68,6 @@ test('two developers, a stale refusal, approval and the changelog', async () => 
   const first = await ana.run('checkpoint', 'shape')
   assert.equal(first.code, 0, first.err)
   assert.match(first.out, /Posted Shape v1/)
-  // Ready for approval: the agent asks with its harness's choice UI, never by telling them to run a command.
-  assert.match(first.out, /Ready for approval: ask the person now with your harness's choice UI \(approve, request changes, or not yet\)[\s\S]*on approve, run factory-foreman approve shape v1\./)
 
   // Ben's draft started from nothing, so it's stale now.
   writeDraft(ben.draft('shape'), SHAPE.replace('Syncing between devices.', 'Sharing lists.'))

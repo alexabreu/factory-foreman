@@ -66,37 +66,21 @@ the person's behalf.
    refused, fix each problem it lists and run it again. If it's refused as
    stale, someone else posted first: run `factory-foreman draft shape --reset`,
    fold your changes into the latest version, and checkpoint again.
-7. The version is ready for approval: ask the person right away (see Ask for
-   approval below). Approve only when they choose approve: then run
+7. Tell the person the version is posted and ask whether to approve it.
+   Approve only when they say so in the chat: then run
    `factory-foreman approve shape v<N>` as one plain command: nothing before
    it (no `PATH=…`), and nothing chained, piped, redirected (no `2>&1`) or in
    variables. In Claude Code the harness then asks them, showing
    what they're approving; their Allow is the approval. Never answer for them,
    rephrase the command to avoid the prompt, or retry after they deny it.
-   If the person answered somewhere they turned on for it (a card in the
-   Claude app, or your question in Codex), and only on their actual answer,
+   Elsewhere (Codex, a headless run) it refuses: they approve in their own
+   terminal with the same command. If the person approved somewhere else they
+   turned on for it (a card in the Claude app), and only on their actual tap,
    run it relayed: `--relayed <channel>:<ref> --expect <approve|merge>:<what
-   they were shown> --as <their login>`, with `claude-app:<card id>` or
-   `codex:<turn or session id>`. Never create or change the person's
-   `~/.factory-foreman` settings to turn a channel on; only they do that. If
-   the channel isn't on, say so and that only they can turn it on. With no
-   person present (headless, CI), never approve: say a person needs to approve
-   in their chat.
+   they were shown> --as <their login>`. Never create or change the person's
+   `~/.factory-foreman` settings to turn a channel on; only they do that.
 
 Design can only be checkpointed once a Shape version is approved.
-
-## Ask for approval
-
-When a version is posted or a slice iteration is up, ask the person straight
-away, without waiting for them to ask. Use the harness's own choice UI:
-AskUserQuestion in Claude Code, a decision card in the Claude app, Codex's own
-question UI in Codex, the equivalent in VS Code, and one short question in the
-chat only where there's none. Name what's ready (the step and version, or the slice, its head
-and CI) and offer three options: approve, request changes, or not yet. Never
-tell the person to type or run a command. On approve, you run the approve
-command as described above. On request changes, settle what they raise and
-draft or iterate again. On not yet, leave it and remind them when it's next
-relevant.
 
 ## Review before you checkpoint
 
@@ -142,9 +126,8 @@ Once Shape and Design are approved, build the Design's slices in order, one
 branch and draft PR each: `factory-foreman slice open <n>`, freeze its AC tests
 with `slice tests <n>`, build it, have it reviewed, and `slice iterate`. Follow
 `references/slices.md`. The person approves each slice, which merges it once
-CI is green, the same way as a version: when an iteration is up you ask them
-(Ask for approval), and on approve you run `factory-foreman approve slice <n>`
-and Claude Code asks them to allow it.
+CI is green, the same way as a version: on their word, you run
+`factory-foreman approve slice <n>` and Claude Code asks them.
 
 ## Amend an approved version
 
