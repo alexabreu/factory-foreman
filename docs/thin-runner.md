@@ -424,8 +424,8 @@ GitHub's `/markdown` renderer, an editor pass that cuts restated or empty conten
      artifacts; the body shows at most a thumbnail of the latest slice's after-screenshot.
   4. **Provenance roll-up**, collapsed: time and tokens per stage.
 
-  **Budget:** at most 3,000 characters of Markdown and one image. The pre-publish check refuses to post a body over
-  budget and moves the overflow into the relevant artifact instead.
+  **Budget:** at most 3,000 characters of Markdown and one image. The pre-publish check moves anything over budget into the
+  relevant artifact before posting.
 - **Shape and Design artifacts:** "Changed since vN" first, then the snapshot.
 - **Slice PR body:** what this slice delivers (its criteria), how to see it (demo, screenshots, the one command to
   run it locally), what changed since the Design it started from, changes to earlier slices, and collapsed
