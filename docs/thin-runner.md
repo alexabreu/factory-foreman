@@ -291,22 +291,18 @@ There's no runner process. Four things do the job:
 
 ### Merge authority
 
-- **In M1, the person merges slice PRs on GitHub.** The App authors the PRs, so the developer (or a teammate) approves
-  and merges natively, and `sync` records the merge in the trail. Nothing more is needed to start.
-- **Later, only if real use shows the need:** the App merges a slice after a recorded answer. Slices into the feature
-  branch then need one of:
-  - the person's approval from the readiness question or a card, captured by the `capture` hook and matched to the
-    slice's **patch id** (its diff against its base), so a server-side rebase of the stack doesn't invalidate it; or
-  - an approval on the slice PR by a teammate, meaning a person with write access other than the developer whose
-    login dispatches the workflow.
-
-  Then **the App performs the merge** through the publish workflow, with `PUT /pulls/{n}/merge` and `sha=` set to
-  the head it checked, so a push in between makes the merge fail. Never the agent's own `gh` command.
+- **Slices are approved in chat, not on GitHub.** When a slice is ready, the agent asks "Merge slice k? (merge / not
+  yet / changes)" in the harness or as a card. The answer, captured by the `capture` hook and matched to the slice's
+  **patch id** (its diff against its base, so a server-side rebase of the stack doesn't invalidate it), is the merge
+  authority. **The App then performs the merge** through the publish workflow, with `gh stack merge` (stacked PRs
+  can't use the plain merge API) pinned to the head it checked. Never the agent's own `gh` command.
+- **A teammate's GitHub approval** on the slice PR counts the same, for teams that review slices on GitHub. The
+  developer's own GitHub approval isn't needed and doesn't count, since the agent works under that login.
 - **The feature PR into the base branch:** GitHub's normal review and merge. A person decides.
 - **Why not an allow rule:** allow rules for `factory-foreman approve` and `factory-foreman slice merge` were tried
   on 11 Nov; Claude Code's auto mode still blocked the agent's merges after a relayed tap ("Merge Without Review").
-  The merge has to happen outside the agent.
-- **Either way, never the agent.** If the App's merge is ever adopted and fails, the person merges on GitHub.
+  The merge has to happen outside the agent, in the publish workflow.
+- **Fallback:** if the workflow can't merge, the person merges on GitHub.
 
 ### Threat model
 
@@ -328,7 +324,7 @@ authors the PRs, the person can approve them on GitHub.
 | --- | --- |
 | Publishing snapshots and deltas | Writes issue artifacts and the issue body |
 | Opening PRs | Opens slice and feature PRs, so the person can approve them on GitHub |
-| Merging slices (later) | Merges an approved slice once the recorded approval matches the slice's patch id; in M1 the person merges on GitHub |
+| Merging slices | Merges a slice after the person's approval in chat (or a teammate's on GitHub), matched to the slice's patch id |
 
 **No App key on a laptop.** The prototype keeps `app.pem` in `~/.config/factory-foreman` and signs locally. The new
 version drops this; the key exists only as a GitHub environment secret.
@@ -388,7 +384,7 @@ The App's key never touches a developer's machine. Everything the App does runs 
 2. Create the environment with the key as its secret, limited to the default branch.
 3. Add the caller workflow, and allow access to the central workflow repo in its Actions settings.
 4. Add CODEOWNERS and the default-branch rule.
-5. Optional, only when the App's merge is adopted: add the feature-branch ruleset. It targets `factory-foreman/*` but excludes `factory-foreman/*-slice-*`;
+5. Add the feature-branch ruleset. It targets `factory-foreman/*` but excludes `factory-foreman/*-slice-*`;
    requires a pull request; restricts updates, not creations, so `start` can create the branch; and lists the App
    as a bypass actor for pull requests only, so the person's fallback merge on GitHub still works.
 
@@ -628,7 +624,7 @@ Spikes (S) and evals (Ev) come before rewrites; deletions come after their repla
 | S | **Spikes** on a scratch repo (S1–S6, below) | Each spike has a written answer in `docs/spikes.md` | 2–3 days |
 | Ev | **Eval harness**: Tessl-format scenarios, the predecessor's cases, seeded defects, at least 3 runs per variant | Current personas have a baseline score | 1–2 days |
 | P | **Prompts**: implementer brief; clarifying protocol; evidence bar, synthesis and finding outcomes; per-criterion feature verdict; SKILL.md trimmed. Then merge PR #12 with these | Precision up and recall not down against the baseline | 2 days |
-| M1 | **Stacks and the trail**: setup (environment, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack` and PRs opened by the App, merged by the person on GitHub; `publish` and `revise` with deltas and drafted reasons; feed-forward notes and proposals in the ledger; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision, with every step in the trail | 3–4 days |
+| M1 | **Stacks and the trail**: setup (environment, App install, CODEOWNERS); the publish workflow and the trail-branch schemas; `start`; slice branches through `gh stack`, PRs opened by the App, and merged by the App after the person approves in chat; `publish` and `revise` with deltas and drafted reasons; feed-forward notes and proposals in the ledger; demo contracts; the `ready` hook and question; guard records instead of denying; tickets and restack deleted | A sample feature goes through Shape, Design, two slices and one Design revision, with every step in the trail | 3–4 days |
 | First real feature | The first real feature after M1, ideally one that revises its Design | What hurts decides M2 and M3 | — |
 | M2 | **Evidence**: the local agent-browser capture (base and head, screenshots, recording, visual delta) pushed to the assets branch and attached to the slice's issue artifact and PR by the publish workflow; the Verification artifact; green-at-head from the repo CI's report or the trail; the optional AC-check job; feature PR with the verdict and plan history | A reviewer sees each criterion pass and the before/after without leaving the PR | 2–3 days |
 | M3 | **Trail on GitHub and sync**: Decisions and Changelog as they happen; provenance capture and footers; `sync` with ETags; `resume` and `doctor` | A GitHub comment shows up in the next session as a finding; every record shows its provenance | 2–3 days |
@@ -641,8 +637,8 @@ Spikes:
 - **S2:** the publish workflow: minting the App token from an environment secret, validating committed files at a
   SHA, posting artifacts, and opening stacked PRs as the App, with `gh stack` or the REST API (can `gh stack` link
   PRs for branches it didn't push from that checkout?).
-- **S3:** a person approving and merging an App-authored slice PR, and `sync` recording it; which guard routes an
-  agent can get around. (The App's own merge is tested only if it's adopted later.)
+- **S3:** the workflow merging a slice with `gh stack merge` after an approval captured in chat (patch-id match);
+  the feature-branch ruleset with the App as bypass actor; which guard routes an agent can get around.
 - **S4:** the `ready` hook in Codex (including re-trust) and VS Code (including double firing).
 - **S5:** an OpenSpec delta for a real Design revision.
 - **S6:** media on the issue and PR: first, how issue artifacts accept images and video programmatically (the API
