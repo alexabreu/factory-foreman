@@ -111,8 +111,8 @@ gh-stack **v0.3.0**, using the developer's own login. No App key was used.
 
 | Spike | Answer so far | Effect on the plan |
 | --- | --- | --- |
-| S1. `gh stack` on a feature branch | **Yes** for create, submit and restack; merge-as-approved is waiting on a person's merge | Our restack code can go; publishing can use `gh stack` and `gh stack link` |
-| S2. Publish workflow with the App | Not run: needs one-time setup (below) | — |
+| S1. `gh stack` on a feature branch | **Yes**: create, submit, restack, merge one slice, retarget the next; a fully merged stack can't be extended, so the next slice starts a new stack | Our restack code can go; publishing can use `gh stack` and `gh stack link` |
+| S2. Publish workflow with the App | Ready to run: environment created, `FF_APP_ID` set, spike workflow in sample PR #8; waits on the key secret and that PR merging | — |
 | S3. Person merges an App-authored slice; guard routes | Not run: needs S2's setup | — |
 | S4. `ready` hook in Codex and VS Code | Not run: needs an interactive Codex TUI (`/hooks` trust) and VS Code | Needs a person at the keyboard, about 15 minutes |
 | S5. OpenSpec deltas for a Design revision | **Partly.** Deltas describe behaviour (requirements), not design. Its validate and archive steps belong in CI | Shape revisions use OpenSpec deltas; Design revisions need our own "Changed since vN" |
@@ -129,9 +129,14 @@ gh-stack **v0.3.0**, using the developer's own login. No App key was used.
   onto it and `gh stack push` updated the PRs, with no conflicts and no prompts.
 - `gh stack view --json` gives each branch's head, base, PR and `needsRebase`, which is what `sync` needs.
 - `gh stack link [--base]` links existing PRs into a stack without local tracking: the route for PRs the App opens.
-- Still to run: a person merging the bottom PR (agents' merges are blocked on this machine, as the M1 design
-  expects), then how the upper PR retargets, and whether a new slice can extend the stack once every slice is
-  merged.
+- Merging a stacked PR needs GitHub's asynchronous merge API: `gh pr merge` refuses ("part of a stack and must be
+  merged using the asynchronous merge REST API"). `gh stack merge 4 --squash --yes` merged the bottom slice into the
+  feature branch, and GitHub retargeted the next PR (#5) onto the feature branch by itself. Merging the whole stack
+  at once is refused while any PR in it is still a draft.
+- Once every slice is merged, the stack can't be extended: `gh stack add` says to start a new stack with `gh stack
+  init`. So with merge-as-approved (D12), a slice built after everything below it has merged starts a new stack on
+  the same feature branch. That works; the feature PR still gathers them all.
+- For the plan: the publish workflow merges with `gh stack merge <n>` or the async merge API, never `gh pr merge`.
 
 ## S5. OpenSpec deltas
 
