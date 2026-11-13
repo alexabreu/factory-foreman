@@ -90,7 +90,8 @@ export function reply(stdout, stderr = '') {
       return { stdout: j.result, tokens: tokens || null, usage, costUsd: j.total_cost_usd ?? null }
     }
   } catch { /* plain text */ }
-  const m = /tokens used\s*:?\s*([\d,]+)/iu.exec(`${stderr}\n${stdout}`)
+  const plain = `${stderr}\n${stdout}`.replace(/\u001b\[[0-9;]*m/gu, '') // Codex colours its summary
+  const m = /tokens used\s*:?\s*([\d,]+)/iu.exec(plain)
   return { stdout, tokens: m ? Number(m[1].replace(/,/gu, '')) : null, costUsd: null }
 }
 

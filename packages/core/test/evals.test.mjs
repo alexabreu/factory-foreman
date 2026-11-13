@@ -114,6 +114,7 @@ test('replies give their text and tokens: Claude JSON usage, Codex "tokens used"
   const claude = reply(JSON.stringify({ result: '[]', usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }, total_cost_usd: 0.01 }))
   assert.deepEqual(claude, { stdout: '[]', tokens: 115, usage: { input: 10, output: 5, cacheRead: 100, cacheCreation: 0 }, costUsd: 0.01 })
   assert.equal(reply('[]', 'tokens used\n12,345\n').tokens, 12345)
+  assert.equal(reply('[]', '\u001b[2mtokens used\u001b[0m\n3,675\n').tokens, 3675)
   assert.deepEqual(reply('[{"id":"a"}]'), { stdout: '[{"id":"a"}]', tokens: null, costUsd: null })
 })
 
