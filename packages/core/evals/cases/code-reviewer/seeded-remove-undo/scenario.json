@@ -1,0 +1,11 @@
+{
+  "id": "seeded-remove-undo",
+  "persona": "code-reviewer",
+  "source": "Synthetic, against the public sample app (alexabreu/alexabreu-factory-foreman-sample). Seeded defects: remove() mutates the list it was given; countUnread() is an extraction that adds nothing. Bait: style choices that are not defects.",
+  "task": "Review this slice as the code reviewer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "notes": "Changed 12 Nov, after results were seen: the case first seeded \"undo() restores by a stale index\" as a defect. It isn't one for AC-2: add() appends (sample src/reading-list.ts:25 at 0a8c609, `items: [ ...list.items, { id: list.nextId, ... } ]`), so a book added between remove and undo lands after every existing item and the stored index still points at the original position. test/evals.test.mjs replays the diff's remove and undo with an appending add to show it. The check was removed and stored outputs for the current reviewer and the candidate were re-scored from their saved replies, with no new runs. Changed 13 Nov, after results were seen: the test-quality checks moved from the code-reviewer case to the test-verification-engineer case of the same name. The persona contract (D51) gives test quality to the test engineer, and Codex's contract code reviewer followed that and was marked down for it on every run. Each persona is now graded on its own job; the slice row (--union) grades both together against the checks the case had before, so nothing a slice gets reviewed for was dropped. Stored outputs were re-scored, with no new code-reviewer runs."
+}

@@ -1,0 +1,37 @@
+diff --git a/src/html.ts b/src/html.ts
+new file mode 100644
+--- /dev/null
++++ b/src/html.ts
+@@ -0,0 +1,9 @@
++// Builds markup from a template. Every inserted value is escaped as text.
++export function html(strings: TemplateStringsArray, ...values: unknown[]): string {
++  return strings.reduce((out, s, i) => out + s + (i < values.length ? escape(values[i]) : ''), '')
++}
++
++const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
++const escape = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ESC[c])
+diff --git a/src/html.test.ts b/src/html.test.ts
+new file mode 100644
+--- /dev/null
++++ b/src/html.test.ts
+@@ -0,0 +1,6 @@
++import { html } from './html'
++
++it('escapes every inserted value', () => {
++  expect(html`<b>${'<img src=x onerror=alert(1)>'}</b>`).toBe('<b>&lt;img src=x onerror=alert(1)&gt;</b>')
++  expect(html`<a title="${'" onmouseover="x'}">`).toBe('<a title="&quot; onmouseover=&quot;x">')
++})
+diff --git a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -40,6 +40,12 @@ function render(list: ReadingList, filter: Filter) {
+   }
+ }
+ 
++import { html } from './html'
++const heading = document.querySelector<HTMLHeadingElement>('#results-heading')!
++
++const q = new URLSearchParams(location.search).get('q') ?? ''
++heading.innerHTML = q ? html`Results for <strong>${q}</strong>` : ''
++
+ render(load(), 'all')

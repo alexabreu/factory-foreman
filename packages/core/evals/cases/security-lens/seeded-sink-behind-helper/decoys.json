@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Finds that html``'s clean() only trims, so q reaches innerHTML unescaped",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"html``'s clean() turns null into an empty string, which is a nice touch; document it in the helper's comment.\", \"where\": \"src/html.ts:7\"}]"
+    },
+    {
+      "line": "Finds that html``'s clean() only trims, so q reaches innerHTML unescaped",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The html`` helper reduces over the strings on every render; for a heading this is fine, but memoize it if it's used in lists.\", \"where\": \"src/html.ts:3\"}]"
+    },
+    {
+      "line": "Says who controls q (anyone who sends a link) and what they gain (script in the reader's page)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Anyone can send a link with a very long q; the heading may wrap badly, so truncate it to 60 characters.\", \"where\": \"src/main.ts:47\"}]"
+    },
+    {
+      "line": "Gives the fix: escape in the helper, or textContent at the sink",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Rename clean() to normalize(), since it only normalizes whitespace.\", \"where\": \"src/html.ts:7\"}]"
+    }
+  ]
+}

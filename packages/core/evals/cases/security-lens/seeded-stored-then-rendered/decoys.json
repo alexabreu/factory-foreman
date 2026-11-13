@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Traces the import parameter through localStorage to innerHTML in the print view",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"importFromLink calls JSON.parse(atob(data)) without a try/catch, so a malformed link throws and the app shows nothing.\", \"where\": \"src/share.ts:8\"}]"
+    },
+    {
+      "line": "Traces the import parameter through localStorage to innerHTML in the print view",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The print view's innerHTML builds a <ul>, which is good for printing; consider a CSS class so it can be styled.\", \"where\": \"src/print.ts:5\"}]"
+    },
+    {
+      "line": "Says who controls it (whoever sends the link) and what they gain (script runs whenever the reader prints, and persists)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Anyone with the link can add many books at once; cap an import at 100 titles so the list stays manageable.\", \"where\": \"src/share.ts:9\"}]"
+    },
+    {
+      "line": "Gives the fix: build the list items with textContent (or escape titles) in the print view",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Use textContent for the print view's heading as well, for consistency.\", \"where\": \"src/print.ts:4\"}]"
+    }
+  ]
+}

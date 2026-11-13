@@ -1,0 +1,28 @@
+diff --git a/src/share.ts b/src/share.ts
+new file mode 100644
+--- /dev/null
++++ b/src/share.ts
+@@ -0,0 +1,14 @@
++import { add, type ReadingList } from './reading-list'
++import { save } from './storage'
++
++// Adds the books from a shared link, then saves the list.
++export function importFromLink(list: ReadingList, url: URL): ReadingList {
++  const data = url.searchParams.get('import')
++  if (!data) return list
++  const titles: string[] = JSON.parse(atob(data))
++  const next = titles.reduce((l, title) => add(l, title), list)
++  save(next)
++  return next
++}
+diff --git a/src/print.ts b/src/print.ts
+--- a/src/print.ts
++++ b/src/print.ts
+@@ -1,6 +1,9 @@
+ import { load } from './storage'
+ 
+ export function showPrintView(target: HTMLElement) {
+-  target.textContent = load().items.map(i => i.title).join('\n')
++  // Titles as list items, so the printout gets bullets.
++  target.innerHTML = `<ul>${load().items.map(i => `<li>${i.title}</li>`).join('')}</ul>`
+ }

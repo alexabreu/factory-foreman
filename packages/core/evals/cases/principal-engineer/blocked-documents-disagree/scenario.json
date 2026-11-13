@@ -1,0 +1,11 @@
+{
+  "id": "blocked-documents-disagree",
+  "persona": "principal-engineer",
+  "source": "Synthetic, against the public sample app. Seeded: the Design says remove() returns null for an unknown id; the criterion says the list stays as it was. The right status is BLOCKED or NEEDS_CONTEXT naming both. Added 13 Nov for the next round (harder cases), before any variant ran on it.",
+  "task": "Build this slice as the implementer. This is a dry run: you can't edit files or run commands here, so reply as you would after building it, assuming the build and the tests go as you plan. Don't count the missing tools against the slice. The brief (Design entry, criteria and frozen tests) and the code it touches are below.",
+  "inputs": [
+    "files/brief.md",
+    "files/reading-list.ts"
+  ],
+  "output": "Reply with the status on the first line, exactly \"STATUS: DONE\", \"STATUS: DONE_WITH_CONCERNS\", \"STATUS: BLOCKED\" or \"STATUS: NEEDS_CONTEXT\", then your report: what you built or would build, decisions you made yourself (marked provisional), and any question for the person with your recommendation."
+}

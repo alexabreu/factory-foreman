@@ -1,0 +1,11 @@
+{
+  "id": "bait-clean-copy",
+  "persona": "test-verification-engineer",
+  "source": "Synthetic, against the public sample app. A correct slice with no defect: splice runs on a copy, both edges are handled and tested. Bait: splice looks like mutation at a glance. Measures false alarms.",
+  "task": "Review this slice's tests as the test verification engineer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "notes": "Changed 13 Nov, after results were seen: the test-quality checks moved from the code-reviewer case to this test-verification-engineer case. The persona contract (D51) gives test quality to the test engineer, and Codex's contract code reviewer followed that and was marked down for it on every run. Each persona is now graded on its own job; the slice row (--union) grades both together against the checks the case had before, so nothing a slice gets reviewed for was dropped. Stored outputs were re-scored, with no new code-reviewer runs. Also changed 13 Nov, after results were seen: the test engineer's \"nothing above minor\" check was dropped here, because every run on both engines found real weaknesses in this slice's tests (identity instead of contents, a two-book list, no check that the input is unchanged). The code is correct, so the code-reviewer case keeps its precision check."
+}

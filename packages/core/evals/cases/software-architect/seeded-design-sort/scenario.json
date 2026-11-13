@@ -1,0 +1,12 @@
+{
+  "id": "seeded-design-sort",
+  "persona": "software-architect",
+  "source": "Synthetic, against the public sample app. Seeded: the Design adds a new title comparator while src/reading-list.ts already has compareTitles; it names src/list-store.ts as existing, but no such file exists; it rejects an option because it's 'simpler', which isn't a reason. Added 13 Nov for step 5, before any variant ran on it.",
+  "task": "Review this Design as the software architect. The Shape, the Design and the code it touches are below. Report findings only for things the author must settle, each with where it is, why it matters, and the smallest change that fixes it.",
+  "inputs": [
+    "files/shape.md",
+    "files/design.md",
+    "files/code.md"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix."
+}

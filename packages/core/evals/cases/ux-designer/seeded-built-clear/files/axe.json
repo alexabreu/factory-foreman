@@ -1,0 +1,28 @@
+{
+  "violations": [
+    {
+      "id": "button-name",
+      "impact": "critical",
+      "nodes": [
+        {
+          "target": [
+            "#toolbar > button:nth-child(2)"
+          ],
+          "failureSummary": "Element does not have inner text that is visible to screen readers; aria-label attribute does not exist"
+        }
+      ]
+    },
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": [
+        {
+          "target": [
+            "#toolbar > button:nth-child(2) svg"
+          ],
+          "failureSummary": "Element has insufficient color contrast of 2.9:1 (foreground #9aa3ad, background #ffffff); expected 3:1 for graphical objects"
+        }
+      ]
+    }
+  ]
+}

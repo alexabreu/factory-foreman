@@ -1,0 +1,31 @@
+diff --git a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -40,6 +40,27 @@ function render(list: ReadingList, filter: Filter) {
+   }
+ }
+ 
++const heading = document.querySelector<HTMLHeadingElement>('#results-heading')!
++const box = document.querySelector<HTMLInputElement>('#search')!
++
++function search(list: ReadingList, q: string): Item[] {
++  const needle = q.trim().toLowerCase()
++  return list.items.filter(item => item.title.toLowerCase().includes(needle))
++}
++
++// The query is shown as text, never as HTML.
++function showSearch(list: ReadingList) {
++  const q = new URLSearchParams(location.search).get('q') ?? ''
++  const strong = document.createElement('strong')
++  strong.textContent = q
++  heading.replaceChildren(...(q ? [ 'Results for ', strong ] : []))
++  renderItems(search(list, q))
++}
++
++box.addEventListener('input', () => {
++  history.replaceState(null, '', `?q=${encodeURIComponent(box.value)}`)
++  showSearch(load())
++})
++
+ render(load(), 'all')
++showSearch(load())

@@ -1,0 +1,11 @@
+{
+  "id": "seeded-sink-behind-helper",
+  "persona": "security-lens",
+  "source": "Synthetic, against the public sample app. Seeded: the query reaches innerHTML through a small html`` tagged-template helper that looks like it escapes but only trims, so the sink hides behind a helper in another file. Added 13 Nov for the next round (harder cases), before any variant ran on it.",
+  "task": "Review this slice as the security lens. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, who controls the input, what they gain, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line>\" }]. Reply [] when there is nothing to fix."
+}

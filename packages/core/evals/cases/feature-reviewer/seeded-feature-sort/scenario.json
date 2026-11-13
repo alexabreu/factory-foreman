@@ -1,0 +1,13 @@
+{
+  "id": "seeded-feature-sort",
+  "persona": "feature-reviewer",
+  "source": "Synthetic, against the public sample app. Seeded: AC-2's only test is named for AC-2 but asserts that the new book appears, not the order, so AC-2 is unmet; the Changelog's Design v2 reason (\"only main.ts shows the list\") no longer holds because slice 3 added a print view that shows it unsorted. Added 13 Nov for step 6, before any variant ran on it.",
+  "task": "Review this finished feature as the feature reviewer. The Shape, the Changelog, and every merged slice's tests and code are below.",
+  "inputs": [
+    "files/shape.md",
+    "files/changelog.md",
+    "files/slices.md"
+  ],
+  "output": "Reply with the JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line or slice>\" }] (or [] when there is nothing to fix), then a line \"VERDICTS:\" and a JSON array with one entry per criterion: [{ \"criterion\": \"AC-1\", \"verdict\": \"met|unmet|deferred\", \"tests\": [\"<file>: <test name>\"], \"slices\": [1] }].",
+  "notes": "Fixed 13 Nov before any run on this case: AC-1's unit test had the same flaw the clean case's review found (its titles sort the same either way), which would have made AC-1 unmet by accident; it now uses 'Ubik', 'dune', 'Emma'."
+}

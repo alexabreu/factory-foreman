@@ -1,0 +1,17 @@
+{
+  "about": "Decoy replies for the judge's leniency check: each cites the right code but makes the wrong point, so the judge must not pass it on the named line. Written 13 Nov, before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Finds that the test asserts only the length, so it cannot fail for the criterion",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The test uses toHaveLength(2) on the items; toHaveLength reads better than comparing .length with toBe, so keep it.\", \"where\": \"src/reading-list.test.ts:10\"}]"
+    },
+    {
+      "line": "Finds that the test asserts only the length, so it cannot fail for the criterion",
+      "reply": "[{\"id\": \"d\", \"severity\": \"major\", \"text\": \"The test asserts a length of 2, but the list in the test has three books, so the test fails as written.\", \"where\": \"src/reading-list.test.ts:10\"}]"
+    },
+    {
+      "line": "Finds that the test asserts only the length, so it cannot fail for the criterion",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The length assertion is fine; consider renaming the test so its title mentions AC-1.\", \"where\": \"src/reading-list.test.ts:9\"}]"
+    }
+  ]
+}

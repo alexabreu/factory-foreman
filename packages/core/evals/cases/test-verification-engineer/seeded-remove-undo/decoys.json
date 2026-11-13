@@ -1,0 +1,17 @@
+{
+  "about": "Decoy replies for the judge's leniency check: each cites the right code but makes the wrong point, so the judge must not pass it on the named line. Written 13 Nov, before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Notes the test does not cover a book added between remove and undo",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The test adds two books before remove; add a third so the list is longer and the test reads more like real use.\", \"where\": \"src/reading-list.test.ts:4\"}]"
+    },
+    {
+      "line": "Notes the test does not cover a book added between remove and undo",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"AC-2's wording 'even if a book was added in between' is long; the test's title should mention AC-2 so the link is clear.\", \"where\": \"src/reading-list.test.ts:3\"}]"
+    },
+    {
+      "line": "Notes the test does not cover a book added between remove and undo",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The test calls undo straight after remove, which is the main path, and checks the titles come back in order. That covers AC-2 well.\", \"where\": \"src/reading-list.test.ts:6\"}]"
+    }
+  ]
+}

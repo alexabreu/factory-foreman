@@ -1,0 +1,13 @@
+{
+  "id": "clean-built-clear",
+  "persona": "ux-designer",
+  "source": "Synthetic, against the public sample app. The built screen matches the Design: a named text button, a toast with Undo that keeps focus where it should, the disabled state, and a clean axe report. Bait: nothing to fix. Measures false alarms. Added 13 Nov for step 5, before any variant ran on it.",
+  "task": "Review the built screen for this slice as the UX designer. The Design's visual behavior, the browser's accessibility snapshot of the built screen, and its axe report are below (the screenshots are summarized in the snapshot). Report findings only for things that should change, each with where it is, what the person would experience, and the fix.",
+  "inputs": [
+    "files/visual-behavior.md",
+    "files/snapshot.md",
+    "files/axe.json"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix.",
+  "notes": "Case review (13 Nov, before any precision run; main and contract UX designer, Codex and Claude, k=1): no above-minor findings. Step 5's fresh Claude runs had raised two real gaps, a fixed 10-second toast with no pause, and no word on where focus goes after Undo, so both are fixed anyway: the timer pauses while focus or the pointer is in the toast, Undo is next in the tab order, and Undo returns focus to 'Clear read'. Review runs are kept out of the results. Re-review after the fix (k=1, main and contract, both engines): no above-minor findings."
+}

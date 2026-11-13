@@ -1,0 +1,21 @@
+{
+  "about": "Decoy replies for the judge's leniency check: each cites the right code but makes the wrong point, so the judge must not pass it on the named line. Written 13 Nov, before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Finds that the test mocks clearRead, the function it is meant to test",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"vi.spyOn(readingList, 'clearRead') is a good way to observe the call; spying keeps the test fast and focused.\", \"where\": \"src/reading-list.test.ts:27\"}]"
+    },
+    {
+      "line": "Finds that the test mocks clearRead, the function it is meant to test",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The mocked return value add(empty(), 'Emma') gives Emma id 1, while in the real list Emma has id 2; use the matching id in the mock.\", \"where\": \"src/reading-list.test.ts:27\"}]"
+    },
+    {
+      "line": "Finds that toBeGreaterThanOrEqual(0) can never fail",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"toBeGreaterThanOrEqual(0) reads awkwardly; toBeGreaterThan(-1) is the same check and is easier to scan.\", \"where\": \"src/reading-list.test.ts:30\"}]"
+    },
+    {
+      "line": "Finds that no book in the test input is read, so AC-1 is never exercised",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The test input adds Dune and Emma; add a third book so the input is longer than the AC's example.\", \"where\": \"src/reading-list.test.ts:28\"}]"
+    }
+  ]
+}

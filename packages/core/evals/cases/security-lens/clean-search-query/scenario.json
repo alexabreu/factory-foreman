@@ -1,0 +1,12 @@
+{
+  "id": "clean-search-query",
+  "persona": "security-lens",
+  "source": "Synthetic, against the public sample app. The same slice built safely: the query goes into the heading through textContent on a created element; nothing from the URL reaches HTML, a URL or a script. Bait: nothing to fix. Measures false alarms. To be case-reviewed before any precision run. Added 13 Nov for step 6, before any variant ran on it.",
+  "task": "Review this slice as the security lens. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, who controls the input, what they gain, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line>\" }]. Reply [] when there is nothing to fix.",
+  "notes": "Case review (13 Nov, before any precision run; contract security lens, Codex and Claude, k=2): no findings in any run, so no changes. Review runs are kept out of the results."
+}

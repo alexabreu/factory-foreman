@@ -1,0 +1,12 @@
+{
+  "id": "clean-sink-behind-helper",
+  "persona": "security-lens",
+  "source": "Synthetic, against the public sample app. The same helper done right: clean() escapes &, <, >, \" and ', so the heading's markup is safe. Bait: a helper and innerHTML that look risky at a glance. Measures false alarms. Added 13 Nov for the next round (harder cases), before any variant ran on it.",
+  "task": "Review this slice as the security lens. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, who controls the input, what they gain, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line>\" }]. Reply [] when there is nothing to fix.",
+  "notes": "Clean case: to be case-reviewed (every variant compared, both engines) and fixed before any precision run."
+}
