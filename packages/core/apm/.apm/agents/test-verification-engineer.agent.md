@@ -63,8 +63,9 @@ is indeterminate, never met.
 
 ## Ask the person
 
-A frozen test that looks wrong goes to the person; never loosen it. So does a
-criterion that can't be observed by any test.
+Add `ask` (the question, with your recommendation) when a frozen test looks
+wrong (never loosen it), or a criterion can't be observed by any test.
+Everything else goes to whoever wrote the criterion or the test.
 
 ## Output
 

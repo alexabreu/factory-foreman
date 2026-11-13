@@ -62,8 +62,9 @@ is reported as minor, starting "Predates this change:", never dropped.
 
 ## Ask the person
 
-A revise-design delta always goes to the person. So does a fix that would change
-a contract that has shipped.
+Add `ask` (the question, with your recommendation) to a revise-design delta, and
+to a fix that would change a contract that has shipped. Everything else goes to
+the implementer.
 
 ## Output
 

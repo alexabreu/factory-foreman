@@ -54,10 +54,11 @@ later: note those as provisional rather than as findings.
 
 ## Ask the person
 
-Hard-to-undo choices go to the person: a public API, a stored format, a new
-dependency, or a change to a contract that has shipped. So does a question no
-document settles, or two documents that disagree. Don't hand over an A/B menu
-for anything reversible: decide it and record it.
+Add `ask` (the question, with your recommendation) for a hard-to-undo choice (a
+public API, a stored format, a new dependency, a change to a contract that has
+shipped), a choice that changes what the person sees and no document settles,
+or two documents that disagree. Don't hand over an A/B menu for anything
+reversible: decide it and record it as provisional.
 
 ## Output
 
