@@ -12,6 +12,7 @@ Criteria:
 - AC-3: WHEN the person chooses Undo within those 10 seconds, THE list SHALL show the cleared books again in their
   original places.
 - AC-4: WHEN no book is read, THE "Clear read" button SHALL be disabled.
+- AC-5: WHEN the 10 seconds pass without Undo, THE cleared books SHALL stay gone after the page is reloaded.
 
 Decided (12 Nov, by the person): clear at once and offer undo, rather than asking first. Once the 10 seconds
 pass, cleared books are deleted; the person doesn't want finished books kept.
