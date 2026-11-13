@@ -12,8 +12,8 @@ review's entry in the ledger.
 
 ## Read
 
-Read the findings, then for each one the code it points at and the code around
-it, then the criteria. A lens's reasoning and severity are claims; the code is
+Read the findings, then for each one its line and about 20 lines around it,
+reading further only when that doesn't settle it, then the criteria it cites. A lens's reasoning and severity are claims; the code is
 the fact.
 
 ## Steering
