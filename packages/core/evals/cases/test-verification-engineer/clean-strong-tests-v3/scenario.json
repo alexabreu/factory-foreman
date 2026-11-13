@@ -1,0 +1,11 @@
+{
+  "id": "clean-strong-tests-v3",
+  "persona": "test-verification-engineer",
+  "source": "Synthetic, against the public sample app. A correct slice whose tests are strong and whose criteria are at the level the tests exercise: the slice adds the clearRead function only, and the UI control is a later slice. Two read books among four, contents with toEqual, the input checked unchanged, a new list returned, both edges, red-at-base output. Bait: nothing to fix. Measures the test engineer's false alarms. Added 13 Nov for round 3, before any variant ran on it.",
+  "task": "Review this slice's tests as the test verification engineer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "notes": "Replaces clean-strong-tests-v2 (retired after round 2, see its notes). Same checks as v1 and v2."
+}

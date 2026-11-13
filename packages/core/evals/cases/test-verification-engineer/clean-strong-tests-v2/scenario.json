@@ -7,5 +7,6 @@
     "files/pr.md",
     "files/pr.diff"
   ],
-  "notes": "Replaces clean-strong-tests (retired after round 1, see its notes). Checks are the same as v1's."
+  "notes": "Replaces clean-strong-tests (retired after round 1, see its notes). Checks are the same as v1's. Retired 13 Nov after round 2: Claude found that the criteria say 'WHEN the person clears read books' and 'THE list SHALL show', but the tests only call the pure function and nothing wires it to the UI, so removing the wiring would fail no test. That passes the persona's falsifier rule, so it's a real gap in the case, not a false alarm. Round 2 results stay recorded.",
+  "retired": "round 3 (13 Nov): its criteria describe what the person does while the tests only call the function, a real acceptance gap; replaced by clean-strong-tests-v3"
 }

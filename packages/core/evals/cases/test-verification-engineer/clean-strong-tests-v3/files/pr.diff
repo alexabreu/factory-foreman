@@ -1,0 +1,57 @@
+diff --git a/src/reading-list.ts b/src/reading-list.ts
+--- a/src/reading-list.ts
++++ b/src/reading-list.ts
+@@ -29,6 +29,11 @@ export function toggle(list: ReadingList, id: number): ReadingList {
+   return { ...list, items: list.items.map(item => (item.id === id ? { ...item, read: !item.read } : item)) }
+ }
+ 
++// Removes every book already read; unread books keep their order and ids.
++export function clearRead(list: ReadingList): ReadingList {
++  return { ...list, items: list.items.filter(item => !item.read) }
++}
++
+ export function visible(list: ReadingList, filter: Filter): Item[] {
+   if (filter === 'all') return list.items
+   return list.items.filter(item => item.read === (filter === 'read'))
+diff --git a/src/reading-list.test.ts b/src/reading-list.test.ts
+--- a/src/reading-list.test.ts
++++ b/src/reading-list.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest'
+-import { add, empty, summary, toggle, visible } from './reading-list'
++import { add, clearRead, empty, summary, toggle, visible } from './reading-list'
+ 
+ describe('reading list', () => {
+   it('adds trimmed titles and refuses blanks and duplicates', () => {
+@@ -21,4 +21,36 @@ describe('reading list', () => {
+   it('summarizes what is left to read', () => {
+     expect(summary(toggle(add(add(empty(), 'Dune'), 'Emma'), 2))).toBe('1 of 2 unread')
+   })
++
++  it('clears every read book and keeps the unread ones in order (AC-1)', () => {
++    const list = toggle(toggle(add(add(add(add(empty(), 'Dune'), 'Emma'), 'Ubik'), 'Solaris'), 2), 4)
++    expect(clearRead(list)).toEqual({ items: [ { id: 1, title: 'Dune', read: false }, { id: 3, title: 'Ubik', read: false } ], nextId: 5 })
++  })
++
++  it('returns a new list, not the one it was given (AC-1)', () => {
++    const list = toggle(add(add(empty(), 'Dune'), 'Emma'), 1)
++    expect(clearRead(list)).not.toBe(list)
++    expect(clearRead(list).items).not.toBe(list.items)
++  })
++
++  it('leaves the list it was given unchanged (AC-3)', () => {
++    const list = toggle(add(add(empty(), 'Dune'), 'Emma'), 1)
++    const before = structuredClone(list)
++    clearRead(list)
++    expect(list).toEqual(before)
++  })
++
++  it('keeps every book when none is read (AC-2)', () => {
++    const list = add(add(empty(), 'Dune'), 'Emma')
++    expect(clearRead(list)).toEqual(list)
++  })
++
++  it('keeps an empty list empty (AC-2)', () => {
++    expect(clearRead(empty())).toEqual(empty())
++  })
+ })
