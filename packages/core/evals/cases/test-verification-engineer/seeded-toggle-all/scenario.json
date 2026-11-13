@@ -1,0 +1,11 @@
+{
+  "id": "seeded-toggle-all",
+  "persona": "test-verification-engineer",
+  "source": "Synthetic, against the public sample app. Seeded defects: toggleAll() crashes on an empty list; it decides by the first book only, so a mixed list where the first is read marks everything unread (breaks AC-1); the test asserts only the length, so it can't fail for the criterion. Bait: none.",
+  "task": "Review this slice's tests as the test verification engineer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "notes": "Changed 13 Nov, after results were seen: the test-quality checks moved from the code-reviewer case to this test-verification-engineer case. The persona contract (D51) gives test quality to the test engineer, and Codex's contract code reviewer followed that and was marked down for it on every run. Each persona is now graded on its own job; the slice row (--union) grades both together against the checks the case had before, so nothing a slice gets reviewed for was dropped. Stored outputs were re-scored, with no new code-reviewer runs."
+}

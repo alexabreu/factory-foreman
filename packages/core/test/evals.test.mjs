@@ -40,7 +40,10 @@ test('every bundled case is well formed', async () => {
       assert.equal(scenario.id, id)
       for (const f of scenario.inputs) assert.ok(readFileSync(join(dir, f), 'utf8').length > 0, f)
       const criteria = (await import(pathToFileURL(join(dir, 'criteria.mjs')).href)).default
-      assert.ok(criteria.length >= 3 && criteria.every((c) => typeof c.check === 'function' && c.text))
+      // A persona's own case has at least one check; a test-engineer case holds the
+      // test-quality checks moved out of the code-reviewer case of the same name.
+      assert.equal(scenario.persona, persona)
+      assert.ok(criteria.length >= 1 && criteria.every((c) => typeof c.check === 'function' && c.text), `${persona}/${id}`)
     }
   }
 })
@@ -94,7 +97,8 @@ test('precision check counts findings above the ceiling, and runs report pass ra
 test('the remove-undo case has no stale-index check: add() appends, so restoring by index is correct for AC-2', async () => {
   const criteria = (await import('../evals/cases/code-reviewer/seeded-remove-undo/criteria.mjs')).default
   assert.equal(criteria.find((c) => /stale index/u.test(c.text)), undefined)
-  const between = criteria.find((c) => /added between/u.test(c.text))
+  const tve = (await import('../evals/cases/test-verification-engineer/seeded-remove-undo/criteria.mjs')).default
+  const between = tve.find((c) => /added between/u.test(c.text))
   assert.equal(between.check('AC-2: the test never adds a book in between remove and undo').passed, true)
 })
 
@@ -152,4 +156,21 @@ test('excerpts keep the lines around each finding, the headers, and name what th
   assert.doesNotMatch(out, /\+line 46\n/u)
   assert.match(out, /Not in the diff: src\/b\.ts:3/u)
   assert.match(excerpts(DIFF, [ { where: 'src/a.ts' } ]), /\+line 80/u, 'no line: the whole file section')
+})
+
+test('test-quality checks live in the test engineer\'s cases, and the slice row grades both personas together', async () => {
+  const { loadCase, union } = await import('../evals/run.mjs')
+  const root = join(import.meta.dirname, '..', 'evals', 'cases')
+  const cr = (await loadCase(join(root, 'code-reviewer', 'seeded-toggle-all'), root)).criteria.map((c) => c.text)
+  const tve = (await loadCase(join(root, 'test-verification-engineer', 'seeded-toggle-all'), root)).criteria.map((c) => c.text)
+  assert.ok(!cr.some((t) => /asserts only the length/u.test(t)) && tve.some((t) => /asserts only the length/u.test(t)))
+  const { mkdtempSync, writeFileSync: write } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const dir = mkdtempSync(join(tmpdir(), 'ff-union-'))
+  const run = (output) => ({ k: 1, ms: 1000, tokens: 10, output })
+  write(join(dir, 'a.json'), JSON.stringify({ persona: 'code-reviewer', harness: 'claude', cases: { 'seeded-toggle-all': { runs: [ run('items[0] is undefined on an empty list, so it crashes. The first book decides for a mixed list, breaking AC-1. reading-list.ts:31 reading-list.ts:33') ] } } }))
+  write(join(dir, 'b.json'), JSON.stringify({ persona: 'test-verification-engineer', harness: 'claude', cases: { 'seeded-toggle-all': { runs: [ run('The test checks only the length with toBe(2), so it never checks read.') ] } } }))
+  const report = await union(join(dir, 'a.json'), join(dir, 'b.json'), root, 'test', dir)
+  assert.equal(report.cases['seeded-toggle-all'].runs[0].score, 1)
+  assert.equal(report.cases['seeded-toggle-all'].runs[0].tokens, 20)
 })

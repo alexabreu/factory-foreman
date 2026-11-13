@@ -200,8 +200,39 @@ async function regrade(file, casesRoot) {
   console.log(`${report.label}: ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} after regrading`)
 }
 
+// The slice row: what a slice gets from two personas together, graded as one
+// review. Runs are paired by case and run number from two stored reports, their
+// replies joined, and graded against both personas' checks for that case. No
+// model calls; seconds are the slower of the pair (they run in parallel) and
+// tokens add up.
+export async function union(fileA, fileB, casesRoot, label, outDir) {
+  const [ a, b ] = [ fileA, fileB ].map((f) => JSON.parse(readFileSync(f, 'utf8')))
+  const report = { label, persona: `${a.persona}+${b.persona}`, harness: a.harness, from: [ fileA, fileB ], at: new Date().toISOString(), cases: {} }
+  for (const id of Object.keys(a.cases).filter((k) => b.cases[k])) {
+    const criteria = []
+    for (const persona of [ a.persona, b.persona ]) {
+      const dir = join(resolve(casesRoot), persona, id)
+      if (existsSync(dir)) for (const c of (await loadCase(dir, resolve(casesRoot))).criteria) if (!criteria.some((x) => x.text === c.text)) criteria.push(c)
+    }
+    const runs = a.cases[id].runs.map((ra) => [ ra, b.cases[id].runs.find((rb) => rb.k === ra.k) ]).filter(([ ra, rb ]) => rb && !ra.error && !rb.error).map(([ ra, rb ]) => {
+      const output = `${reply(ra.output).stdout}\n\n${reply(rb.output).stdout}`
+      return { k: ra.k, ms: Math.max(ra.ms, rb.ms), tokens: ra.tokens != null && rb.tokens != null ? ra.tokens + rb.tokens : null, ...grade(output, criteria), output }
+    })
+    report.cases[id] = { ...summarize(runs.map((r) => r.score)), tokens: mean(runs.map((r) => r.tokens)), seconds: mean(runs.map((r) => r.ms / 1000)), runs }
+  }
+  const cs = Object.values(report.cases)
+  report.overall = { ...summarize(cs.flatMap((c) => c.runs.map((r) => r.score))), tokens: mean(cs.map((c) => c.tokens)), seconds: mean(cs.map((c) => c.seconds)) }
+  mkdirSync(outDir, { recursive: true })
+  const file = join(outDir, `slice-${label}-${report.at.replace(/[:.]/g, '-')}.json`)
+  writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`)
+  console.log(`${label}: ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} over ${report.overall.n} paired run(s). ${file}`)
+  return report
+}
+
 async function main(argv) {
   if (argv[0] === '--regrade') return regrade(argv[1], argv[3] ?? join(here, 'cases'))
+  // --union <a.json> <b.json> <cases> <label> <out>
+  if (argv[0] === '--union') return union(argv[1], argv[2], argv[3], argv[4], argv[5])
   const opts = parseArgs(argv)
   const dir = join(resolve(opts.cases), opts.persona)
   if (!existsSync(dir)) throw new Error(`No cases for ${opts.persona} in ${dir}`)
