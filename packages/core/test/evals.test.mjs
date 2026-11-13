@@ -174,3 +174,16 @@ test('test-quality checks live in the test engineer\'s cases, and the slice row 
   assert.equal(report.cases['seeded-toggle-all'].runs[0].score, 1)
   assert.equal(report.cases['seeded-toggle-all'].runs[0].tokens, 20)
 })
+
+test('in a slice row, a check marked own judges only its persona\'s reply', async () => {
+  const { union } = await import('../evals/run.mjs')
+  const { mkdtempSync, writeFileSync: write } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const root = join(import.meta.dirname, '..', 'evals', 'cases')
+  const dir = mkdtempSync(join(tmpdir(), 'ff-own-'))
+  const run = (output) => ({ k: 1, ms: 1, tokens: 1, output })
+  write(join(dir, 'a.json'), JSON.stringify({ persona: 'code-reviewer', cases: { 'bait-clean-copy': { runs: [ run('[]') ] } } }))
+  write(join(dir, 'b.json'), JSON.stringify({ persona: 'test-verification-engineer', cases: { 'bait-clean-copy': { runs: [ run('[{"id":"t","severity":"major","text":"toBe(list) proves identity, not contents","where":"src/reading-list.test.ts:12"}]') ] } } }))
+  const r = await union(join(dir, 'a.json'), join(dir, 'b.json'), root, 'own', dir)
+  assert.equal(r.cases['bait-clean-copy'].runs[0].results.find((c) => /above minor/u.test(c.text)).passed, true)
+})

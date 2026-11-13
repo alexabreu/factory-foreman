@@ -205,17 +205,24 @@ async function regrade(file, casesRoot) {
 // replies joined, and graded against both personas' checks for that case. No
 // model calls; seconds are the slower of the pair (they run in parallel) and
 // tokens add up.
+const SEP = '\n\n<!-- next reviewer -->\n\n'
 export async function union(fileA, fileB, casesRoot, label, outDir) {
   const [ a, b ] = [ fileA, fileB ].map((f) => JSON.parse(readFileSync(f, 'utf8')))
   const report = { label, persona: `${a.persona}+${b.persona}`, harness: a.harness, from: [ fileA, fileB ], at: new Date().toISOString(), cases: {} }
   for (const id of Object.keys(a.cases).filter((k) => b.cases[k])) {
+    // A check marked `own` is judged on its persona's reply alone; the rest on both.
     const criteria = []
-    for (const persona of [ a.persona, b.persona ]) {
+    for (const [ persona, side ] of [ [ a.persona, 0 ], [ b.persona, 1 ] ]) {
       const dir = join(resolve(casesRoot), persona, id)
-      if (existsSync(dir)) for (const c of (await loadCase(dir, resolve(casesRoot))).criteria) if (!criteria.some((x) => x.text === c.text)) criteria.push(c)
+      if (existsSync(dir)) {
+        for (const c of (await loadCase(dir, resolve(casesRoot))).criteria) {
+          if (criteria.some((x) => x.text === c.text)) continue
+          criteria.push(c.own ? { ...c, check: (o) => c.check(o.split(SEP)[side]) } : c)
+        }
+      }
     }
     const runs = a.cases[id].runs.map((ra) => [ ra, b.cases[id].runs.find((rb) => rb.k === ra.k) ]).filter(([ ra, rb ]) => rb && !ra.error && !rb.error).map(([ ra, rb ]) => {
-      const output = `${reply(ra.output).stdout}\n\n${reply(rb.output).stdout}`
+      const output = `${reply(ra.output).stdout}${SEP}${reply(rb.output).stdout}`
       return { k: ra.k, ms: Math.max(ra.ms, rb.ms), tokens: ra.tokens != null && rb.tokens != null ? ra.tokens + rb.tokens : null, ...grade(output, criteria), output }
     })
     report.cases[id] = { ...summarize(runs.map((r) => r.score)), tokens: mean(runs.map((r) => r.tokens)), seconds: mean(runs.map((r) => r.ms / 1000)), runs }
