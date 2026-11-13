@@ -213,3 +213,12 @@ test('a run that errors is retried; a case with a run that never completes is in
   assert.deepEqual(report.incomplete, [ 'down' ])
   assert.equal(report.overall.n, 1)
 })
+
+test('round 2 cases: the in-between check reads either word order, and the retired clean case is kept but not run', async () => {
+  const tve = (await import('../evals/cases/test-verification-engineer/seeded-remove-undo/criteria.mjs')).default
+  const between = tve.find((c) => /added between/u.test(c.text))
+  assert.equal(between.check('AC-2 explicitly requires undo after an intervening addition, but this test immediately calls undo').passed, true)
+  assert.equal(between.check('remove() mutates the list it was given').passed, false)
+  const retired = JSON.parse(readFileSync(new URL('../evals/cases/test-verification-engineer/clean-strong-tests/scenario.json', import.meta.url), 'utf8'))
+  assert.ok(retired.retired)
+})

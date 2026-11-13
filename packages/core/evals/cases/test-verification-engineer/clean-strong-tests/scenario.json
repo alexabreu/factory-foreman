@@ -3,5 +3,10 @@
   "persona": "test-verification-engineer",
   "source": "Synthetic, against the public sample app. A correct slice whose tests are strong: contents checked with toEqual, a three-book list, the input checked unchanged, both edges of AC-2, and red-at-base output given. Bait: nothing to fix. Measures the test engineer's false alarms. Added 13 Nov, before any variant ran on it.",
   "task": "Review this slice's tests as the test verification engineer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
-  "inputs": [ "files/pr.md", "files/pr.diff" ]
+  "inputs": [
+    "files/pr.md",
+    "files/pr.diff"
+  ],
+  "retired": "round 2 (13 Nov): not clean under the persona's falsifier rule; replaced by clean-strong-tests-v2",
+  "notes": "Retired 13 Nov after round 1. Every Claude run found a real gap: AC-1's test has one read book, so a function removing only the first read book passes, and the criterion says books. One Codex run noted that the new-list identity isn't checked. Its round-1 results stay recorded as invalid for precision. v2 fixes both."
 }
