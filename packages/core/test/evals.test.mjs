@@ -222,3 +222,9 @@ test('round 2 cases: the in-between check reads either word order, and the retir
   const retired = JSON.parse(readFileSync(new URL('../evals/cases/test-verification-engineer/clean-strong-tests/scenario.json', import.meta.url), 'utf8'))
   assert.ok(retired.retired)
 })
+
+test('round 3: the tautology check reads the phrasings round 2 undercounted', async () => {
+  const c = (await import('../evals/cases/test-verification-engineer/seeded-mock-and-tautology/criteria.mjs')).default.find((x) => /never fail/u.test(x.text))
+  for (const said of [ 'toBeGreaterThanOrEqual(0)` holds for any array, so no input can make it fail', 'toBeGreaterThanOrEqual(0)` holds for every array', "AC-1's length >= 0 assertion cannot fail for any array", 'toBeGreaterThanOrEqual(0)` can\'t fail, because an array\'s length is never negative' ]) assert.equal(c.check(said).passed, true, said)
+  assert.equal(c.check('The test mocks clearRead, so it never runs the real function').passed, false)
+})
