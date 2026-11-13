@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Flags that the clear button has no accessible name",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The trash icon button should have a tooltip on hover so sighted mouse users know what it does.\", \"where\": \"#toolbar > button:nth-child(2)\"}]"
+    },
+    {
+      "line": "Flags that clearing has no undo although the Design promises one",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"After clearing, the list re-renders instantly; a short fade would make the change easier to follow.\", \"where\": \"snapshot.md\"}]"
+    },
+    {
+      "line": "Cites the measured contrast, 2.9:1",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The icon's grey looks a little light; consider a darker grey for a stronger look.\", \"where\": \"#toolbar > button:nth-child(2) svg\"}]"
+    },
+    {
+      "line": "Says where focus goes after clearing",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Focus handling looks fine: the button keeps its focus ring style from the design system.\", \"where\": \"toolbar\"}]"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "seeded-built-clear",
+  "persona": "ux-designer",
+  "source": "Synthetic, against the public sample app. Seeded: the built button is icon-only with no accessible name; clearing has no undo although the Design promises it; axe measures the icon's contrast at 2.9:1. Added 13 Nov for step 5, before any variant ran on it.",
+  "task": "Review the built screen for this slice as the UX designer. The Design's visual behavior, the browser's accessibility snapshot of the built screen, and its axe report are below (the screenshots are summarized in the snapshot). Report findings only for things that should change, each with where it is, what the person would experience, and the fix.",
+  "inputs": [
+    "files/visual-behavior.md",
+    "files/snapshot.md",
+    "files/axe.json"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix."
+}

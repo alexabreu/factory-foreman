@@ -1,0 +1,12 @@
+{
+  "id": "clean-design-sort",
+  "persona": "software-architect",
+  "source": "Synthetic, against the public sample app. A sound Design: it reuses compareTitles, names only files that exist or are new, gives the force that rejected the option, and each slice owns its criteria. Bait: nothing to settle. Measures false alarms. Added 13 Nov for step 5, before any variant ran on it.",
+  "task": "Review this Design as the software architect. The Shape, the Design and the code it touches are below. Report findings only for things the author must settle, each with where it is, why it matters, and the smallest change that fixes it.",
+  "inputs": [
+    "files/shape.md",
+    "files/design.md",
+    "files/code.md"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix."
+}

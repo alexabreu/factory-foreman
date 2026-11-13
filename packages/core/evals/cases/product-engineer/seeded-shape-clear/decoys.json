@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Flags the CSV export criterion as serving nobody the issue names",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"AC-2's CSV download should name the file, for example reading-list-cleared.csv, so people can find it.\", \"where\": \"shape.md, AC-2\"}]"
+    },
+    {
+      "line": "Flags the CSV export criterion as serving nobody the issue names",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The CSV in AC-2 should include each book's id and read date, so the export is complete.\", \"where\": \"shape.md, AC-2\"}]"
+    },
+    {
+      "line": "Flags that AC-3 decides confirm-versus-undo, which the Shape lists as undecided",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"AC-3's confirmation text 'Clear 3 read books?' should use the real count rather than 3.\", \"where\": \"shape.md, AC-3\"}]"
+    },
+    {
+      "line": "Asks for real example values in AC-1",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"AC-1 is clear and testable as written; it covers the main path.\", \"where\": \"shape.md, AC-1\"}]"
+    }
+  ]
+}

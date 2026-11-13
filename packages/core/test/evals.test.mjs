@@ -266,7 +266,10 @@ test('a quote matches a JSON reply whose quotation marks are escaped', async () 
 test('every public recall case has 3 or 4 decoys, each aimed at one of its recall lines', async () => {
   const { isRecall } = await import('../evals/lib/judge.mjs')
   const root = join(import.meta.dirname, '..', 'evals', 'cases')
-  for (const c of [ 'code-reviewer/seeded-remove-undo', 'code-reviewer/seeded-toggle-all', 'test-verification-engineer/seeded-remove-undo', 'test-verification-engineer/seeded-toggle-all', 'test-verification-engineer/seeded-mock-and-tautology' ]) {
+  // Every seeded case of a reviewer persona has decoys; clean cases have no recall lines.
+  const seeded = readdirSync(root).flatMap((p) => readdirSync(join(root, p)).filter((id) => id.startsWith('seeded-')).map((id) => `${p}/${id}`))
+  assert.ok(seeded.length >= 8)
+  for (const c of seeded) {
     const { decoys } = JSON.parse(readFileSync(join(root, c, 'decoys.json'), 'utf8'))
     const lines = (await import(pathToFileURL(join(root, c, 'criteria.mjs')).href)).default.filter(isRecall).map((x) => x.text)
     assert.ok(decoys.length >= 3 && decoys.length <= 4, c)

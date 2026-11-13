@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Names compareTitles in src/reading-list.ts as the existing comparator to reuse instead of a new one",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"src/reading-list.ts already exports compareTitles; the Design should add a comment there pointing readers to the new sorting module.\", \"where\": \"src/reading-list.ts\"}]"
+    },
+    {
+      "line": "Names compareTitles in src/reading-list.ts as the existing comparator to reuse instead of a new one",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"titleOrder lowercases both titles; compareTitles uses localeCompare, so the new comparator is the faster of the two and should replace compareTitles everywhere.\", \"where\": \"design.md\"}]"
+    },
+    {
+      "line": "Flags that src/list-store.ts, named as existing, isn't in the repository",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Slice 2 changes src/list-store.ts; it should also update that file's tests.\", \"where\": \"design.md, slice 2\"}]"
+    },
+    {
+      "line": "Flags that 'simpler' alone is not a reason for the rejected option",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The rejected option is described clearly: a separate module is simpler, which is a good reason to keep sorting out of reading-list.ts.\", \"where\": \"design.md, Rejected\"}]"
+    }
+  ]
+}

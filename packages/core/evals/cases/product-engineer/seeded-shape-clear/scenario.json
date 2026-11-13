@@ -1,0 +1,11 @@
+{
+  "id": "seeded-shape-clear",
+  "persona": "product-engineer",
+  "source": "Synthetic, against the public sample app. Seeded: a criterion (CSV export) serves nobody the issue names; AC-3 decides confirm-versus-undo, which the Shape itself lists as undecided; AC-1 has no example values. Added 13 Nov for step 5, before any variant ran on it.",
+  "task": "Review this Shape as the product engineer. The issue and the Shape are below. Report findings only for things the author must settle, each with where it is, why it matters, and the smallest change that fixes it.",
+  "inputs": [
+    "files/issue.md",
+    "files/shape.md"
+  ],
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix."
+}
