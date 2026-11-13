@@ -22,10 +22,12 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { excerpts } from './lib/excerpts.mjs'
 import { findingsFrom } from './lib/findings.mjs'
 import { grade, summarize } from './lib/grade.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const meanUsage = (us) => (us.length && us.every(Boolean) ? Object.fromEntries(Object.keys(us[0]).map((k) => [ k, us.reduce((t, u) => t + u[k], 0) / us.length ])) : null)
 const mean = (xs) => (xs.length && xs.every((x) => typeof x === 'number') ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
 
 export function parseArgs(argv) {
@@ -83,8 +85,9 @@ export function reply(stdout, stderr = '') {
     const j = JSON.parse(stdout)
     if (j && typeof j.result === 'string') {
       const u = j.usage ?? {}
-      const tokens = [ 'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens' ].reduce((t, k) => t + (u[k] ?? 0), 0)
-      return { stdout: j.result, tokens: tokens || null, costUsd: j.total_cost_usd ?? null }
+      const usage = { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheCreation: u.cache_creation_input_tokens ?? 0 }
+      const tokens = usage.input + usage.output + usage.cacheRead + usage.cacheCreation
+      return { stdout: j.result, tokens: tokens || null, usage, costUsd: j.total_cost_usd ?? null }
     }
   } catch { /* plain text */ }
   const m = /tokens used\s*:?\s*([\d,]+)/iu.exec(`${stderr}\n${stdout}`)
@@ -94,8 +97,16 @@ export function reply(stdout, stderr = '') {
 // What the verifier is told about its input and output in an eval.
 export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected|merged), "reason", "into" for a merged one, and "ask" (kept from the lens, or added when lenses disagree) when the person needs to decide. Add any "Found while verifying" entries.'
 
+// The verifier's brief: the task, every input that isn't a diff (the change
+// description and criteria), and only the diff lines around each finding, not
+// the whole diff. It reads further only when that doesn't settle a finding.
 export function verifierPrompt(verifierText, scenario, readInput, findings) {
-  return prompt(verifierText, scenario, readInput).replace(`${OUTPUT}\n`, `# Findings to verify\n\n${JSON.stringify(findings, null, 2)}\n\n${VERIFY}\n`)
+  const instructions = verifierText.replace(/^---\n[\s\S]*?\n---\n/, '').trim()
+  const inputs = scenario.inputs.map((f) => {
+    const text = readInput(f)
+    return /\.(diff|patch)$/u.test(f) ? `<excerpts from="${f}">\n${excerpts(text, findings)}\n</excerpts>` : `<file path="${f}">\n${text}\n</file>`
+  }).join('\n\n')
+  return `${instructions}\n\n# Task\n\n${scenario.task}\n\n${inputs}\n\n# Findings to verify\n\n${JSON.stringify(findings, null, 2)}\n\n${VERIFY}\n`
 }
 
 // One pipeline run: every lens in parallel, then the verifier. Returns the kept
@@ -106,23 +117,27 @@ async function pipelineRun(opts, lensTexts, verifierText, scenario, readInput) {
   const failed = lensRuns.find((r) => r.code !== 0)
   if (failed) return { error: `${failed.name}: ${failed.stderr.trim().split('\n').at(-1)}`, lensRuns }
   const findings = lensRuns.flatMap(({ name, stdout }) => (findingsFrom(stdout) ?? []).map((f) => ({ ...f, id: `${name}/${f.id ?? 'finding'}` })))
-  const v = findings.length ? await ask(argv, verifierPrompt(verifierText, scenario, readInput, findings)) : { code: 0, stdout: '[]', tokens: 0, ms: 0 }
+  const v = findings.length ? await ask(argv, verifierPrompt(verifierText, scenario, readInput, findings)) : { code: 0, stdout: '[]', tokens: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }, costUsd: 0, ms: 0 }
   if (v.code !== 0) return { error: `verifier: ${v.stderr.trim().split('\n').at(-1)}`, lensRuns }
   const judged = findingsFrom(v.stdout) ?? []
   // Rejected and merged findings stay in the record but aren't graded: a merged one
   // lives on in the finding it was merged into.
   const kept = judged.filter((f) => f.outcome !== 'rejected' && f.outcome !== 'merged')
   const sum = (k) => [ ...lensRuns, v ].reduce((t, r) => (t === null || r[k] == null ? null : t + r[k]), 0)
+  const usage = [ ...lensRuns, v ].reduce((t, r) => (t && r.usage ? Object.fromEntries(Object.entries(t).map(([ k, x ]) => [ k, x + r.usage[k] ])) : null), { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
   return {
     output: JSON.stringify(kept),
     ms: Math.max(...lensRuns.map((r) => r.ms)) + v.ms,
     tokens: sum('tokens'),
+    usage,
+    costUsd: sum('costUsd'),
+    calls: lensRuns.length + (findings.length ? 1 : 0),
     lensFindings: findings.length,
     rejected: judged.filter((f) => f.outcome === 'rejected').length,
     merged: judged.filter((f) => f.outcome === 'merged').length,
     unanswered: Math.max(0, findings.length - judged.filter((f) => !/^found while verifying/iu.test(f.text ?? '')).length),
     asks: kept.filter((f) => f.ask).length,
-    steps: [ ...lensRuns.map((r) => ({ name: r.name, ms: r.ms, tokens: r.tokens, output: r.stdout })), { name: 'verifier', ms: v.ms, tokens: v.tokens, output: v.stdout } ],
+    steps: [ ...lensRuns.map((r) => ({ name: r.name, ms: r.ms, tokens: r.tokens, usage: r.usage, costUsd: r.costUsd, output: r.stdout })), { name: 'verifier', ms: v.ms, tokens: v.tokens, usage: v.usage, costUsd: v.costUsd, output: v.stdout } ],
   }
 }
 
@@ -203,19 +218,20 @@ async function main(argv) {
       let run
       if (lensTexts) {
         const p = await pipelineRun(opts, lensTexts, verifierText, scenario, readInput)
-        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, lensFindings: p.lensFindings, rejected: p.rejected, merged: p.merged, unanswered: p.unanswered, asks: p.asks, ...grade(p.output, criteria), output: p.output, steps: p.steps }
+        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, usage: p.usage, costUsd: p.costUsd, calls: p.calls, lensFindings: p.lensFindings, rejected: p.rejected, merged: p.merged, unanswered: p.unanswered, asks: p.asks, ...grade(p.output, criteria), output: p.output, steps: p.steps }
       } else {
         const r = await ask(command(opts.harness, opts.model), text)
-        run = r.code === 0 ? { k, ms: r.ms, tokens: r.tokens, ...grade(r.stdout, criteria), output: r.stdout } : { k, ms: r.ms, error: r.stderr.trim().split('\n').at(-1) }
+        run = r.code === 0 ? { k, ms: r.ms, tokens: r.tokens, usage: r.usage, costUsd: r.costUsd, calls: 1, ...grade(r.stdout, criteria), output: r.stdout } : { k, ms: r.ms, error: r.stderr.trim().split('\n').at(-1) }
       }
       runs.push(run)
       console.log(`${id} run ${k}: ${run.error ? `error (${run.error})` : `${(run.score * 100).toFixed(0)}%, ${(run.ms / 1000).toFixed(0)} s, ${run.tokens ?? '?'} tokens`}`)
     }
     const scored = runs.filter((r) => !r.error)
-    report.cases[id] = { ...summarize(scored.map((r) => r.score)), errors: runs.length - scored.length, tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
+    report.cases[id] = { ...summarize(scored.map((r) => r.score)), errors: runs.length - scored.length, tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), costUsd: mean(scored.map((r) => r.costUsd)), usage: meanUsage(scored.map((r) => r.usage)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
   }
   const all = Object.values(report.cases).flatMap((c) => c.runs.filter((r) => !r.error).map((r) => r.score))
-  report.overall = { ...summarize(all), tokens: mean(Object.values(report.cases).map((c) => c.tokens)), seconds: mean(Object.values(report.cases).map((c) => c.seconds)) }
+  const cs = Object.values(report.cases)
+  report.overall = { ...summarize(all), tokens: mean(cs.map((c) => c.tokens)), seconds: mean(cs.map((c) => c.seconds)), costUsd: mean(cs.map((c) => c.costUsd)), usage: meanUsage(cs.map((c) => c.usage)) }
   mkdirSync(opts.out, { recursive: true })
   const file = join(opts.out, `${opts.persona}-${opts.label}-${report.at.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`)

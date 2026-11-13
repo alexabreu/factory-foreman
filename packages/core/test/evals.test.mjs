@@ -112,15 +112,18 @@ test('evidence for the remove-undo case: with an appending add(), undo by stored
 test('replies give their text and tokens: Claude JSON usage, Codex "tokens used", or plain text with none', async () => {
   const { reply } = await import('../evals/run.mjs')
   const claude = reply(JSON.stringify({ result: '[]', usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }, total_cost_usd: 0.01 }))
-  assert.deepEqual(claude, { stdout: '[]', tokens: 115, costUsd: 0.01 })
+  assert.deepEqual(claude, { stdout: '[]', tokens: 115, usage: { input: 10, output: 5, cacheRead: 100, cacheCreation: 0 }, costUsd: 0.01 })
   assert.equal(reply('[]', 'tokens used\n12,345\n').tokens, 12345)
   assert.deepEqual(reply('[{"id":"a"}]'), { stdout: '[{"id":"a"}]', tokens: null, costUsd: null })
 })
 
 test('the verifier gets the case, the lens findings and its own output contract instead of the finders\'', async () => {
   const { verifierPrompt, OUTPUT, VERIFY } = await import('../evals/run.mjs')
-  const text = verifierPrompt('---\nname: v\n---\nJudge.', { task: 'Review.', inputs: [ 'a.diff' ] }, () => 'diff', [ { id: 'correctness-lens/x', text: 'bug' } ])
+  const read = (f) => (f === 'pr.md' ? 'AC-1: it works' : DIFF)
+  const text = verifierPrompt('---\nname: v\n---\nJudge.', { task: 'Review.', inputs: [ 'pr.md', 'pr.diff' ] }, read, [ { id: 'correctness-lens/x', text: 'bug', where: 'src/a.ts:40' } ])
   assert.ok(text.includes('correctness-lens/x') && text.includes(VERIFY) && !text.includes(OUTPUT))
+  assert.ok(text.includes('AC-1: it works'), 'the description goes whole')
+  assert.ok(text.includes('line 40') && !text.includes('line 2\n'), 'the diff goes as excerpts')
 })
 
 test('the verifier is told to keep a lens\'s ask and to add one when lenses disagree', async () => {
@@ -133,4 +136,19 @@ test('options are checked, so flags passed as one argument fail instead of runni
   assert.throws(() => parseArgs([ '--persona', 'p', '--lenses a.md --verifier v.md', '--label', 'x' ]), /Unknown option/u)
   assert.throws(() => parseArgs([ '--persona', 'p', '--lenses', 'a.md' ]), /needs --verifier/u)
   assert.equal(parseArgs([ '--persona', 'p', '--lenses', 'a.md', '--verifier', 'v.md' ]).verifier, 'v.md')
+})
+
+// A diff of src/a.ts with 80 lines, every one added, so new line n reads "line n".
+const DIFF = [ 'diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -0,0 +1,80 @@', ...Array.from({ length: 80 }, (_, i) => `+line ${i + 1}`) ].join('\n')
+
+test('excerpts keep the lines around each finding, the headers, and name what the diff lacks', async () => {
+  const { excerpts } = await import('../evals/lib/excerpts.mjs')
+  const out = excerpts(DIFF, [ { where: 'src/a.ts:40' }, { where: 'src/b.ts:3' } ], 5)
+  assert.match(out, /\+\+\+ b\/src\/a\.ts/u)
+  assert.match(out, /@@ -0,0 \+1,80 @@/u)
+  for (const n of [ 35, 40, 45 ]) assert.match(out, new RegExp(`\\+line ${n}\\n|\\+line ${n}$`, 'u'))
+  assert.doesNotMatch(out, /\+line 34\n/u)
+  assert.doesNotMatch(out, /\+line 46\n/u)
+  assert.match(out, /Not in the diff: src\/b\.ts:3/u)
+  assert.match(excerpts(DIFF, [ { where: 'src/a.ts' } ]), /\+line 80/u, 'no line: the whole file section')
 })
