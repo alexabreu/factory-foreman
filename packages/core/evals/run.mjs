@@ -87,7 +87,7 @@ export function reply(stdout, stderr = '') {
 }
 
 // What the verifier is told about its input and output in an eval.
-export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected|merged), "reason", and "into" for a merged one.'
+export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected|merged), "reason", "into" for a merged one, and "ask" (kept from the lens, or added when lenses disagree) when the person's call is needed. Add any "Found while verifying" entries.'
 
 export function verifierPrompt(verifierText, scenario, readInput, findings) {
   return prompt(verifierText, scenario, readInput).replace(`${OUTPUT}\n`, `# Findings to verify\n\n${JSON.stringify(findings, null, 2)}\n\n${VERIFY}\n`)
@@ -115,7 +115,8 @@ async function pipelineRun(opts, lensTexts, verifierText, scenario, readInput) {
     lensFindings: findings.length,
     rejected: judged.filter((f) => f.outcome === 'rejected').length,
     merged: judged.filter((f) => f.outcome === 'merged').length,
-    unanswered: findings.length - judged.length,
+    unanswered: Math.max(0, findings.length - judged.filter((f) => !/^found while verifying/iu.test(f.text ?? '')).length),
+    asks: kept.filter((f) => f.ask).length,
     steps: [ ...lensRuns.map((r) => ({ name: r.name, ms: r.ms, tokens: r.tokens, output: r.stdout })), { name: 'verifier', ms: v.ms, tokens: v.tokens, output: v.stdout } ],
   }
 }
@@ -197,7 +198,7 @@ async function main(argv) {
       let run
       if (lensTexts) {
         const p = await pipelineRun(opts, lensTexts, verifierText, scenario, readInput)
-        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, lensFindings: p.lensFindings, rejected: p.rejected, merged: p.merged, unanswered: p.unanswered, ...grade(p.output, criteria), output: p.output, steps: p.steps }
+        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, lensFindings: p.lensFindings, rejected: p.rejected, merged: p.merged, unanswered: p.unanswered, asks: p.asks, ...grade(p.output, criteria), output: p.output, steps: p.steps }
       } else {
         const r = await ask(command(opts.harness, opts.model), text)
         run = r.code === 0 ? { k, ms: r.ms, tokens: r.tokens, ...grade(r.stdout, criteria), output: r.stdout } : { k, ms: r.ms, error: r.stderr.trim().split('\n').at(-1) }

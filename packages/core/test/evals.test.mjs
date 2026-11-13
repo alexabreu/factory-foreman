@@ -122,3 +122,9 @@ test('the verifier gets the case, the lens findings and its own output contract 
   const text = verifierPrompt('---\nname: v\n---\nJudge.', { task: 'Review.', inputs: [ 'a.diff' ] }, () => 'diff', [ { id: 'correctness-lens/x', text: 'bug' } ])
   assert.ok(text.includes('correctness-lens/x') && text.includes(VERIFY) && !text.includes(OUTPUT))
 })
+
+test('the verifier is told to keep a lens\'s ask and to add one when lenses disagree', async () => {
+  const { VERIFY } = await import('../evals/run.mjs')
+  assert.match(VERIFY, /"ask"/u)
+  assert.match(VERIFY, /Found while verifying/u)
+})
