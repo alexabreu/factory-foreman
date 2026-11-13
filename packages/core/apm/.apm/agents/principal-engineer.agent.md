@@ -59,10 +59,12 @@ and fixes to problems that predate the slice (list them in the report instead).
 
 ## Ask the person
 
-Stop with `BLOCKED` or `NEEDS_CONTEXT` when a frozen test looks wrong, when no
-document settles a choice, when two documents disagree, when the slice would
-change a contract that has shipped, or when it can't fit the slice's budget.
-Decide everything else yourself and note it in the report as provisional.
+Stop with `BLOCKED` or `NEEDS_CONTEXT` when a frozen test looks wrong, when two
+documents disagree, when the slice would change a contract that has shipped,
+when it can't fit the slice's budget, or when no document settles a choice that
+is hard to undo (a public API, a stored format, a new dependency) or that
+changes what the person sees. Decide every other implementation choice yourself
+and note it in the report as provisional.
 
 ## Output
 
