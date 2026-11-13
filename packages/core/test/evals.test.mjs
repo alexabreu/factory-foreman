@@ -240,3 +240,18 @@ test('the implementer\'s status is read from its STATUS line; a case can name it
   const text = prompt('---\nname: x\n---\nBuild.', { task: 'T', inputs: [], output: 'Reply with STATUS first.' }, () => '')
   assert.ok(text.endsWith('Reply with STATUS first.\n'))
 })
+
+test('the judge keeps a pass only when its quote is really in the reply, and only recall checks go to it', async () => {
+  const { verdicts, isRecall, judgePrompt } = await import('../evals/lib/judge.mjs')
+  const replies = [ { id: 'R1', text: 'The test mocks `clearRead`, so it never runs the real function.' }, { id: 'R2', text: 'Looks fine.' } ]
+  const judged = JSON.stringify([ { reply: 'R1', line: 1, pass: true, quote: 'The test mocks clearRead' }, { reply: 'R2', line: 1, pass: true, quote: 'the test mocks clearRead' } ])
+  const v = verdicts(judged, replies, 1)
+  assert.equal(v.R1[0].pass, true)
+  assert.deepEqual([ v.R2[0].pass, v.R2[0].why ], [ false, 'quote not in the reply' ])
+  const crit = (await import('../evals/cases/code-reviewer/bait-clean-copy/criteria.mjs')).default
+  assert.equal(crit.filter(isRecall).length, 0, 'precision checks stay as code')
+  const tve = (await import('../evals/cases/test-verification-engineer/seeded-mock-and-tautology/criteria.mjs')).default
+  assert.deepEqual(tve.map(isRecall), [ true, true, true, false ], 'the citation check stays as code')
+  const p = judgePrompt({ inputs: [ 'a.diff' ] }, () => 'DIFF', [ 'Finds X' ], replies)
+  assert.ok(p.includes('<reply id="R2">') && p.includes('1. Finds X') && !/claude|codex|variant|contract/iu.test(p.split('# Replies')[1]))
+})

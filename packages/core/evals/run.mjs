@@ -70,6 +70,9 @@ export function command(harness, model) {
   throw new Error(`Unknown harness ${harness}; use claude or codex`)
 }
 
+// One call to a harness, for tools beside the runner (the judge's calibration).
+export const askHarness = (harness, model, input) => ask(command(harness, model), input)
+
 function ask(argv, input, timeoutMs = 600_000) {
   return new Promise((resolveRun) => {
     const started = Date.now()
