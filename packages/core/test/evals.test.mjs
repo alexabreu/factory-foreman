@@ -273,3 +273,29 @@ test('every public recall case has 3 or 4 decoys, each aimed at one of its recal
     for (const d of decoys) assert.ok(lines.includes(d.line), `${c}: ${d.line}`)
   }
 })
+
+test('with --judge, recall checks take the judge\'s verdict, the regex verdict stays beside it, and decoy passes are counted', async () => {
+  const { mkdtempSync, mkdirSync: mk, writeFileSync: write } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { judgeCase } = await import('../evals/run.mjs')
+  const tmp = mkdtempSync(join(tmpdir(), 'ff-judge-'))
+  const bin = join(tmp, 'bin'); mk(bin)
+  // A stand-in judge: passes line 1 for every reply, quoting "mocks clearRead".
+  write(join(bin, 'claude'), `#!/bin/sh\nin=$(cat)\nn=$(printf '%s' "$in" | grep -o '<reply id="R[0-9]*">' | wc -l | tr -d ' ')\nout='['\ni=1\nwhile [ $i -le $n ]; do out="$out{\\"reply\\":\\"R$i\\",\\"line\\":1,\\"pass\\":true,\\"quote\\":\\"mocks clearRead\\"},"; i=$((i+1)); done\nout="\${out%,}]"\nnode -e 'console.log(JSON.stringify({result: process.argv[1]}))' "$out"\n`, { mode: 0o755 })
+  const caseDir = join(tmp, 'case'); mk(caseDir)
+  write(join(caseDir, 'decoys.json'), JSON.stringify({ decoys: [ { line: 'Finds the mock', reply: 'Spying is fine; it mocks clearRead neatly.' } ] }))
+  const criteria = [ { text: 'Finds the mock', weight: 3, check: (o) => matches(o, /mocks clearRead/u) }, { text: 'Cites', weight: 1, check: () => ({ passed: true }) } ]
+  const runs = [ { k: 1, output: 'It never says so.', score: 0.25, results: [ { text: 'Finds the mock', weight: 3, passed: false, evidence: 'no' }, { text: 'Cites', weight: 1, passed: true } ] } ]
+  const saved = process.env.PATH
+  process.env.PATH = `${bin}:${saved}`
+  try {
+    const j = await judgeCase({ judge: 'claude' }, caseDir, { inputs: [] }, () => '', criteria, runs)
+    // The real reply doesn't contain the quote, so the judge's pass is refused.
+    assert.equal(runs[0].results[0].passed, false)
+    assert.equal(runs[0].results[0].by, 'judge')
+    assert.equal(runs[0].results[0].regexPassed, false)
+    assert.equal(runs[0].regexScore, 0.25)
+    // The decoy does contain it, so that's a counted false pass.
+    assert.equal(j.decoyFalsePasses, 1)
+  } finally { process.env.PATH = saved }
+})

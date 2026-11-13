@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { excerpts } from './lib/excerpts.mjs'
+import { isRecall, judgePrompt, verdicts } from './lib/judge.mjs'
 import { findingsFrom } from './lib/findings.mjs'
 import { grade, summarize } from './lib/grade.mjs'
 
@@ -37,7 +38,7 @@ const mean = (xs) => (xs.length && xs.every((x) => typeof x === 'number') ? xs.r
 
 export function parseArgs(argv) {
   const out = { cases: join(here, 'cases'), harness: 'claude', runs: 3, label: 'baseline', out: join(here, 'results') }
-  const known = [ 'persona', 'cases', 'agent', 'harness', 'model', 'runs', 'label', 'out', 'lenses', 'verifier' ]
+  const known = [ 'persona', 'cases', 'agent', 'harness', 'model', 'runs', 'label', 'out', 'lenses', 'verifier', 'judge', 'judge-model' ]
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].replace(/^--/, '')
     // An unknown flag (or several flags passed as one argument) would otherwise eat
@@ -245,6 +246,37 @@ export async function union(fileA, fileB, casesRoot, label, outDir) {
   return report
 }
 
+// With --judge, a case's recall checks are graded by the rubric judge: its
+// replies and the case's decoys go blind, in one call, and each recall result
+// becomes the judge's verdict (a pass needs a verbatim quote). The regex verdict
+// stays beside it for comparison, and structural checks stay as code. Any pass
+// on a decoy is a false pass, recorded with the case.
+export async function judgeCase(opts, caseDir, scenario, readInput, criteria, runs) {
+  const lines = criteria.filter(isRecall).map((c) => c.text)
+  if (!lines.length) return null
+  const decoyFile = join(caseDir, 'decoys.json')
+  const decoys = existsSync(decoyFile) ? JSON.parse(readFileSync(decoyFile, 'utf8')).decoys : []
+  const pool = [ ...runs.map((r) => ({ run: r, text: reply(r.output).stdout })), ...decoys.map((d) => ({ decoy: d, text: d.reply })) ]
+  // A fixed shuffle, so the judge can't tell runs from decoys by position.
+  const order = pool.map((p, i) => ({ p, key: (i * 7919 + 104729) % 1009 })).sort((a, b) => a.key - b.key).map((x, i) => ({ ...x.p, id: `R${i + 1}` }))
+  const r = await ask(command(opts.judge, opts['judge-model']), judgePrompt(scenario, readInput, lines, order))
+  if (r.code !== 0) return { error: r.stderr, lines }
+  const v = verdicts(r.stdout, order, lines.length)
+  for (const item of order.filter((x) => x.run)) {
+    const run = item.run
+    run.results = run.results.map((res) => {
+      const n = lines.indexOf(res.text)
+      if (n === -1) return res
+      return { ...res, passed: v[item.id][n].pass, evidence: v[item.id][n].pass ? `Judge: "${v[item.id][n].quote}"` : `Judge: ${v[item.id][n].why}`, regexPassed: res.passed, regexEvidence: res.evidence, by: 'judge' }
+    })
+    const total = run.results.reduce((t, x) => t + x.weight, 0)
+    run.regexScore = run.score
+    run.score = total ? run.results.reduce((t, x) => t + (x.passed ? x.weight : 0), 0) / total : 0
+  }
+  const decoyPasses = order.filter((x) => x.decoy).flatMap((x) => lines.map((line, n) => ({ line, named: line === x.decoy.line, passed: v[x.id][n].pass, quote: v[x.id][n].quote })).filter((d) => d.passed))
+  return { harness: opts.judge, model: opts['judge-model'] ?? 'default', lines, decoys: decoys.length, decoyFalsePasses: decoyPasses.length, decoyPasses, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd, raw: r.stdout }
+}
+
 async function main(argv) {
   if (argv[0] === '--regrade') return regrade(argv[1], argv[3] ?? join(here, 'cases'))
   // --union <a.json> <b.json> <cases> <label> <out>
@@ -287,7 +319,8 @@ async function main(argv) {
     const scored = runs.filter((r) => !r.error)
     // A case is scored only when every run completed; otherwise it's incomplete.
     const incomplete = scored.length < runs.length
-    report.cases[id] = { ...summarize(incomplete ? [] : scored.map((r) => r.score)), incomplete, errors: runs.length - scored.length, attemptErrors: runs.reduce((t, r) => t + (r.failures?.length ?? 0), 0), tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), costUsd: mean(scored.map((r) => r.costUsd)), usage: meanUsage(scored.map((r) => r.usage)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
+    const judged = opts.judge && !incomplete ? await judgeCase(opts, caseDir, scenario, readInput, criteria, scored) : null
+    report.cases[id] = { ...summarize(incomplete ? [] : scored.map((r) => r.score)), incomplete, ...(judged ? { judge: judged, regex: summarize(scored.map((r) => r.regexScore ?? r.score)) } : {}), errors: runs.length - scored.length, attemptErrors: runs.reduce((t, r) => t + (r.failures?.length ?? 0), 0), tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), costUsd: mean(scored.map((r) => r.costUsd)), usage: meanUsage(scored.map((r) => r.usage)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
   }
   const cs = Object.values(report.cases).filter((c) => !c.incomplete)
   const all = cs.flatMap((c) => c.runs.map((r) => r.score))
