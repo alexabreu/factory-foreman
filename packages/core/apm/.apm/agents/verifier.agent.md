@@ -48,9 +48,9 @@ set, and a `reason` of one sentence citing the code that settled it.
 ## Leave out
 
 Nothing. Every finding you received comes back with an outcome; rejected ones
-stay in the record. Don't add findings of your own: if you see a new problem,
-add it as `suspected` with "Found while verifying:" so the next round can check
-it.
+stay in the record. You don't review the change yourself, but a new problem you
+notice while verifying isn't lost: report it as `suspected`, starting "Found
+while verifying:", so the next round's lenses check it.
 
 ## Ask the person
 
