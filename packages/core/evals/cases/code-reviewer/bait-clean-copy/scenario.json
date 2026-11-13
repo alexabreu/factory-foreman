@@ -7,5 +7,5 @@
     "files/pr.md",
     "files/pr.diff"
   ],
-  "notes": "Changed 13 Nov, after results were seen: the test-quality checks moved from the code-reviewer case to the test-verification-engineer case of the same name. The persona contract (D51) gives test quality to the test engineer, and Codex's contract code reviewer followed that and was marked down for it on every run. Each persona is now graded on its own job; the slice row (--union) grades both together against the checks the case had before, so nothing a slice gets reviewed for was dropped. Stored outputs were re-scored, with no new code-reviewer runs."
+  "notes": "Changed 13 Nov, after results were seen: the test-quality checks moved from the code-reviewer case to the test-verification-engineer case of the same name. The persona contract (D51) gives test quality to the test engineer, and Codex's contract code reviewer followed that and was marked down for it on every run. Each persona is now graded on its own job; the slice row (--union) grades both together against the checks the case had before, so nothing a slice gets reviewed for was dropped. Stored outputs were re-scored, with no new code-reviewer runs. Case review (13 Nov, before any precision run; main and contract, Codex and Claude, k=1): no above-minor findings, so no changes."
 }

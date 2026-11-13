@@ -8,5 +8,6 @@
     "files/design.md",
     "files/code.md"
   ],
-  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix."
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file or section>\" }]. Reply [] when there is nothing to fix.",
+  "notes": "Case review (13 Nov, before any precision run; main and contract architect, Codex and Claude, k=1): the contract version on Claude found that `sorted(list)` didn't say whether it takes a ReadingList or items, and that `visible(list, 'all')` returns `list.items` itself, so an in-place sort would reorder the stored list; step 5's fresh runs had raised the same. Fixed: `sorted(items: Item[]): Item[]` copies before sorting, with a test that the input keeps its order, and main.ts composes it with visible(). Review runs are kept out of the results."
 }

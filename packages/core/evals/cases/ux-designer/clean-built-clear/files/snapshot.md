@@ -11,5 +11,6 @@ list "Reading list"
 ```
 
 After pressing "Clear read": the list shows "Dune" only. A status region announces "2 books cleared", with a button
-"Undo" beside it, for 10 seconds. Focus stays on "Clear read". Pressing "Undo" restores "Emma" and "Ubik" in their
-places and announces "2 books restored". With no book read, "Clear read" is disabled (aria-disabled="true").
+"Undo" beside it, for 10 seconds. Focus stays on "Clear read". Tabbing from "Clear read" reaches "Undo" next. While
+focus or the pointer is in the toast, its timer pauses. Pressing "Undo" restores "Emma" and "Ubik" in their places,
+announces "2 books restored", and returns focus to "Clear read". With no book read, "Clear read" is disabled (aria-disabled="true").

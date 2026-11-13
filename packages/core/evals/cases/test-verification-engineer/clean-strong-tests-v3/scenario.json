@@ -7,5 +7,5 @@
     "files/pr.md",
     "files/pr.diff"
   ],
-  "notes": "Replaces clean-strong-tests-v2 (retired after round 2, see its notes). Same checks as v1 and v2."
+  "notes": "Replaces clean-strong-tests-v2 (retired after round 2, see its notes). Same checks as v1 and v2. Case review (13 Nov, before any precision run; main and contract, Codex and Claude, k=1): no above-minor findings, so no changes."
 }
