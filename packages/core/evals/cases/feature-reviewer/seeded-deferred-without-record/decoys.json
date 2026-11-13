@@ -1,0 +1,17 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Says AC-3's deferral has no record of the person agreeing",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Slice 2's card explains the AC-3 deferral clearly; link the follow-up issue number so it's easy to find.\", \"where\": \"slice 2 card\"}]"
+    },
+    {
+      "line": "Says AC-3's deferral has no record of the person agreeing",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"D11 records the undo-versus-confirm decision well; it could also note the date format used elsewhere.\", \"where\": \"decisions.md\"}]"
+    },
+    {
+      "line": "Says the shipped Undo button does nothing",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The Undo button has the accessible name 'Undo', which matches the test; keep it.\", \"where\": \"e2e/reading-list.e2e.ts: AC-2\"}]"
+    }
+  ]
+}

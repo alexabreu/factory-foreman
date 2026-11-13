@@ -1,0 +1,14 @@
+{
+  "id": "clean-deferred-with-record",
+  "persona": "feature-reviewer",
+  "source": "Synthetic, against the public sample app. A clean feature where AC-3 is deferred with the person's recorded decision and the Undo button isn't shipped, so the verdicts are met, met, deferred. Bait: a deferral that looks like a gap. Measures false alarms. Added 13 Nov for the next round (harder cases), before any variant ran on it.",
+  "task": "Review this finished feature as the feature reviewer. The Shape, the Changelog, the decisions log, and every merged slice's tests and code are below.",
+  "inputs": [
+    "files/shape.md",
+    "files/changelog.md",
+    "files/decisions.md",
+    "files/slices.md"
+  ],
+  "output": "Reply with the JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line or slice>\" }] (or [] when there is nothing to fix), then a line \"VERDICTS:\" and a JSON array with one entry per criterion: [{ \"criterion\": \"AC-1\", \"verdict\": \"met|unmet|deferred\", \"tests\": [\"<file>: <test name>\"], \"slices\": [1] }].",
+  "notes": "Clean case: to be case-reviewed (every variant compared, both engines) and fixed before any precision run."
+}
