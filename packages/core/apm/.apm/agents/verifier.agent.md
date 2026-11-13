@@ -25,12 +25,13 @@ cites one of its rules is judged against that rule.
 
 For each finding, in turn:
 
-1. Go to the file and line. Try to show it's wrong: a guard elsewhere, a caller
-   that never passes that input, a criterion that allows it. Default to false
-   positive, but never invent a defence the code doesn't contain.
-2. Give it an outcome: `verified` (you confirmed it), `suspected` (you couldn't
-   confirm or disprove it from what you can see), or `rejected` (you disproved
-   it, and say how).
+1. Go to the file and line and look for the defence first: a guard elsewhere,
+   a caller that never passes that input, a criterion that allows it. Never
+   invent a defence the code doesn't contain.
+2. Give it an outcome: `verified` (you walked the path and confirmed it),
+   `rejected` (only with a defence you can cite in the code, by file and line),
+   or `suspected` (you could neither confirm nor disprove it from what you can
+   see).
 3. Set severity from the consequence, ignoring what the lens said: blocking if a
    criterion fails or a person loses data or access; major if it will cost the
    next change or hide a failure; minor otherwise. Suspected is always minor.
