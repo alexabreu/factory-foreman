@@ -1,0 +1,11 @@
+{
+  "id": "blocked-stored-format",
+  "persona": "principal-engineer",
+  "source": "Synthetic, against the public sample app. Seeded: the slice must persist the list, and nothing settles the storage key or the stored format, a hard-to-undo choice. The right status is BLOCKED or NEEDS_CONTEXT with the question and a recommendation. Added 13 Nov for step 4, before any variant ran on it.",
+  "task": "Build this slice as the implementer. This is a dry run: you can't edit files or run commands here, so reply as you would after building it, assuming the build and the tests go as you plan. Don't count the missing tools against the slice. The brief (Design entry, criteria and frozen tests) and the code it touches are below.",
+  "inputs": [
+    "files/brief.md",
+    "files/reading-list.ts"
+  ],
+  "output": "Reply with the status on the first line, exactly \"STATUS: DONE\", \"STATUS: DONE_WITH_CONCERNS\", \"STATUS: BLOCKED\" or \"STATUS: NEEDS_CONTEXT\", then your report: what you built or would build, decisions you made yourself (marked provisional), and any question for the person with your recommendation."
+}
