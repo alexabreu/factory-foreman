@@ -228,3 +228,15 @@ test('round 3: the tautology check reads the phrasings round 2 undercounted', as
   for (const said of [ 'toBeGreaterThanOrEqual(0)` holds for any array, so no input can make it fail', 'toBeGreaterThanOrEqual(0)` holds for every array', "AC-1's length >= 0 assertion cannot fail for any array", 'toBeGreaterThanOrEqual(0)` can\'t fail, because an array\'s length is never negative' ]) assert.equal(c.check(said).passed, true, said)
   assert.equal(c.check('The test mocks clearRead, so it never runs the real function').passed, false)
 })
+
+test('the implementer\'s status is read from its STATUS line; a case can name its own output contract', async () => {
+  const { statusOf, statusIn } = await import('../evals/lib/status.mjs')
+  assert.equal(statusOf('STATUS: DONE_WITH_CONCERNS\nreport'), 'DONE_WITH_CONCERNS')
+  assert.equal(statusOf('Some narration.\n**STATUS:** BLOCKED\n'), 'BLOCKED')
+  assert.equal(statusOf('STATUS: DONE'), 'DONE')
+  assert.equal(statusOf('I am done.'), null)
+  assert.equal(statusIn([ 'BLOCKED', 'NEEDS_CONTEXT' ])('STATUS: NEEDS_CONTEXT').passed, true)
+  assert.equal(statusIn([ 'DONE' ])('STATUS: DONE_WITH_CONCERNS').passed, false)
+  const text = prompt('---\nname: x\n---\nBuild.', { task: 'T', inputs: [], output: 'Reply with STATUS first.' }, () => '')
+  assert.ok(text.endsWith('Reply with STATUS first.\n'))
+})

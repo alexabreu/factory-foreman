@@ -56,7 +56,8 @@ export function parseArgs(argv) {
 export function prompt(agentText, scenario, readInput) {
   const instructions = agentText.replace(/^---\n[\s\S]*?\n---\n/, '').trim()
   const inputs = scenario.inputs.map((f) => `<file path="${f}">\n${readInput(f)}\n</file>`).join('\n\n')
-  return `${instructions}\n\n# Task\n\n${scenario.task}\n\n${inputs}\n\n${OUTPUT}\n`
+  // A case can name its own output contract (the implementer replies with a status, not findings).
+  return `${instructions}\n\n# Task\n\n${scenario.task}\n\n${inputs}\n\n${scenario.output ?? OUTPUT}\n`
 }
 
 // The same output contract the real slice-review brief gives (src/commands/slice.mjs),
