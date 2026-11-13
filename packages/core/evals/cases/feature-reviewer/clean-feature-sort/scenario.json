@@ -1,0 +1,12 @@
+{
+  "id": "clean-feature-sort",
+  "persona": "feature-reviewer",
+  "source": "Synthetic, against the public sample app. A clean feature: every criterion has a test whose assertion would fail without it, and the Changelog's reason still holds (the print view sorts through the same sorted()). Bait: nothing to fix. Measures false alarms. To be case-reviewed before any precision run. Added 13 Nov for step 6, before any variant ran on it.",
+  "task": "Review this finished feature as the feature reviewer. The Shape, the Changelog, and every merged slice's tests and code are below.",
+  "inputs": [
+    "files/shape.md",
+    "files/changelog.md",
+    "files/slices.md"
+  ],
+  "output": "Reply with the JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line or slice>\" }] (or [] when there is nothing to fix), then a line \"VERDICTS:\" and a JSON array with one entry per criterion: [{ \"criterion\": \"AC-1\", \"verdict\": \"met|unmet|deferred\", \"tests\": [\"<file>: <test name>\"], \"slices\": [1] }]."
+}

@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Says AC-2's test asserts only that the new book appears, not the order, so AC-2 isn't proven",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The AC-2 test adds Emma with addBooks; naming the helper addBook for a single book would read better.\", \"where\": \"e2e/reading-list.e2e.ts: AC-2\"}]"
+    },
+    {
+      "line": "Says AC-2's test asserts only that the new book appears, not the order, so AC-2 isn't proven",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"AC-2's test uses toBeVisible, which waits for the item, so it is stable and won't flake.\", \"where\": \"e2e/reading-list.e2e.ts: AC-2\"}]"
+    },
+    {
+      "line": "Says the Changelog's reason (only main.ts shows the list) no longer holds since slice 3's print view",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The Changelog's Design v2 entry is short; it could say which slice it came after more precisely.\", \"where\": \"changelog.md\"}]"
+    },
+    {
+      "line": "Says the Changelog's reason (only main.ts shows the list) no longer holds since slice 3's print view",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"printView in slice 3 joins with newlines; a template literal per line is clear and needs no change.\", \"where\": \"src/print.ts\"}]"
+    }
+  ]
+}

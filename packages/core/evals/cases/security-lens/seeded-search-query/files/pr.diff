@@ -1,0 +1,28 @@
+diff --git a/src/main.ts b/src/main.ts
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -40,6 +40,24 @@ function render(list: ReadingList, filter: Filter) {
+   }
+ }
+ 
++const heading = document.querySelector<HTMLHeadingElement>('#results-heading')!
++const box = document.querySelector<HTMLInputElement>('#search')!
++
++function search(list: ReadingList, q: string): Item[] {
++  const needle = q.trim().toLowerCase()
++  return list.items.filter(item => item.title.toLowerCase().includes(needle))
++}
++
++function showSearch(list: ReadingList) {
++  const q = new URLSearchParams(location.search).get('q') ?? ''
++  heading.innerHTML = q ? `Results for <strong>${q}</strong>` : ''
++  renderItems(search(list, q))
++}
++
++box.addEventListener('input', () => {
++  history.replaceState(null, '', `?q=${encodeURIComponent(box.value)}`)
++  showSearch(load())
++})
++
+ render(load(), 'all')
++showSearch(load())

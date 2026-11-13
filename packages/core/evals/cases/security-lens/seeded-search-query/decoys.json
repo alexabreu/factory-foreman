@@ -1,0 +1,21 @@
+{
+  "about": "Decoys for the judge's leniency check: each cites the right part of the change but makes the wrong point. Written before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Traces the q URL parameter to heading.innerHTML with no escaping",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"heading.innerHTML is reassigned on every keystroke; building the heading once and updating only the query text would avoid layout work.\", \"where\": \"src/main.ts:52\"}]"
+    },
+    {
+      "line": "Traces the q URL parameter to heading.innerHTML with no escaping",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The q parameter is read with URLSearchParams, which decodes it correctly, and encodeURIComponent is used when writing it, so the URL handling is safe.\", \"where\": \"src/main.ts:51\"}]"
+    },
+    {
+      "line": "Says who controls the input (anyone who sends or posts a link) and what they gain (script running in the reader's page, with their list)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Anyone can share a link with ?q=, which might make the results heading long; cap the shown query at 60 characters.\", \"where\": \"src/main.ts:52\"}]"
+    },
+    {
+      "line": "Gives the fix: textContent or building the strong element, not innerHTML",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"Use textContent for the result count elsewhere on the page for consistency with renderItems.\", \"where\": \"src/main.ts:53\"}]"
+    }
+  ]
+}

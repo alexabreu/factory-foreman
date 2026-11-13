@@ -302,3 +302,14 @@ test('with --judge, recall checks take the judge\'s verdict, the regex verdict s
     assert.equal(j.decoyFalsePasses, 1)
   } finally { process.env.PATH = saved }
 })
+
+test('the feature reviewer\'s verdicts are read after VERDICTS:, and checks hold criteria to them', async () => {
+  const { verdictsOf, verdictIs, everyCriterionMapped } = await import('../evals/lib/verdicts.mjs')
+  const reply = '[{"id":"f","severity":"major","text":"AC-2 is unmet","where":"x"}]\nVERDICTS: [{"criterion":"AC-1","verdict":"met","tests":["a"],"slices":[1]},{"criterion":"AC-2","verdict":"unmet","tests":[],"slices":[2]}]'
+  assert.equal(verdictsOf(reply).length, 2)
+  assert.equal(verdictIs('AC-2', 'unmet')(reply).passed, true)
+  assert.equal(verdictIs('AC-1', 'unmet')(reply).passed, false)
+  assert.equal(everyCriterionMapped([ 'AC-1', 'AC-2' ])(reply).passed, true)
+  assert.equal(everyCriterionMapped([ 'AC-1', 'AC-3' ])(reply).passed, false)
+  assert.equal(verdictsOf('no verdicts'), null)
+})
