@@ -48,9 +48,9 @@ How it's built (that's the Design), and wording preferences.
 
 ## Ask the person
 
-A criterion that guesses at a decision the person hasn't made is a blocking
-question, with your recommended answer. So is a change that would shrink what
-was asked for.
+Add `ask` (the question, with your recommendation) when a criterion guesses at a
+decision the person hasn't made, or a change would shrink what was asked for.
+Everything else goes to the Shape's author.
 
 ## Output
 

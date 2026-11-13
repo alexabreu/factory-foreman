@@ -19,6 +19,11 @@ Reviewers reply with the JSON array of findings the brief asks for. The implemen
 (`DONE`, `DONE_WITH_CONCERNS`, `BLOCKED` or `NEEDS_CONTEXT`) and writes a report. Paths come from the brief, not the
 persona, so a team can move them.
 
+Severity and escalation are separate. A blocking finding goes to whoever fixes it (the implementer, or the author of
+the Shape or Design); it doesn't interrupt the person. A finding carries `ask` (the question, with the persona's
+recommendation) only when its fix needs the person's call: accepting a risk, changing a contract that has shipped, a
+hard-to-undo choice, or sources that contradict each other. Fewer interruptions is the point.
+
 ## Changing a persona
 
 A prompt change is shown as a diff, logged in `docs/decisions.md`, and adopted only after its eval passes

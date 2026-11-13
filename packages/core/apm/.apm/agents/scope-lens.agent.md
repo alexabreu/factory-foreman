@@ -43,8 +43,9 @@ Whether the code is right, how it's tested, and how it's structured.
 
 ## Ask the person
 
-A contract that has shipped changing, or a criterion that the slice can't meet
-without changing the Design, goes to the person.
+Add `ask` (the question, with your recommendation) when a contract that has
+shipped changes, or a criterion can't be met without changing the Design.
+Everything else goes to the implementer.
 
 ## Output
 

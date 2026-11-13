@@ -42,8 +42,9 @@ already handles (say where), and problems that were there before this change.
 
 ## Ask the person
 
-Raise it as blocking when the right behavior on failure isn't stated anywhere
-and choosing it would change what the person sees.
+Add `ask` (the question, with your recommendation) when the right behavior on
+failure isn't stated anywhere and choosing it would change what the person sees.
+Everything else goes to the implementer.
 
 ## Output
 

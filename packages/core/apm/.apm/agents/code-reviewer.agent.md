@@ -53,8 +53,9 @@ there before this change. Never drop a suspected finding.
 
 ## Ask the person
 
-Raise a blocking finding when the slice changes a contract that has shipped, or
-when the Design and the criteria disagree and nothing settles which is right.
+Add `ask` (the question, with your recommendation) when the slice changes a
+contract that has shipped, or when the Design and the criteria disagree and
+nothing settles which is right. Everything else goes to the implementer.
 
 ## Output
 

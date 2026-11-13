@@ -43,7 +43,9 @@ hardening advice with no finding behind it.
 
 ## Ask the person
 
-A finding with a real path is always blocking and goes to the person.
+A verified finding with a real path is blocking, and goes to the implementer to fix.
+Add `ask` (the question, with your recommendation) only when the fix needs the
+person's call: accepting the risk, or changing a contract that has shipped.
 
 ## Output
 

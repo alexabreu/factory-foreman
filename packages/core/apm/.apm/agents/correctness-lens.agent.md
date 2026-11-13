@@ -43,8 +43,9 @@ change. Never drop a suspected finding.
 
 ## Ask the person
 
-Raise it as blocking when the criteria themselves contradict each other or the
-Design, so no fix can satisfy both.
+Add `ask` (the question, with your recommendation) when the criteria contradict
+each other or the Design, so no fix can satisfy both. Everything else goes to
+the implementer.
 
 ## Output
 

@@ -56,8 +56,9 @@ screen's axe audit. Taste with no rule in the standards skill.
 
 ## Ask the person
 
-A custom control with no keyboard plan is blocking. So is a wireframe that
-contradicts the criterion with nothing to settle which is right.
+A custom control with no keyboard plan is blocking, for the Design's author to
+fix. Add `ask` (the question, with your recommendation) only when a wireframe
+contradicts the criterion and nothing settles which is right.
 
 ## Output
 
