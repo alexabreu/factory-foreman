@@ -38,6 +38,8 @@ export async function calibrate({ files, cases, judge, model }) {
   let calls = 0
   let seconds = 0
   let tokens = 0
+  let cost = 0
+  const raw = []
   for (const [ key, all ] of byCase) {
     const caseDir = join(resolve(cases), key)
     const { scenario, criteria } = await loadCase(caseDir, resolve(cases))
@@ -47,7 +49,8 @@ export async function calibrate({ files, cases, judge, model }) {
     for (let i = 0; i < replies.length; i += BATCH) {
       const batch = replies.slice(i, i + BATCH)
       const r = await askHarness(judge, model, judgePrompt(scenario, (f) => readFileSync(join(caseDir, f), 'utf8'), lines, batch))
-      calls++; seconds += r.ms / 1000; tokens += r.tokens ?? 0
+      calls++; seconds += r.ms / 1000; tokens += r.tokens ?? 0; cost += r.costUsd ?? 0
+      raw.push({ case: key, batch: batch.map((x) => ({ id: x.id, engine: x.engine, label: x.label, k: x.k })), reply: r.stdout })
       if (r.code !== 0) { console.log(`${key} batch ${i / BATCH + 1}: judge error (${r.stderr})`); continue }
       const v = verdicts(r.stdout, batch, lines.length)
       for (const rep of batch) {
@@ -65,7 +68,7 @@ export async function calibrate({ files, cases, judge, model }) {
     const agree = r.filter((x) => x.regex === x.judge).length
     return { verdicts: r.length, agree, rate: r.length ? agree / r.length : null, judgeOnly: r.filter((x) => x.judge && !x.regex).length, regexOnly: r.filter((x) => x.regex && !x.judge).length }
   }
-  return { judge, model: model ?? 'default', at: new Date().toISOString(), calls, seconds, tokens, overall: split(), claude: split('claude'), codex: split('codex'), disagreements: rows.filter((x) => x.regex !== x.judge), rows }
+  return { judge, model: model ?? 'default', at: new Date().toISOString(), calls, seconds, tokens, costUsd: cost, overall: split(), claude: split('claude'), codex: split('codex'), disagreements: rows.filter((x) => x.regex !== x.judge), rows, raw }
 }
 
 async function main(argv) {

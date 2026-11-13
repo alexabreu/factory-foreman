@@ -255,3 +255,10 @@ test('the judge keeps a pass only when its quote is really in the reply, and onl
   const p = judgePrompt({ inputs: [ 'a.diff' ] }, () => 'DIFF', [ 'Finds X' ], replies)
   assert.ok(p.includes('<reply id="R2">') && p.includes('1. Finds X') && !/claude|codex|variant|contract/iu.test(p.split('# Replies')[1]))
 })
+
+test('a quote matches a JSON reply whose quotation marks are escaped', async () => {
+  const { verdicts } = await import('../evals/lib/judge.mjs')
+  const replies = [ { id: 'R1', text: '[{"text":"The input never marks \\"Dune\\" as read, so AC-1 never runs."}]' } ]
+  const v = verdicts(JSON.stringify([ { reply: 'R1', line: 1, pass: true, quote: 'never marks "Dune" as read' } ]), replies, 1)
+  assert.equal(v.R1[0].pass, true)
+})

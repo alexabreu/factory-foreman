@@ -20,7 +20,9 @@ export function judgePrompt(scenario, readInput, lines, replies) {
   return `${JUDGE_INSTRUCTIONS}\n\n# The change under review\n\n${inputs}\n\n# Rubric\n\n${rubric}\n\n# Replies\n\n${body}\n\n${JUDGE_OUTPUT}\n`
 }
 
-const squash = (s) => String(s).replace(/[\s`*_"'“”‘’]+/gu, ' ').trim().toLowerCase()
+// Compares text loosely: whitespace, markdown and quote marks (including the
+// escaped quotes inside a JSON reply) don't count.
+export const squash = (s) => String(s).replace(/\\(["'\\])/gu, '$1').replace(/[\s`*_"'“”‘’]+/gu, ' ').trim().toLowerCase()
 
 // The verdicts for each reply and line, with a pass kept only when its quote is
 // really in that reply.
