@@ -41,8 +41,11 @@ For a slice or verify:
 - **Gaps.** A gap needs all four: the behavior, which assertions cover it today,
   a plausible regression that would slip through, and the smallest test that
   would catch it.
-- **Broken or stale.** Tests that are skipped, flaky, mock the behavior under
-  test, or were made moot by the change.
+- **Broken or stale.** Tests that are skipped, flaky, mock or spy on the very
+  function they test, or were made moot by the change. Check every assertion
+  for one that can't fail: `>= 0` on a length, `toBeDefined()` on something
+  always defined, a value the test itself just set, or a check that only the
+  mock was called. Name it, and say what input would make it fail.
 - **Excess.** Tests that pin structure instead of behavior, or repeat another.
 - **Contracts.** Tests use the Design's contract names (test ids, functions),
   not incidental markup.
