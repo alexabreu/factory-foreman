@@ -2,7 +2,7 @@
 // review or merge a pull request, however the command is dressed up.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -232,7 +232,7 @@ test('the hook config wires the guard and capture for every harness APM deploys 
 
 test('the reviewer agents are named, scoped and each loads its standards skill', () => {
   const dir = new URL('../apm/.apm/agents/', import.meta.url)
-  const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', maintainer: 'standards-architecture' }
+  const expected = { 'test-verification-engineer': 'standards-testing', 'software-architect': 'standards-architecture', 'ux-designer': 'standards-ux', 'code-reviewer': 'standards-code-review', 'product-engineer': 'standards-product', maintainer: 'standards-architecture', 'correctness-lens': 'standards-code-review', 'silent-failure-lens': 'standards-code-review', 'scope-lens': 'standards-code-review', 'security-lens': 'standards-security', verifier: 'standards-code-review', 'feature-reviewer': 'standards-testing' }
   for (const [ name, skill ] of Object.entries(expected)) {
     const text = readFileSync(new URL(`${name}.agent.md`, dir), 'utf8')
     // No model: each harness uses its own session model (a Claude model name means nothing to Codex).
@@ -248,6 +248,37 @@ test('the implementer agent builds slices: it can edit, loads its standards, and
   assert.match(text, /`standards-engineering`/u)
   assert.match(text, /frozen tests/u)
   assert.match(text, /fresh evidence/u)
+})
+
+test('persona files follow the contract: the same eight parts, in order', () => {
+  const dir = new URL('../apm/.apm/agents/', import.meta.url)
+  const parts = [ 'Job', 'Read', 'Steering', 'Method', 'Evidence', 'Leave out', 'Ask the person', 'Output' ]
+  const files = readdirSync(dir).filter(name => name.endsWith('.agent.md'))
+  assert.equal(files.length, 13)
+  for (const file of files) {
+    const headings = readFileSync(new URL(file, dir), 'utf8').match(/^## .+$/gmu).map(line => line.slice(3))
+    assert.deepEqual(headings, parts, file)
+  }
+})
+
+test('the verifier keeps every finding with an outcome, rejected ones included', () => {
+  const text = readFileSync(new URL('../apm/.apm/agents/verifier.agent.md', import.meta.url), 'utf8')
+  for (const pattern of [ /`verified`/u, /`suspected`/u, /`rejected`/u, /`merged`/u, /`ask`/u, /exactly\s+one\s+entry\s+for\s+each\s+finding/u, /Never\s+invent\s+a\s+defence/u ]) assert.match(text, pattern)
+})
+
+test('reviewers escalate to the person only through an ask on the finding', () => {
+  const dir = new URL('../apm/.apm/agents/', import.meta.url)
+  for (const file of readdirSync(dir).filter(name => name.endsWith('.agent.md') && name !== 'principal-engineer.agent.md')) {
+    const section = readFileSync(new URL(file, dir), 'utf8').split('## Ask the person')[1].split('## Output')[0]
+    assert.match(section, /`ask`/u, file)
+    assert.doesNotMatch(section, /goes to the person/u, file)
+  }
+})
+
+test('the implementer returns a status and never starts its own reviewer', () => {
+  const text = readFileSync(new URL('../apm/.apm/agents/principal-engineer.agent.md', import.meta.url), 'utf8')
+  for (const status of [ 'DONE', 'DONE_WITH_CONCERNS', 'BLOCKED', 'NEEDS_CONTEXT' ]) assert.match(text, new RegExp(`\`${status}\``), status)
+  assert.match(text, /Never start a reviewer/u)
 })
 
 test('the package stays free of any one product\'s names', () => {
