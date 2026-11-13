@@ -1,0 +1,7 @@
+{
+  "id": "seeded-mock-and-tautology",
+  "persona": "test-verification-engineer",
+  "source": "Synthetic, against the public sample app. The code is correct. Seeded test defects: the test mocks clearRead, the function under test; its assertion (length >= 0) can't fail; its input has no read book, so AC-1's behaviour is never exercised. Added 13 Nov, before any variant ran on it.",
+  "task": "Review this slice's tests as the test verification engineer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [ "files/pr.md", "files/pr.diff" ]
+}

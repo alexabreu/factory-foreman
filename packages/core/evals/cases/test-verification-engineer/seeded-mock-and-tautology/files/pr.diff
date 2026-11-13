@@ -1,0 +1,39 @@
+diff --git a/src/reading-list.ts b/src/reading-list.ts
+--- a/src/reading-list.ts
++++ b/src/reading-list.ts
+@@ -29,6 +29,11 @@ export function toggle(list: ReadingList, id: number): ReadingList {
+   return { ...list, items: list.items.map(item => (item.id === id ? { ...item, read: !item.read } : item)) }
+ }
+ 
++// Removes every book already read; unread books keep their order and ids.
++export function clearRead(list: ReadingList): ReadingList {
++  return { ...list, items: list.items.filter(item => !item.read) }
++}
++
+ export function visible(list: ReadingList, filter: Filter): Item[] {
+   if (filter === 'all') return list.items
+   return list.items.filter(item => item.read === (filter === 'read'))
+diff --git a/src/reading-list.test.ts b/src/reading-list.test.ts
+--- a/src/reading-list.test.ts
++++ b/src/reading-list.test.ts
+@@ -1,5 +1,6 @@
+-import { describe, expect, it } from 'vitest'
+-import { add, empty, summary, toggle, visible } from './reading-list'
++import { describe, expect, it, vi } from 'vitest'
++import * as readingList from './reading-list'
++import { add, clearRead, empty, summary, toggle, visible } from './reading-list'
+ 
+ describe('reading list', () => {
+   it('adds trimmed titles and refuses blanks and duplicates', () => {
+@@ -21,4 +22,12 @@ describe('reading list', () => {
+   it('summarizes what is left to read', () => {
+     expect(summary(toggle(add(add(empty(), 'Dune'), 'Emma'), 2))).toBe('1 of 2 unread')
+   })
++
++  it('clears read books (AC-1)', () => {
++    const spy = vi.spyOn(readingList, 'clearRead').mockReturnValue(add(empty(), 'Emma'))
++    const list = readingList.clearRead(add(add(empty(), 'Dune'), 'Emma'))
++    expect(spy).toHaveBeenCalled()
++    expect(list.items.length).toBeGreaterThanOrEqual(0)
++  })
+ })

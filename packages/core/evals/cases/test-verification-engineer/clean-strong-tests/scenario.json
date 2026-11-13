@@ -1,0 +1,7 @@
+{
+  "id": "clean-strong-tests",
+  "persona": "test-verification-engineer",
+  "source": "Synthetic, against the public sample app. A correct slice whose tests are strong: contents checked with toEqual, a three-book list, the input checked unchanged, both edges of AC-2, and red-at-base output given. Bait: nothing to fix. Measures the test engineer's false alarms. Added 13 Nov, before any variant ran on it.",
+  "task": "Review this slice's tests as the test verification engineer. The pull request description and the diff are below. Report findings only for things that should change, each with the file and line, why it matters, and the fix.",
+  "inputs": [ "files/pr.md", "files/pr.diff" ]
+}
