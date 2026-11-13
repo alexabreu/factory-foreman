@@ -2,7 +2,8 @@
 // otherwise the first well-formed array in the text. Narration before or after the
 // JSON, or brackets in prose, don't hide it. Returns null when there's none.
 export function findingsFrom(reply) {
-  const text = String(reply)
+  // The feature reviewer puts its verdicts after a VERDICTS: line; they aren't findings.
+  const text = String(reply).split(/\n\s*\**VERDICTS\**\s*:/u)[0]
   const fenced = [ ...text.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n```/gu) ].map((m) => m[1])
   for (const block of fenced) {
     try { const v = JSON.parse(block.trim()); if (Array.isArray(v)) return v } catch { /* not this block */ }

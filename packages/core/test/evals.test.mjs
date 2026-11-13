@@ -313,3 +313,11 @@ test('the feature reviewer\'s verdicts are read after VERDICTS:, and checks hold
   assert.equal(everyCriterionMapped([ 'AC-1', 'AC-3' ])(reply).passed, false)
   assert.equal(verdictsOf('no verdicts'), null)
 })
+
+test('findings stop at a VERDICTS: line, so an empty findings array is not mistaken for the verdicts', async () => {
+  const { findingsFrom } = await import('../evals/lib/findings.mjs')
+  const { noFindingsAbove } = await import('../evals/lib/checks.mjs')
+  const reply = '[]\nVERDICTS: [{"criterion":"AC-1","verdict":"met","tests":["t"]}]'
+  assert.deepEqual(findingsFrom(reply), [])
+  assert.equal(noFindingsAbove(reply).passed, true)
+})
