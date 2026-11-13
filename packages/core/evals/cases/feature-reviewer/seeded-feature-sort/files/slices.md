@@ -5,8 +5,9 @@
 ```ts
 // src/reading-list.test.ts
 it('AC-1: sorts by title, ignoring case', () => {
-  const list = add(add(add(empty(), 'ubik'), 'Dune'), 'emma')
-  expect(sorted(list).map(i => i.title)).toEqual([ 'Dune', 'emma', 'ubik' ])
+  const list = add(add(add(empty(), 'Ubik'), 'dune'), 'Emma')
+  // A case-sensitive sort would give Emma, Ubik, dune.
+  expect(sorted(list).map(i => i.title)).toEqual([ 'dune', 'Emma', 'Ubik' ])
 })
 ```
 

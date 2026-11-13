@@ -7,5 +7,6 @@
     "files/pr.md",
     "files/pr.diff"
   ],
-  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line>\" }]. Reply [] when there is nothing to fix."
+  "output": "Reply with only a JSON array of findings: [{ \"id\": \"<short-id>\", \"severity\": \"blocking|major|minor\", \"text\": \"\u2026\", \"where\": \"<file:line>\" }]. Reply [] when there is nothing to fix.",
+  "notes": "Case review (13 Nov, before any precision run; contract security lens, Codex and Claude, k=2): no findings in any run, so no changes. Review runs are kept out of the results."
 }
