@@ -5,8 +5,11 @@
 // the stored regex verdict, split by the engine that wrote the reply, and every
 // disagreement is written out to be read by hand.
 //
-//   node evals/calibrate.mjs --cases <dir> --judge claude|codex --out <file> <result.json>...
-import { readFileSync, writeFileSync } from 'node:fs'
+//   node evals/calibrate.mjs --cases <dir> --judge claude|codex [--decoys-only yes] --out <file> <result.json>...
+//
+// Each case's decoys.json holds replies that cite the right code but make the
+// wrong point; any judge pass on one is a false pass (the leniency check).
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isRecall, judgePrompt, verdicts } from './lib/judge.mjs'
@@ -21,7 +24,8 @@ function shuffle(xs, seed = 7) {
   return a
 }
 
-export async function calibrate({ files, cases, judge, model }) {
+export async function calibrate({ files, cases, judge, model, decoysOnly = false }) {
+  const decoyRows = []
   const byCase = new Map()
   for (const file of files) {
     const report = JSON.parse(readFileSync(file, 'utf8'))
@@ -45,7 +49,12 @@ export async function calibrate({ files, cases, judge, model }) {
     const { scenario, criteria } = await loadCase(caseDir, resolve(cases))
     const lines = criteria.filter(isRecall).map((c) => c.text)
     if (!lines.length) continue
-    const replies = shuffle(all).map((r, i) => ({ ...r, id: `R${i + 1}` }))
+    // Decoys cite the right code but make the wrong point; the judge must pass none.
+    const decoyFile = join(caseDir, 'decoys.json')
+    const decoys = existsSync(decoyFile) ? JSON.parse(readFileSync(decoyFile, 'utf8')).decoys.map((d, i) => ({ engine: 'decoy', label: 'decoy', k: i + 1, text: d.reply, decoyLine: d.line })) : []
+    const pool = decoysOnly ? decoys : [ ...all, ...decoys ]
+    if (!pool.length) continue
+    const replies = shuffle(pool).map((r, i) => ({ ...r, id: `R${i + 1}` }))
     for (let i = 0; i < replies.length; i += BATCH) {
       const batch = replies.slice(i, i + BATCH)
       const r = await askHarness(judge, model, judgePrompt(scenario, (f) => readFileSync(join(caseDir, f), 'utf8'), lines, batch))
@@ -55,6 +64,7 @@ export async function calibrate({ files, cases, judge, model }) {
       const v = verdicts(r.stdout, batch, lines.length)
       for (const rep of batch) {
         lines.forEach((line, n) => {
+          if (rep.engine === 'decoy') { decoyRows.push({ case: key, line, named: line === rep.decoyLine, judge: v[rep.id][n].pass, quote: v[rep.id][n].quote, reply: rep.text }); return }
           const regex = rep.results?.find((x) => x.text === line)
           if (!regex) return
           rows.push({ case: key, line, engine: rep.engine, label: rep.label, k: rep.k, regex: regex.passed, judge: v[rep.id][n].pass, why: v[rep.id][n].why, quote: v[rep.id][n].quote, regexEvidence: regex.evidence, reply: rep.text })
@@ -68,7 +78,8 @@ export async function calibrate({ files, cases, judge, model }) {
     const agree = r.filter((x) => x.regex === x.judge).length
     return { verdicts: r.length, agree, rate: r.length ? agree / r.length : null, judgeOnly: r.filter((x) => x.judge && !x.regex).length, regexOnly: r.filter((x) => x.regex && !x.judge).length }
   }
-  return { judge, model: model ?? 'default', at: new Date().toISOString(), calls, seconds, tokens, costUsd: cost, overall: split(), claude: split('claude'), codex: split('codex'), disagreements: rows.filter((x) => x.regex !== x.judge), rows, raw }
+  const decoyReport = { verdicts: decoyRows.length, falsePasses: decoyRows.filter((x) => x.judge).length, onNamedLine: decoyRows.filter((x) => x.named && x.judge).length, named: decoyRows.filter((x) => x.named).length, passed: decoyRows.filter((x) => x.judge) }
+  return { judge, model: model ?? 'default', decoys: decoyReport, at: new Date().toISOString(), calls, seconds, tokens, costUsd: cost, overall: split(), claude: split('claude'), codex: split('codex'), disagreements: rows.filter((x) => x.regex !== x.judge), rows, raw }
 }
 
 async function main(argv) {
@@ -77,9 +88,10 @@ async function main(argv) {
     if (argv[i].startsWith('--')) opts[argv[i].slice(2)] = argv[++i]
     else opts.files.push(argv[i])
   }
-  const out = await calibrate(opts)
+  const out = await calibrate({ ...opts, decoysOnly: opts['decoys-only'] === 'yes' })
   writeFileSync(opts.out, `${JSON.stringify(out, null, 2)}\n`)
   for (const k of [ 'overall', 'claude', 'codex' ]) console.log(`${k}: ${out[k].agree}/${out[k].verdicts} agree (${((out[k].rate ?? 0) * 100).toFixed(1)}%), judge-only passes ${out[k].judgeOnly}, regex-only passes ${out[k].regexOnly}`)
+  console.log(`decoys: ${out.decoys.falsePasses} false pass(es) of ${out.decoys.verdicts} verdicts; ${out.decoys.onNamedLine} of ${out.decoys.named} on the line each decoy targets`)
   console.log(`${out.calls} judge calls, ${out.seconds.toFixed(0)} s, ${out.tokens} tokens. ${opts.out}`)
 }
 

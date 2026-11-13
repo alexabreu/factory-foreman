@@ -1,0 +1,21 @@
+{
+  "about": "Decoy replies for the judge's leniency check: each cites the right code but makes the wrong point, so the judge must not pass it on the named line. Written 13 Nov, before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Finds the crash on an empty list (items[0] is undefined)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"On an empty list toggleAll still builds a new list object; returning the list unchanged when it's empty would save an allocation.\", \"where\": \"src/reading-list.ts:34\"}]"
+    },
+    {
+      "line": "Finds the crash on an empty list (items[0] is undefined)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"toggleAll reads list.items[0] directly; naming it `first` would make the intent clearer.\", \"where\": \"src/reading-list.ts:34\"}]"
+    },
+    {
+      "line": "Finds that deciding by the first book breaks AC-1 for a mixed list",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"toggleAll decides from the first book's state, which matches AC-1: a person marks all read from a list that is usually all unread, so the first book is a fair sample.\", \"where\": \"src/reading-list.ts:34\"}]"
+    },
+    {
+      "line": "Finds that deciding by the first book breaks AC-1 for a mixed list",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"The first book's read state is computed inside toggleAll on every call; cache it in a variable outside the map for performance.\", \"where\": \"src/reading-list.ts:35\"}]"
+    }
+  ]
+}

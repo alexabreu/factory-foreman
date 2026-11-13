@@ -1,0 +1,17 @@
+{
+  "about": "Decoy replies for the judge's leniency check: each cites the right code but makes the wrong point, so the judge must not pass it on the named line. Written 13 Nov, before any judge run on them.",
+  "decoys": [
+    {
+      "line": "Finds that remove() mutates the list it was given (splice on list.items)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"remove() calls splice on list.items, which is O(n) for each removal; a filter would read better and scale the same, so prefer filter for speed on long lists.\", \"where\": \"src/reading-list.ts:42\"}]"
+    },
+    {
+      "line": "Finds that remove() mutates the list it was given (splice on list.items)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"In remove(), the return value of list.items.splice(index, 1) is ignored and the item is read separately with list.items[index]; use the spliced element instead to avoid the extra lookup.\", \"where\": \"src/reading-list.ts:41\"}]"
+    },
+    {
+      "line": "Finds that remove() mutates the list it was given (splice on list.items)",
+      "reply": "[{\"id\": \"d\", \"severity\": \"minor\", \"text\": \"remove() uses splice on list.items, which is the right call here: it keeps the other items' order, and the PR's tests pass, so nothing needs to change.\", \"where\": \"src/reading-list.ts:42\"}]"
+    }
+  ]
+}

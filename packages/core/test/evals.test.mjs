@@ -262,3 +262,14 @@ test('a quote matches a JSON reply whose quotation marks are escaped', async () 
   const v = verdicts(JSON.stringify([ { reply: 'R1', line: 1, pass: true, quote: 'never marks "Dune" as read' } ]), replies, 1)
   assert.equal(v.R1[0].pass, true)
 })
+
+test('every public recall case has 3 or 4 decoys, each aimed at one of its recall lines', async () => {
+  const { isRecall } = await import('../evals/lib/judge.mjs')
+  const root = join(import.meta.dirname, '..', 'evals', 'cases')
+  for (const c of [ 'code-reviewer/seeded-remove-undo', 'code-reviewer/seeded-toggle-all', 'test-verification-engineer/seeded-remove-undo', 'test-verification-engineer/seeded-toggle-all', 'test-verification-engineer/seeded-mock-and-tautology' ]) {
+    const { decoys } = JSON.parse(readFileSync(join(root, c, 'decoys.json'), 'utf8'))
+    const lines = (await import(pathToFileURL(join(root, c, 'criteria.mjs')).href)).default.filter(isRecall).map((x) => x.text)
+    assert.ok(decoys.length >= 3 && decoys.length <= 4, c)
+    for (const d of decoys) assert.ok(lines.includes(d.line), `${c}: ${d.line}`)
+  }
+})
