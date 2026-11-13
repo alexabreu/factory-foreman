@@ -187,3 +187,29 @@ test('in a slice row, a check marked own judges only its persona\'s reply', asyn
   const r = await union(join(dir, 'a.json'), join(dir, 'b.json'), root, 'own', dir)
   assert.equal(r.cases['bait-clean-copy'].runs[0].results.find((c) => /above minor/u.test(c.text)).passed, true)
 })
+
+test('a run that errors is retried; a case with a run that never completes is incomplete and not scored', async () => {
+  const { mkdtempSync, mkdirSync: mk, writeFileSync: write, readdirSync: ls, readFileSync: read } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { spawnSync } = await import('node:child_process')
+  const tmp = mkdtempSync(join(tmpdir(), 'ff-retry-'))
+  // A stand-in claude: fails on its first call for case "flaky", always fails for "down".
+  const bin = join(tmp, 'bin'); mk(bin)
+  write(join(bin, 'claude'), `#!/bin/sh\nin=$(cat)\ncase "$in" in *DOWN*) exit 1;; esac\ncase "$in" in *FLAKY*) [ -f ${tmp}/seen ] || { touch ${tmp}/seen; echo 403 >&2; exit 1; };; esac\necho '{"result":"[]","usage":{"input_tokens":1,"output_tokens":1}}'\n`, { mode: 0o755 })
+  for (const [ id, word ] of [ [ 'down', 'DOWN' ], [ 'flaky', 'FLAKY' ] ]) {
+    const d = join(tmp, 'cases', 'p', id); mk(join(d, 'files'), { recursive: true })
+    write(join(d, 'files', 'in.md'), word)
+    write(join(d, 'scenario.json'), JSON.stringify({ id, persona: 'p', task: 't', inputs: [ 'files/in.md' ] }))
+    write(join(d, 'criteria.mjs'), "export default [ { text: 'replies', check: (o) => ({ passed: o.includes('[]') }) } ]\n")
+  }
+  write(join(tmp, 'agent.md'), '---\nname: p\n---\nReview.')
+  const r = spawnSync(process.execPath, [ join(import.meta.dirname, '..', 'evals', 'run.mjs'), '--persona', 'p', '--cases', join(tmp, 'cases'), '--agent', join(tmp, 'agent.md'), '--runs', '1', '--out', join(tmp, 'out') ], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FF_EVAL_BACKOFF_MS: '1,1' }, encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stderr)
+  const report = JSON.parse(read(join(tmp, 'out', ls(join(tmp, 'out'))[0]), 'utf8'))
+  assert.equal(report.cases.flaky.incomplete, false)
+  assert.equal(report.cases.flaky.attemptErrors, 1)
+  assert.equal(report.cases.down.incomplete, true)
+  assert.equal(report.cases.down.attemptErrors, 3)
+  assert.deepEqual(report.incomplete, [ 'down' ])
+  assert.equal(report.overall.n, 1)
+})

@@ -27,6 +27,11 @@ import { findingsFrom } from './lib/findings.mjs'
 import { grade, summarize } from './lib/grade.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
+// Infrastructure errors (a 403, a run killed at the timeout, an exit with no
+// reply) are retried up to twice, after 30 s and then 90 s.
+export const RETRIES = 2
+const BACKOFF_MS = (process.env.FF_EVAL_BACKOFF_MS ?? '30000,90000').split(',').map(Number)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const meanUsage = (us) => (us.length && us.every(Boolean) ? Object.fromEntries(Object.keys(us[0]).map((k) => [ k, us.reduce((t, u) => t + u[k], 0) / us.length ])) : null)
 const mean = (xs) => (xs.length && xs.every((x) => typeof x === 'number') ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
 
@@ -250,11 +255,16 @@ async function main(argv) {
   for (const id of readdirSync(dir).sort()) {
     const caseDir = join(dir, id)
     const { scenario, criteria } = await loadCase(caseDir, resolve(opts.cases))
+    // A retired case stays in the repo as a record (its notes say why) but isn't run.
+    if (scenario.retired) { console.log(`${id}: retired (${scenario.retired})`); continue }
     const readInput = (f) => readFileSync(join(caseDir, f), 'utf8')
     const text = prompt(agentText, scenario, readInput)
     const runs = []
     for (let k = 1; k <= opts.runs; k++) {
       let run
+      const failures = []
+      for (let attempt = 1; attempt <= 1 + RETRIES; attempt++) {
+      if (attempt > 1) await sleep(BACKOFF_MS[attempt - 2])
       if (lensTexts) {
         const p = await pipelineRun(opts, lensTexts, verifierText, scenario, readInput)
         run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, usage: p.usage, costUsd: p.costUsd, calls: p.calls, lensFindings: p.lensFindings, rejected: p.rejected, merged: p.merged, unanswered: p.unanswered, asks: p.asks, ...grade(p.output, criteria), output: p.output, steps: p.steps }
@@ -262,18 +272,27 @@ async function main(argv) {
         const r = await ask(command(opts.harness, opts.model), text)
         run = r.code === 0 ? { k, ms: r.ms, tokens: r.tokens, usage: r.usage, costUsd: r.costUsd, calls: 1, ...grade(r.stdout, criteria), output: r.stdout } : { k, ms: r.ms, error: r.stderr.trim().split('\n').at(-1) }
       }
+      if (!run.error) break
+      failures.push(run.error)
+      console.log(`${id} run ${k} attempt ${attempt}: error (${run.error})`)
+      }
+      if (failures.length) run.failures = failures
       runs.push(run)
       console.log(`${id} run ${k}: ${run.error ? `error (${run.error})` : `${(run.score * 100).toFixed(0)}%, ${(run.ms / 1000).toFixed(0)} s, ${run.tokens ?? '?'} tokens`}`)
     }
     const scored = runs.filter((r) => !r.error)
-    report.cases[id] = { ...summarize(scored.map((r) => r.score)), errors: runs.length - scored.length, tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), costUsd: mean(scored.map((r) => r.costUsd)), usage: meanUsage(scored.map((r) => r.usage)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
+    // A case is scored only when every run completed; otherwise it's incomplete.
+    const incomplete = scored.length < runs.length
+    report.cases[id] = { ...summarize(incomplete ? [] : scored.map((r) => r.score)), incomplete, errors: runs.length - scored.length, attemptErrors: runs.reduce((t, r) => t + (r.failures?.length ?? 0), 0), tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), costUsd: mean(scored.map((r) => r.costUsd)), usage: meanUsage(scored.map((r) => r.usage)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
   }
-  const all = Object.values(report.cases).flatMap((c) => c.runs.filter((r) => !r.error).map((r) => r.score))
-  const cs = Object.values(report.cases)
+  const cs = Object.values(report.cases).filter((c) => !c.incomplete)
+  const all = cs.flatMap((c) => c.runs.map((r) => r.score))
   report.overall = { ...summarize(all), tokens: mean(cs.map((c) => c.tokens)), seconds: mean(cs.map((c) => c.seconds)), costUsd: mean(cs.map((c) => c.costUsd)), usage: meanUsage(cs.map((c) => c.usage)) }
+  report.incomplete = Object.entries(report.cases).filter(([ , c ]) => c.incomplete).map(([ id ]) => id)
   mkdirSync(opts.out, { recursive: true })
   const file = join(opts.out, `${opts.persona}-${opts.label}-${report.at.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`)
+  if (report.incomplete.length) console.log(`Incomplete (not scored): ${report.incomplete.join(', ')}`)
   console.log(`Overall ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} over ${all.length} run(s), ${report.overall.seconds?.toFixed(0) ?? '?'} s and ${report.overall.tokens?.toFixed(0) ?? '?'} tokens per run. ${file}`)
 }
 
