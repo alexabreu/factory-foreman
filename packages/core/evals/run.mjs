@@ -87,7 +87,7 @@ export function reply(stdout, stderr = '') {
 }
 
 // What the verifier is told about its input and output in an eval.
-export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected) and "reason".'
+export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected|merged), "reason", and "into" for a merged one.'
 
 export function verifierPrompt(verifierText, scenario, readInput, findings) {
   return prompt(verifierText, scenario, readInput).replace(`${OUTPUT}\n`, `# Findings to verify\n\n${JSON.stringify(findings, null, 2)}\n\n${VERIFY}\n`)
@@ -104,14 +104,18 @@ async function pipelineRun(opts, lensTexts, verifierText, scenario, readInput) {
   const v = findings.length ? await ask(argv, verifierPrompt(verifierText, scenario, readInput, findings)) : { code: 0, stdout: '[]', tokens: 0, ms: 0 }
   if (v.code !== 0) return { error: `verifier: ${v.stderr.trim().split('\n').at(-1)}`, lensRuns }
   const judged = findingsFrom(v.stdout) ?? []
-  const kept = judged.filter((f) => f.outcome !== 'rejected')
+  // Rejected and merged findings stay in the record but aren't graded: a merged one
+  // lives on in the finding it was merged into.
+  const kept = judged.filter((f) => f.outcome !== 'rejected' && f.outcome !== 'merged')
   const sum = (k) => [ ...lensRuns, v ].reduce((t, r) => (t === null || r[k] == null ? null : t + r[k]), 0)
   return {
     output: JSON.stringify(kept),
     ms: Math.max(...lensRuns.map((r) => r.ms)) + v.ms,
     tokens: sum('tokens'),
     lensFindings: findings.length,
-    rejected: judged.length - kept.length,
+    rejected: judged.filter((f) => f.outcome === 'rejected').length,
+    merged: judged.filter((f) => f.outcome === 'merged').length,
+    unanswered: findings.length - judged.length,
     steps: [ ...lensRuns.map((r) => ({ name: r.name, ms: r.ms, tokens: r.tokens, output: r.stdout })), { name: 'verifier', ms: v.ms, tokens: v.tokens, output: v.stdout } ],
   }
 }
@@ -193,7 +197,7 @@ async function main(argv) {
       let run
       if (lensTexts) {
         const p = await pipelineRun(opts, lensTexts, verifierText, scenario, readInput)
-        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, lensFindings: p.lensFindings, rejected: p.rejected, ...grade(p.output, criteria), output: p.output, steps: p.steps }
+        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, lensFindings: p.lensFindings, rejected: p.rejected, merged: p.merged, unanswered: p.unanswered, ...grade(p.output, criteria), output: p.output, steps: p.steps }
       } else {
         const r = await ask(command(opts.harness, opts.model), text)
         run = r.code === 0 ? { k, ms: r.ms, tokens: r.tokens, ...grade(r.stdout, criteria), output: r.stdout } : { k, ms: r.ms, error: r.stderr.trim().split('\n').at(-1) }
