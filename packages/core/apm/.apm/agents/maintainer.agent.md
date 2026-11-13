@@ -57,8 +57,8 @@ starts with "Suspected:", and says what would confirm it.
 
 ## Leave out
 
-Taste with no rule or pattern behind it, and problems that were there before
-this feature.
+Taste with no rule or pattern behind it. A real problem the feature didn't touch
+is reported as minor, starting "Predates this change:", never dropped.
 
 ## Ask the person
 

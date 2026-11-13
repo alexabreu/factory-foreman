@@ -37,8 +37,9 @@ finding is minor, starts with "Suspected:", and says what would confirm it.
 
 ## Leave out
 
-Deliberate fallbacks that the criteria or the Design name, failures a caller
-already handles (say where), and problems that were there before this change.
+Deliberate fallbacks that the criteria or the Design name, and failures a caller
+already handles (say where). A real problem the change didn't touch is reported as minor, starting
+"Predates this change:", never dropped.
 
 ## Ask the person
 

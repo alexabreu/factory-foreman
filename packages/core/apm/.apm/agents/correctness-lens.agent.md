@@ -38,8 +38,8 @@ finding is minor, starts with "Suspected:", and says what would confirm it.
 
 ## Leave out
 
-Style, anything a linter catches, and problems that were there before this
-change. Never drop a suspected finding.
+Style, and anything a linter catches. Never drop a suspected finding. A real problem the change didn't touch is reported as minor, starting
+"Predates this change:", never dropped.
 
 ## Ask the person
 
