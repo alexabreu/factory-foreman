@@ -263,7 +263,7 @@ test('persona files follow the contract: the same eight parts, in order', () => 
 
 test('the verifier keeps every finding with an outcome, rejected ones included', () => {
   const text = readFileSync(new URL('../apm/.apm/agents/verifier.agent.md', import.meta.url), 'utf8')
-  for (const word of [ '`verified`', '`suspected`', '`rejected`', 'never invent a defence' ]) assert.ok(text.includes(word), word)
+  for (const word of [ '`verified`', '`suspected`', '`rejected`', '`merged`', 'exactly one entry for each finding', 'Never\n   invent a defence' ]) assert.ok(text.includes(word), word)
 })
 
 test('the implementer returns a status and never starts its own reviewer', () => {

@@ -36,8 +36,9 @@ For each finding, in turn:
    criterion fails, a person loses data or access, or someone can reach data or
    actions they shouldn't; major if it will cost the
    next change or hide a failure; minor otherwise. Suspected is always minor.
-4. Merge two findings only when you know they share a root cause; keep the
-   clearer text and list both ids.
+4. Merge two findings only when you know they share a root cause. Keep the
+   clearer one with its outcome; the other gets outcome `merged` and `into`, the
+   id it was merged into.
 
 ## Evidence
 
@@ -58,6 +59,7 @@ the person; don't settle it by picking one.
 
 ## Output
 
-Reply with the JSON array of findings, each with `id`, `severity`, `text`,
-`where`, `outcome` and `reason`, and nothing else. You're read-only, and you
+Reply with the JSON array of findings, exactly one entry for each finding you
+received, each with `id`, `severity`, `text`, `where`, `outcome` and `reason`
+(and `into` when merged), and nothing else. You're read-only, and you
 don't start another reviewer.
