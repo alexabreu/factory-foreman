@@ -263,7 +263,16 @@ test('persona files follow the contract: the same eight parts, in order', () => 
 
 test('the verifier keeps every finding with an outcome, rejected ones included', () => {
   const text = readFileSync(new URL('../apm/.apm/agents/verifier.agent.md', import.meta.url), 'utf8')
-  for (const word of [ '`verified`', '`suspected`', '`rejected`', '`merged`', 'exactly one entry for each finding', 'Never\n   invent a defence' ]) assert.ok(text.includes(word), word)
+  for (const pattern of [ /`verified`/u, /`suspected`/u, /`rejected`/u, /`merged`/u, /`ask`/u, /exactly\s+one\s+entry\s+for\s+each\s+finding/u, /Never\s+invent\s+a\s+defence/u ]) assert.match(text, pattern)
+})
+
+test('reviewers escalate to the person only through an ask on the finding', () => {
+  const dir = new URL('../apm/.apm/agents/', import.meta.url)
+  for (const file of readdirSync(dir).filter(name => name.endsWith('.agent.md') && name !== 'principal-engineer.agent.md')) {
+    const section = readFileSync(new URL(file, dir), 'utf8').split('## Ask the person')[1].split('## Output')[0]
+    assert.match(section, /`ask`/u, file)
+    assert.doesNotMatch(section, /goes to the person/u, file)
+  }
 })
 
 test('the implementer returns a status and never starts its own reviewer', () => {
