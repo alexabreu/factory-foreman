@@ -66,7 +66,9 @@ export function prompt(agentText, scenario, readInput) {
 export const OUTPUT = 'Reply with only a JSON array of findings: [{ "id": "<short-id>", "severity": "blocking|major|minor", "text": "…", "where": "<file:line>" }]. Reply [] when there is nothing to fix.'
 
 export function command(harness, model) {
-  if (harness === 'claude') return [ 'claude', '-p', '--output-format', 'json', ...(model ? [ '--model', model ] : []) ]
+  // Only the project's settings: the evaluating person's own (an output style,
+  // say) would change replies that the product's subagents never see.
+  if (harness === 'claude') return [ 'claude', '-p', '--output-format', 'json', '--setting-sources', 'project', ...(model ? [ '--model', model ] : []) ]
   if (harness === 'codex') return [ 'codex', 'exec', ...(model ? [ '-m', model ] : []), '-' ]
   throw new Error(`Unknown harness ${harness}; use claude or codex`)
 }

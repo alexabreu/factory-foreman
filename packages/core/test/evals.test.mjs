@@ -25,7 +25,7 @@ test('grade weights criteria and summarize gives mean and spread', () => {
 test('the prompt drops front matter and includes every input; harnesses get stdin commands', () => {
   const p = prompt('---\nname: x\n---\nBe precise.', { task: 'Review.', inputs: [ 'a.md' ] }, () => 'A')
   assert.match(p, /^Be precise\.\n\n# Task\n\nReview\.\n\n<file path="a\.md">\nA\n<\/file>\n\nReply with only a JSON array of findings/u)
-  assert.deepEqual(command('claude', 'opus'), [ 'claude', '-p', '--output-format', 'json', '--model', 'opus' ])
+  assert.deepEqual(command('claude', 'opus'), [ 'claude', '-p', '--output-format', 'json', '--setting-sources', 'project', '--model', 'opus' ])
   assert.deepEqual(command('codex'), [ 'codex', 'exec', '-' ])
   assert.throws(() => command('other'), /Unknown harness/u)
   assert.equal(parseArgs([ '--persona', 'code-reviewer', '--runs', '2' ]).runs, 2)
@@ -320,4 +320,11 @@ test('findings stop at a VERDICTS: line, so an empty findings array is not mista
   const reply = '[]\nVERDICTS: [{"criterion":"AC-1","verdict":"met","tests":["t"]}]'
   assert.deepEqual(findingsFrom(reply), [])
   assert.equal(noFindingsAbove(reply).passed, true)
+})
+
+test('Claude eval calls load only the project\'s settings, never the evaluating person\'s own', () => {
+  const argv = command('claude')
+  const i = argv.indexOf('--setting-sources')
+  assert.ok(i > 0)
+  assert.equal(argv[i + 1], 'project')
 })
