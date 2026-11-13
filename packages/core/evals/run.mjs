@@ -87,7 +87,7 @@ export function reply(stdout, stderr = '') {
 }
 
 // What the verifier is told about its input and output in an eval.
-export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected|merged), "reason", "into" for a merged one, and "ask" (kept from the lens, or added when lenses disagree) when the person's call is needed. Add any "Found while verifying" entries.'
+export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected|merged), "reason", "into" for a merged one, and "ask" (kept from the lens, or added when lenses disagree) when the person needs to decide. Add any "Found while verifying" entries.'
 
 export function verifierPrompt(verifierText, scenario, readInput, findings) {
   return prompt(verifierText, scenario, readInput).replace(`${OUTPUT}\n`, `# Findings to verify\n\n${JSON.stringify(findings, null, 2)}\n\n${VERIFY}\n`)
