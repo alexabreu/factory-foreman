@@ -128,3 +128,9 @@ test('the verifier is told to keep a lens\'s ask and to add one when lenses disa
   assert.match(VERIFY, /"ask"/u)
   assert.match(VERIFY, /Found while verifying/u)
 })
+
+test('options are checked, so flags passed as one argument fail instead of running the wrong variant', () => {
+  assert.throws(() => parseArgs([ '--persona', 'p', '--lenses a.md --verifier v.md', '--label', 'x' ]), /Unknown option/u)
+  assert.throws(() => parseArgs([ '--persona', 'p', '--lenses', 'a.md' ]), /needs --verifier/u)
+  assert.equal(parseArgs([ '--persona', 'p', '--lenses', 'a.md', '--verifier', 'v.md' ]).verifier, 'v.md')
+})

@@ -30,10 +30,15 @@ const mean = (xs) => (xs.length && xs.every((x) => typeof x === 'number') ? xs.r
 
 export function parseArgs(argv) {
   const out = { cases: join(here, 'cases'), harness: 'claude', runs: 3, label: 'baseline', out: join(here, 'results') }
+  const known = [ 'persona', 'cases', 'agent', 'harness', 'model', 'runs', 'label', 'out', 'lenses', 'verifier' ]
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].replace(/^--/, '')
+    // An unknown flag (or several flags passed as one argument) would otherwise eat
+    // the next flag as its value and run the wrong variant under a default label.
+    if (!known.includes(key)) throw new Error(`Unknown option ${argv[i]}`)
     out[key] = argv[++i]
   }
+  if (out.lenses && !out.verifier) throw new Error('--lenses needs --verifier')
   out.runs = Number(out.runs)
   if (!out.persona) throw new Error('Name the persona: --persona <name>')
   out.agent ??= join(here, '..', 'apm', '.apm', 'agents', `${out.persona}.agent.md`)
