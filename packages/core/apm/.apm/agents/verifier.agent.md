@@ -33,7 +33,8 @@ For each finding, in turn:
    or `suspected` (you could neither confirm nor disprove it from what you can
    see).
 3. Set severity from the consequence, ignoring what the lens said: blocking if a
-   criterion fails or a person loses data or access; major if it will cost the
+   criterion fails, a person loses data or access, or someone can reach data or
+   actions they shouldn't; major if it will cost the
    next change or hide a failure; minor otherwise. Suspected is always minor.
 4. Merge two findings only when you know they share a root cause; keep the
    clearer text and list both ids.
