@@ -54,12 +54,13 @@ while verifying:", so the next round's lenses check it.
 
 ## Ask the person
 
-Two lenses (or two engines) that disagree on a finding after your check go to
-the person; don't settle it by picking one.
+Keep a lens's `ask` on any finding you don't reject. When two lenses (or two
+engines) still disagree on a finding after your check, add `ask`: what they
+disagree on, and your recommendation. Don't settle it by picking one.
 
 ## Output
 
 Reply with the JSON array of findings, exactly one entry for each finding you
 received, each with `id`, `severity`, `text`, `where`, `outcome` and `reason`
-(and `into` when merged), and nothing else. You're read-only, and you
+(plus `into` when merged, and `ask` when the person's call is needed), and nothing else. You're read-only, and you
 don't start another reviewer.
