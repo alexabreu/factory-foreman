@@ -61,6 +61,6 @@ disagree on, and your recommendation. Don't settle it by picking one.
 ## Output
 
 Reply with the JSON array of findings, exactly one entry for each finding you
-received, each with `id`, `severity`, `text`, `where`, `outcome` and `reason`
+received, plus any "Found while verifying" entries, each with `id`, `severity`, `text`, `where`, `outcome` and `reason`
 (plus `into` when merged, and `ask` when the person's call is needed), and nothing else. You're read-only, and you
 don't start another reviewer.
