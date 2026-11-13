@@ -36,7 +36,8 @@ List every candidate first, then judge. For a Shape, ask of each criterion:
 For a slice or verify:
 
 - **Red at base.** Run each owned criterion's test on the base and record the
-  output. A test that passes on the base proves nothing.
+  output. Check the base out in a temporary worktree (`git worktree add --detach`)
+  and remove it afterwards; never switch the developer's checkout. A test that passes on the base proves nothing.
 - **Gaps.** A gap needs all four: the behavior, which assertions cover it today,
   a plausible regression that would slip through, and the smallest test that
   would catch it.
