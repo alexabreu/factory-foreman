@@ -25,7 +25,7 @@ test('grade weights criteria and summarize gives mean and spread', () => {
 test('the prompt drops front matter and includes every input; harnesses get stdin commands', () => {
   const p = prompt('---\nname: x\n---\nBe precise.', { task: 'Review.', inputs: [ 'a.md' ] }, () => 'A')
   assert.match(p, /^Be precise\.\n\n# Task\n\nReview\.\n\n<file path="a\.md">\nA\n<\/file>\n\nReply with only a JSON array of findings/u)
-  assert.deepEqual(command('claude', 'opus'), [ 'claude', '-p', '--output-format', 'text', '--model', 'opus' ])
+  assert.deepEqual(command('claude', 'opus'), [ 'claude', '-p', '--output-format', 'json', '--model', 'opus' ])
   assert.deepEqual(command('codex'), [ 'codex', 'exec', '-' ])
   assert.throws(() => command('other'), /Unknown harness/u)
   assert.equal(parseArgs([ '--persona', 'code-reviewer', '--runs', '2' ]).runs, 2)
@@ -107,4 +107,18 @@ test('evidence for the remove-undo case: with an appending add(), undo by stored
     const r = remove([ 'Dune', 'Emma' ], i)
     assert.deepEqual(undo(add(r.items, 'Ubik'), r.removed), [ 'Dune', 'Emma', 'Ubik' ])
   }
+})
+
+test('replies give their text and tokens: Claude JSON usage, Codex "tokens used", or plain text with none', async () => {
+  const { reply } = await import('../evals/run.mjs')
+  const claude = reply(JSON.stringify({ result: '[]', usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }, total_cost_usd: 0.01 }))
+  assert.deepEqual(claude, { stdout: '[]', tokens: 115, costUsd: 0.01 })
+  assert.equal(reply('[]', 'tokens used\n12,345\n').tokens, 12345)
+  assert.deepEqual(reply('[{"id":"a"}]'), { stdout: '[{"id":"a"}]', tokens: null, costUsd: null })
+})
+
+test('the verifier gets the case, the lens findings and its own output contract instead of the finders\'', async () => {
+  const { verifierPrompt, OUTPUT, VERIFY } = await import('../evals/run.mjs')
+  const text = verifierPrompt('---\nname: v\n---\nJudge.', { task: 'Review.', inputs: [ 'a.diff' ] }, () => 'diff', [ { id: 'correctness-lens/x', text: 'bug' } ])
+  assert.ok(text.includes('correctness-lens/x') && text.includes(VERIFY) && !text.includes(OUTPUT))
 })

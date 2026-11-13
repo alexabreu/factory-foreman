@@ -7,6 +7,13 @@
 //   node evals/run.mjs --persona code-reviewer [--cases <dir>] [--agent <file>]
 //                      [--harness claude|codex] [--model <id>] [--runs 3]
 //                      [--label baseline] [--out <dir>]
+//   node evals/run.mjs --persona code-reviewer --lenses a.md,b.md,c.md --verifier v.md ...
+//
+// With --lenses, each run sends the case to every lens in parallel, then their
+// findings to the verifier; only findings the verifier doesn't reject are graded.
+// Every run records seconds and tokens (Claude's usage, Codex's "tokens used").
+// A run whose harness fails is recorded as an error and left out of the scores,
+// never counted as a failed check.
 //
 // --cases defaults to evals/cases (synthetic cases, public). Cases built from
 // private repositories live outside this package and are passed with --cases.
@@ -19,6 +26,7 @@ import { findingsFrom } from './lib/findings.mjs'
 import { grade, summarize } from './lib/grade.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const mean = (xs) => (xs.length && xs.every((x) => typeof x === 'number') ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
 
 export function parseArgs(argv) {
   const out = { cases: join(here, 'cases'), harness: 'claude', runs: 3, label: 'baseline', out: join(here, 'results') }
@@ -44,7 +52,7 @@ export function prompt(agentText, scenario, readInput) {
 export const OUTPUT = 'Reply with only a JSON array of findings: [{ "id": "<short-id>", "severity": "blocking|major|minor", "text": "…", "where": "<file:line>" }]. Reply [] when there is nothing to fix.'
 
 export function command(harness, model) {
-  if (harness === 'claude') return [ 'claude', '-p', '--output-format', 'text', ...(model ? [ '--model', model ] : []) ]
+  if (harness === 'claude') return [ 'claude', '-p', '--output-format', 'json', ...(model ? [ '--model', model ] : []) ]
   if (harness === 'codex') return [ 'codex', 'exec', ...(model ? [ '-m', model ] : []), '-' ]
   throw new Error(`Unknown harness ${harness}; use claude or codex`)
 }
@@ -58,9 +66,54 @@ function ask(argv, input, timeoutMs = 600_000) {
     const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs)
     child.stdout.on('data', (d) => { stdout += d })
     child.stderr.on('data', (d) => { stderr += d })
-    child.on('close', (code) => { clearTimeout(timer); resolveRun({ code, stdout, stderr, ms: Date.now() - started }) })
+    child.on('close', (code, signal) => { clearTimeout(timer); resolveRun({ code, ...reply(stdout, stderr), stderr: stderr.trim() || `exit ${code ?? signal}${stdout.trim() ? `: ${stdout.trim().slice(-200)}` : ''}`, ms: Date.now() - started }) })
     child.stdin.end(input)
   })
+}
+
+// The reply text and its token count. Claude's JSON output carries the result and
+// its usage; Codex prints "tokens used" and the count on stderr.
+export function reply(stdout, stderr = '') {
+  try {
+    const j = JSON.parse(stdout)
+    if (j && typeof j.result === 'string') {
+      const u = j.usage ?? {}
+      const tokens = [ 'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens' ].reduce((t, k) => t + (u[k] ?? 0), 0)
+      return { stdout: j.result, tokens: tokens || null, costUsd: j.total_cost_usd ?? null }
+    }
+  } catch { /* plain text */ }
+  const m = /tokens used\s*:?\s*([\d,]+)/iu.exec(`${stderr}\n${stdout}`)
+  return { stdout, tokens: m ? Number(m[1].replace(/,/gu, '')) : null, costUsd: null }
+}
+
+// What the verifier is told about its input and output in an eval.
+export const VERIFY = 'Reply with only a JSON array: every finding you received, each with "id", "severity" (blocking|major|minor), "text", "where", "outcome" (verified|suspected|rejected) and "reason".'
+
+export function verifierPrompt(verifierText, scenario, readInput, findings) {
+  return prompt(verifierText, scenario, readInput).replace(`${OUTPUT}\n`, `# Findings to verify\n\n${JSON.stringify(findings, null, 2)}\n\n${VERIFY}\n`)
+}
+
+// One pipeline run: every lens in parallel, then the verifier. Returns the kept
+// findings as the graded output, and what each step cost.
+async function pipelineRun(opts, lensTexts, verifierText, scenario, readInput) {
+  const argv = command(opts.harness, opts.model)
+  const lensRuns = await Promise.all(lensTexts.map(({ name, text }) => ask(argv, prompt(text, scenario, readInput)).then((r) => ({ name, ...r }))))
+  const failed = lensRuns.find((r) => r.code !== 0)
+  if (failed) return { error: `${failed.name}: ${failed.stderr.trim().split('\n').at(-1)}`, lensRuns }
+  const findings = lensRuns.flatMap(({ name, stdout }) => (findingsFrom(stdout) ?? []).map((f) => ({ ...f, id: `${name}/${f.id ?? 'finding'}` })))
+  const v = findings.length ? await ask(argv, verifierPrompt(verifierText, scenario, readInput, findings)) : { code: 0, stdout: '[]', tokens: 0, ms: 0 }
+  if (v.code !== 0) return { error: `verifier: ${v.stderr.trim().split('\n').at(-1)}`, lensRuns }
+  const judged = findingsFrom(v.stdout) ?? []
+  const kept = judged.filter((f) => f.outcome !== 'rejected')
+  const sum = (k) => [ ...lensRuns, v ].reduce((t, r) => (t === null || r[k] == null ? null : t + r[k]), 0)
+  return {
+    output: JSON.stringify(kept),
+    ms: Math.max(...lensRuns.map((r) => r.ms)) + v.ms,
+    tokens: sum('tokens'),
+    lensFindings: findings.length,
+    rejected: judged.length - kept.length,
+    steps: [ ...lensRuns.map((r) => ({ name: r.name, ms: r.ms, tokens: r.tokens, output: r.stdout })), { name: 'verifier', ms: v.ms, tokens: v.tokens, output: v.stdout } ],
+  }
 }
 
 // Criteria from the predecessor's format that need a repository snapshot and
@@ -111,10 +164,11 @@ async function regrade(file, casesRoot) {
   const report = JSON.parse(readFileSync(file, 'utf8'))
   for (const [ id, c ] of Object.entries(report.cases)) {
     const { criteria } = await loadCase(join(resolve(casesRoot), report.persona, id), resolve(casesRoot))
-    for (const r of c.runs) Object.assign(r, grade(r.output, criteria))
-    Object.assign(c, summarize(c.runs.map((r) => r.score)))
+    const scored = c.runs.filter((r) => !r.error && r.output !== undefined)
+    for (const r of scored) Object.assign(r, grade(reply(r.output).stdout, criteria))
+    Object.assign(c, summarize(scored.map((r) => r.score)))
   }
-  report.overall = summarize(Object.values(report.cases).flatMap((c) => c.runs.map((r) => r.score)))
+  report.overall = summarize(Object.values(report.cases).flatMap((c) => c.runs.filter((r) => !r.error && r.output !== undefined).map((r) => r.score)))
   report.regradedAt = new Date().toISOString()
   writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`)
   console.log(`${report.label}: ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} after regrading`)
@@ -126,26 +180,36 @@ async function main(argv) {
   const dir = join(resolve(opts.cases), opts.persona)
   if (!existsSync(dir)) throw new Error(`No cases for ${opts.persona} in ${dir}`)
   const agentText = readFileSync(opts.agent, 'utf8')
-  const report = { label: opts.label, persona: opts.persona, harness: opts.harness, model: opts.model ?? 'default', runs: opts.runs, at: new Date().toISOString(), cases: {} }
+  const lensTexts = opts.lenses ? opts.lenses.split(',').map((f) => ({ name: f.split('/').at(-1).replace(/\.agent\.md$/u, ''), text: readFileSync(f, 'utf8') })) : null
+  const verifierText = lensTexts ? readFileSync(opts.verifier, 'utf8') : null
+  const report = { label: opts.label, persona: opts.persona, harness: opts.harness, model: opts.model ?? 'default', runs: opts.runs, at: new Date().toISOString(), ...(lensTexts ? { lenses: lensTexts.map((l) => l.name), verifier: opts.verifier } : {}), cases: {} }
   for (const id of readdirSync(dir).sort()) {
     const caseDir = join(dir, id)
     const { scenario, criteria } = await loadCase(caseDir, resolve(opts.cases))
-    const text = prompt(agentText, scenario, (f) => readFileSync(join(caseDir, f), 'utf8'))
+    const readInput = (f) => readFileSync(join(caseDir, f), 'utf8')
+    const text = prompt(agentText, scenario, readInput)
     const runs = []
     for (let k = 1; k <= opts.runs; k++) {
-      const r = await ask(command(opts.harness, opts.model), text)
-      const g = r.code === 0 ? grade(r.stdout, criteria) : { score: 0, results: [], error: r.stderr.trim().split('\n').at(-1) }
-      runs.push({ k, ms: r.ms, ...g, output: r.stdout })
-      console.log(`${id} run ${k}: ${(g.score * 100).toFixed(0)}%${g.error ? ` (failed: ${g.error})` : ''}`)
+      let run
+      if (lensTexts) {
+        const p = await pipelineRun(opts, lensTexts, verifierText, scenario, readInput)
+        run = p.error ? { k, error: p.error } : { k, ms: p.ms, tokens: p.tokens, lensFindings: p.lensFindings, rejected: p.rejected, ...grade(p.output, criteria), output: p.output, steps: p.steps }
+      } else {
+        const r = await ask(command(opts.harness, opts.model), text)
+        run = r.code === 0 ? { k, ms: r.ms, tokens: r.tokens, ...grade(r.stdout, criteria), output: r.stdout } : { k, ms: r.ms, error: r.stderr.trim().split('\n').at(-1) }
+      }
+      runs.push(run)
+      console.log(`${id} run ${k}: ${run.error ? `error (${run.error})` : `${(run.score * 100).toFixed(0)}%, ${(run.ms / 1000).toFixed(0)} s, ${run.tokens ?? '?'} tokens`}`)
     }
-    report.cases[id] = { ...summarize(runs.map((r) => r.score)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
+    const scored = runs.filter((r) => !r.error)
+    report.cases[id] = { ...summarize(scored.map((r) => r.score)), errors: runs.length - scored.length, tokens: mean(scored.map((r) => r.tokens)), seconds: mean(scored.map((r) => r.ms / 1000)), skipped: (await loadCase(caseDir, resolve(opts.cases))).skipped, runs }
   }
-  const all = Object.values(report.cases).flatMap((c) => c.runs.map((r) => r.score))
-  report.overall = summarize(all)
+  const all = Object.values(report.cases).flatMap((c) => c.runs.filter((r) => !r.error).map((r) => r.score))
+  report.overall = { ...summarize(all), tokens: mean(Object.values(report.cases).map((c) => c.tokens)), seconds: mean(Object.values(report.cases).map((c) => c.seconds)) }
   mkdirSync(opts.out, { recursive: true })
   const file = join(opts.out, `${opts.persona}-${opts.label}-${report.at.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`)
-  console.log(`Overall ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} over ${all.length} run(s). ${file}`)
+  console.log(`Overall ${(report.overall.mean * 100).toFixed(1)}% ± ${(report.overall.sd * 100).toFixed(1)} over ${all.length} run(s), ${report.overall.seconds?.toFixed(0) ?? '?'} s and ${report.overall.tokens?.toFixed(0) ?? '?'} tokens per run. ${file}`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
